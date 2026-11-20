@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Dharmastra - Escape from Hastinapur</title>
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <main id="game" aria-label="Escape from Hastinapur" data-side="right">
+    <canvas id="stage" role="img" aria-label="Top-down view of the chariot, guards and checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission."></canvas>
+
+    <header id="hud">
+      <button id="pause-btn" class="btn" type="button" data-action="pause"><span aria-hidden="true">&#10074;&#10074;</span> Pause</button>
+      <div class="hud-main">
+        <p id="objective" class="objective">Loading mission...</p>
+        <p id="hint" class="hint"></p>
+      </div>
+      <ul class="stats">
+        <li><span aria-hidden="true">&#9829;</span> Health <span id="health-text">100/100</span><span class="bar" aria-hidden="true"><span id="health-fill"></span></span></li>
+        <li><span aria-hidden="true">&#9670;</span> Checkpoints <span id="cp-text">0/3</span></li>
+        <li id="stat-timer"><span aria-hidden="true">&#9201;</span> Time <span id="timer-text"></span></li>
+      </ul>
+    </header>
+
+    <p id="caption" class="caption" aria-live="polite" aria-atomic="true" hidden></p>
+    <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
+
+    <div id="touch" class="touch" role="group" aria-label="Touch controls">
+      <button class="pad" type="button" data-control="left"><span aria-hidden="true">&#9664;</span> Left</button>
+      <button class="pad" type="button" data-control="right">Right <span aria-hidden="true">&#9654;</span></button>
+      <button class="pad" type="button" data-control="brake"><span aria-hidden="true">&#9632;</span> Brake</button>
+      <button class="pad" type="button" data-control="go"><span aria-hidden="true">&#9650;</span> Go</button>
+    </div>
+  </main>
+
+  <div id="screen-start" class="overlay" role="dialog" aria-modal="true" aria-labelledby="start-title">
+    <div class="panel">
+      <p class="eyebrow" id="era">Dvapara Yuga</p>
+      <h1 id="start-title">Escape from Hastinapur</h1>
+      <p id="logline"></p>
+      <p>Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
+      <h2>Controls</h2>
+      <ul>
+        <li>Keyboard: arrow keys or W A S D. Up or W to go, down or S to brake. Esc or P to pause.</li>
+        <li>Touch: Left, Right, Brake and Go buttons, or drag left and right on the game view to steer.</li>
+      </ul>
+      <div class="actions">
+        <button id="start-btn" class="btn primary" type="button" data-action="start" data-autofocus disabled>Start mission</button>
+        <button class="btn" type="button" data-action="settings">Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-pause" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+    <div class="panel">
+      <h2 id="pause-title">Paused</h2>
+      <div class="actions column">
+        <button class="btn primary" type="button" data-action="resume" data-autofocus>Resume</button>
+        <button class="btn" type="button" data-action="restart">Restart mission</button>
+        <button class="btn" type="button" data-action="settings">Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-settings" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="panel">
+      <h2 id="settings-title">Settings</h2>
+      <div class="field">
+        <label for="set-timer">Timer</label>
+        <select id="set-timer">
+          <option value="off">Off (no time limit)</option>
+          <option value="standard">Standard (2:30)</option>
+          <option value="extended">Extended (5:00)</option>
+        </select>
+      </div>
+      <div class="field check"><input id="set-auto" type="checkbox"><label for="set-auto">Auto-accelerate (the chariot moves forward by itself; use Brake or Down to slow)</label></div>
+      <div class="field check"><input id="set-motion" type="checkbox"><label for="set-motion">Reduce motion (no screen shake or flashing, calmer animation)</label></div>
+      <div class="field">
+        <label for="set-side">Touch controls side</label>
+        <select id="set-side"><option value="right">Right</option><option value="left">Left</option></select>
+      </div>
+      <div class="actions"><button class="btn primary" type="button" data-action="settings-back" data-autofocus>Back</button></div>
+    </div>
+  </div>
+
+  <div id="screen-win" class="overlay" role="dialog" aria-modal="true" aria-labelledby="win-title" hidden>
+    <div class="panel">
+      <h2 id="win-title">&#10003; Mission complete</h2>
+      <p id="win-line"></p>
+      <p id="win-stats"></p>
+      <div id="win-notes"><h3>Notes on history and tradition</h3><ul id="win-events"></ul></div>
+      <div class="actions">
+        <button class="btn primary" type="button" data-action="retry" data-autofocus>Play again</button>
+        <button class="btn" type="button" data-action="menu">Main menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-fail" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="fail-title" hidden>
+    <div class="panel">
+      <h2 id="fail-title"><span aria-hidden="true">&#10007;</span> Mission failed</h2>
+      <p id="fail-reason"></p>
+      <p id="fail-line"></p>
+      <div class="actions">
+        <button id="retry-btn" class="btn primary big" type="button" data-action="retry">Retry</button>
+        <button class="btn" type="button" data-action="menu">Main menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-error" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="error-title" hidden>
+    <div class="panel">
+      <h2 id="error-title">Could not start</h2>
+      <p id="error-text"></p>
+      <p>This game needs to be served over HTTP (for example <code>python3 -m http.server</code>), not opened as a file.</p>
+      <div class="actions"><button class="btn primary" type="button" data-action="reload" data-autofocus>Try again</button></div>
+    </div>
+  </div>
+
+  <noscript><p class="noscript">Dharmastra needs JavaScript turned on to play.</p></noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

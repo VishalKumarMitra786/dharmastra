@@ -20,7 +20,17 @@ svg{display:block;width:100%;height:auto;touch-action:manipulation}
 @keyframes sp{to{transform:rotate(360deg)}}
 .halo{animation:hp 2.2s ease-in-out infinite}
 @keyframes hp{0%,100%{opacity:.15}50%{opacity:.6}}
-@media (prefers-reduced-motion:reduce){.spin,.halo{animation:none}}
+@media (prefers-reduced-motion:reduce){.spin,.halo{animation:none}#tip{transition:none}}
+.paused .spin,.paused .halo{animation-play-state:paused}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.tile:focus-visible{outline:none;stroke:#fff;stroke-width:2.6}
+.dot:focus-visible{outline:none}
+.dot:focus-visible .halo{animation:none;opacity:.95}
+button,select{min-height:44px}
+select{font:inherit;color:var(--text);background:#0d0b1f;border:1px solid var(--line);border-radius:10px;padding:0 10px;width:100%}
+.tools{display:grid;grid-template-columns:1fr auto;gap:8px;margin:0 0 12px}
+.ev{min-height:44px}
 .tile{cursor:pointer;transition:fill-opacity .2s}
 .tile:hover{fill-opacity:.5}
 .dot{cursor:pointer}
@@ -31,7 +41,7 @@ svg{display:block;width:100%;height:auto;touch-action:manipulation}
 .chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 12px;font-size:12px;color:var(--mute);margin-bottom:14px}
 .chips i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
-.ring{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0}
+.ring{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0}
 .name{font-family:Cinzel,Georgia,serif;font-size:21px;margin:2px 0 0;color:var(--gold)}
 .span{font-size:13px;color:var(--mute);margin:0 0 8px}
 .mission{font-size:14px;margin:0}
@@ -47,7 +57,7 @@ button:hover{border-color:var(--gold)}
 .ev .y{font-size:13px;color:var(--gold);white-space:nowrap}
 .ev.on{background:rgba(232,184,74,.1);border-radius:8px}
 .ev .x{padding:0 6px;border:0;color:var(--mute);font-size:16px}
-h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 6px;font-weight:500}
+h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 6px;font-weight:500}
 .empty{color:var(--mute);font-size:13px;margin:4px 0}
 form{display:grid;grid-template-columns:1fr 110px;gap:8px}
 input{font:inherit;color:var(--text);background:#0d0b1f;border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;min-width:0}
@@ -85,7 +95,13 @@ form button{grid-column:1/-1;background:var(--gold);color:#1a1405;border:0;font-
 </svg>
 <div id="tip" role="status"></div>
 </div>
-<p class="hint">Tap a tile to light up its event dots. Tap a dot for details.</p>
+<div class="tools">
+<label class="sr" for="jump">Jump to an era</label>
+<select id="jump"></select>
+<button id="pz" aria-pressed="false">Pause rotation</button>
+</div>
+<div id="live" class="sr" aria-live="polite"></div>
+<p class="hint">Tap a tile to light up its event dots, or use the era menu. Tap a dot for details.</p>
 <div class="chips" id="chips"></div>
 
 <div class="card">
@@ -255,6 +271,8 @@ var evs=events(cur),base=E[cur][4].length;
 if(!evs.length){var p=document.createElement("p");p.className="empty";p.textContent="No events yet. Add the first one below.";box.appendChild(p);return}
 evs.forEach(function(ev,j){
 var row=document.createElement("div");row.className="ev"+(j>=base?" cu":"")+(j===curEv?" on":"");
+row.setAttribute("role","button");row.setAttribute("tabindex","0");row.setAttribute("aria-label",ev[0]+", "+ev[1]);
+row.addEventListener("keydown",function(e){if(e.target===row&&(e.key==="Enter"||e.key===" ")){e.preventDefault();pick(j)}});
 var d=document.createElement("span");d.className="d";
 var n=document.createElement("span");n.className="n";n.textContent=ev[0];
 var y=document.createElement("span");y.className="y";y.textContent=ev[1];
@@ -295,7 +313,7 @@ var c=RING[E[j][0]][1],on=j===i;
 e.setAttribute("fill",c);
 e.setAttribute("fill-opacity",on?.85:.24);
 e.setAttribute("stroke",on?"#fff":c);
-e.setAttribute("stroke-opacity",on?1:.7);
+e.setAttribute("stroke-opacity",on?1:.95);
 e.setAttribute("stroke-width",on?1.6:.8);
 if(on){e.setAttribute("filter","url(#glow)");e.parentNode.appendChild(e)}else{e.removeAttribute("filter")}
 });
@@ -304,9 +322,23 @@ $("eRing").textContent=RING[d[0]][0];
 $("eName").textContent=d[1];
 $("eSpan").textContent=d[2];
 $("eMission").textContent="Mission hook: "+d[3];
+$("jump").value=String(i);
+$("live").textContent=d[1]+", "+d[2]+". "+events(i).length+" events.";
 renderDots();renderList();
 }
 
+(function(){
+var jp=$("jump"),grp=null,last=-1;
+E.forEach(function(d,i){
+if(d[0]!==last){grp=document.createElement("optgroup");grp.label=RING[d[0]][0];jp.appendChild(grp);last=d[0]}
+var o=document.createElement("option");o.value=String(i);o.textContent=d[1]+" ("+d[2]+")";grp.appendChild(o);
+});
+jp.addEventListener("change",function(){sel(parseInt(jp.value,10))});
+var pz=$("pz"),st=$("stage"),reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function setP(p){st.classList.toggle("paused",p);pz.setAttribute("aria-pressed",p?"true":"false");pz.textContent=p?"Resume rotation":"Pause rotation"}
+pz.addEventListener("click",function(){setP(!st.classList.contains("paused"))});
+if(reduce)setP(true);
+})();
 $("pv").addEventListener("click",function(){sel((cur+E.length-1)%E.length)});
 $("nx").addEventListener("click",function(){sel((cur+1)%E.length)});
 

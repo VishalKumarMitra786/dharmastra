@@ -20,7 +20,7 @@ One agent works through a set of role skills: TPO, Creative head, Storyteller, U
 
 ## Status
 
-Early prototype. The time chakra works. The engine and the first mission (Dvapara Yuga) are next.
+Early prototype. The time chakra works, and the first mission, Escape from Hastinapur (Dvapara Yuga), is playable. Run it with `python3 -m http.server 8000` and open http://localhost:8000/. Tests: `node src/test/run.mjs`.
 
 ## License
 
