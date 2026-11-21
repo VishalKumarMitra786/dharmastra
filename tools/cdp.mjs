@@ -1,13 +1,15 @@
 // Minimal headless-Chrome driver over the DevTools protocol. Used by tools/smoke.mjs. No dependencies.
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-const PORT = Number(process.env.CDP_PORT || 9333), URL_ = process.env.GAME_URL || 'http://localhost:8765/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function launch({ w = 360, h = 640, mobile = true, noWebgl = false, reduced = false, tag = 'x' } = {}) {
+  const PORT = Number(process.env.CDP_PORT || 9333), URL_ = process.env.GAME_URL || 'http://localhost:8765/'; // read at call time: smoke.mjs sets these after importing this file
   const chrome = spawn(process.env.CHROME || 'google-chrome', ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', `--remote-debugging-port=${PORT}`, `--user-data-dir=${process.env.TMPDIR || '/tmp'}/dharmastra-prof-${tag}-${Date.now()}`,
     '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', 'about:blank'], { stdio: 'ignore' });
+  chrome.on('error', (e) => { throw new Error('could not start Chrome (' + (process.env.CHROME || 'google-chrome') + '): ' + e.message); });
   let targets;
-  for (let i = 0; i < 50; i++) { try { targets = await (await fetch(`http://localhost:${PORT}/json`)).json(); if (targets.length) break; } catch {} await sleep(200); }
+  for (let i = 0; i < 150; i++) { try { targets = await (await fetch(`http://localhost:${PORT}/json`)).json(); if (targets.length) break; } catch {} await sleep(200); }
+  if (!targets) throw new Error('Chrome did not open its debugging port ' + PORT + ' within 30 s');
   const page = targets.find((t) => t.type === 'page');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener('open', r));
