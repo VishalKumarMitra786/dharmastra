@@ -2,7 +2,7 @@
   "id": "dvapara-escape",
   "era": "Dvapara Yuga",
   "title": "Escape from Hastinapur",
-  "logline": "On a tense night before the great war, a young chariot driver must carry a villagers' plea for grain relief through Hastinapur's lantern-lit streets and out the east gate before dawn.",
+  "logline": "On a tense night before the great war, a young courier on foot must carry a villagers' plea for grain relief through Hastinapur's lantern-lit streets and out the east gate before dawn.",
   "objectives": [
     {
       "id": "checkpoint-1",
@@ -21,7 +21,7 @@
     {
       "id": "start-1",
       "speaker": "Bhadra",
-      "text": "The city is on edge. Keep your lamp low and your wheels quiet, Tarak.",
+      "text": "The city is on edge. Keep your lamp low and your steps quiet, Tarak.",
       "trigger": "start"
     },
     {
@@ -33,7 +33,7 @@
     {
       "id": "cp1-1",
       "speaker": "Suvrata",
-      "text": "Here. The plea from the farm villages. Hold the tablet flat and drive.",
+      "text": "Here. The plea from the farm villages. Hold the tablet flat and run.",
       "trigger": "checkpoint-1"
     },
     {
@@ -69,13 +69,13 @@
     {
       "id": "hit-2",
       "speaker": "Tarak",
-      "text": "The wheel is shaking. Steady, steady.",
+      "text": "Your hands are shaking. Steady, steady.",
       "trigger": "hit"
     },
     {
       "id": "fail-1",
       "speaker": "Bhadra",
-      "text": "They stopped the cart. Come back to the stable and try another lane.",
+      "text": "They caught you. Come back to the stable and try another lane.",
       "trigger": "fail"
     },
     {

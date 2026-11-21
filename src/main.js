@@ -35,7 +35,7 @@ async function boot() {
   renderer2d.setWorld(world);
   let renderer3d = null;
   const ARIA_2D = canvas.getAttribute('aria-label');
-  const ARIA_3D = 'Chase view of the chariot, guards and checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission.';
+  const ARIA_3D = 'City view of you, the guards and the checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission.';
   const hud = createHud();
   const audio = createAudio();
   let game = null;

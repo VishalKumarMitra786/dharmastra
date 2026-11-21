@@ -5,6 +5,7 @@ export const TUNING = {
   maxSpeed: 200, maxReverse: 80, accel: 260, brakeForce: 420, coast: 120, drag: 0.25,
   turnRate: 2.8, turnFullAt: 90, radius: 18, guardRadius: 16,
   maxHealth: 100, wallDamage: 8, guardDamage: 20, impactMin: 45, wallCooldown: 0.5, guardInvuln: 1.2,
+  walkSpeed: 135, runSpeed: 215, footAccel: 900, footTurn: 14, footRadius: 14, footGuardRadius: 13,
   timerFactor: { off: null, standard: 1, extended: 2 },
 };
 
@@ -15,8 +16,9 @@ export function createSim(world, { timerMode = 'standard', tuning = {} } = {}) {
   const sim = {
     world, t, status: 'playing', failReason: null, elapsed: 0, timerMode,
     health: t.maxHealth, checkpoint: 0, wallCooldown: 0, invuln: 0,
-    chariot: { ...world.start, speed: 0, radius: t.radius },
-    guards: world.guards.map((g) => ({ ...g.path[0], radius: t.guardRadius, angle: 0, speed: g.speed, path: g.path, target: 1 % g.path.length })),
+    foot: world.mode === 'foot',
+    chariot: { ...world.start, speed: 0, radius: world.mode === 'foot' ? t.footRadius : t.radius, moveAngle: world.start.angle || 0 },
+    guards: world.guards.map((g) => ({ ...g.path[0], radius: world.mode === 'foot' ? t.footGuardRadius : t.guardRadius, angle: 0, speed: g.speed, path: g.path, target: 1 % g.path.length })),
   };
   sim.timeLeft = limitFor(sim);
   return sim;
@@ -40,7 +42,7 @@ export function step(sim, dt, controls) {
   sim.elapsed += dt;
   sim.wallCooldown = Math.max(0, sim.wallCooldown - dt);
   sim.invuln = Math.max(0, sim.invuln - dt);
-  driveChariot(sim, dt, controls);
+  if (sim.foot) walk(sim, dt, controls); else driveChariot(sim, dt, controls);
   moveGuards(sim, dt);
   wallHits(sim, events);
   guardHits(sim, events);
@@ -71,6 +73,28 @@ function driveChariot(sim, dt, { steer = 0, throttle = 0 }) {
   c.y += Math.sin(c.angle) * c.speed * dt;
 }
 
+// On foot: direct control. (mx, my) is the wanted direction on the map (x east, y south), length 0..1 for analog sticks.
+function walk(sim, dt, { mx = 0, my = 0, run = false }) {
+  const { t, chariot: c } = sim;
+  let len = Math.hypot(mx, my);
+  if (len > 1) { mx /= len; my /= len; len = 1; }
+  const wanted = len > 0.08 ? (run ? t.runSpeed : t.walkSpeed) * len : 0;
+  if (len > 0.08) c.moveAngle = Math.atan2(my, mx);
+  const dv = wanted - c.speed;
+  c.speed += Math.sign(dv) * Math.min(Math.abs(dv), t.footAccel * dt);
+  c.angle += clamp(angleDiff(c.angle, c.moveAngle), -t.footTurn * dt, t.footTurn * dt);
+  c.x += Math.cos(c.moveAngle) * c.speed * dt;
+  c.y += Math.sin(c.moveAngle) * c.speed * dt;
+}
+
+function angleDiff(from, to) {
+  const tau = Math.PI * 2;
+  let d = (to - from) % tau;
+  if (d > Math.PI) d -= tau;
+  if (d < -Math.PI) d += tau;
+  return d;
+}
+
 function moveGuards(sim, dt) {
   for (const g of sim.guards) {
     const to = g.path[g.target];
@@ -85,6 +109,7 @@ function moveGuards(sim, dt) {
 
 function wallHits(sim, events) {
   const c = sim.chariot;
+  if (sim.foot) { resolveWalls(sim.world, c); return; } // walking into a wall just stops you, no damage
   const vx = Math.cos(c.angle) * c.speed; const vy = Math.sin(c.angle) * c.speed;
   const normals = resolveWalls(sim.world, c);
   const impact = Math.max(0, ...normals.map((n) => -(vx * n.nx + vy * n.ny)));
@@ -106,7 +131,7 @@ function guardHits(sim, events) {
     const nx = d > 0 ? dx / d : 1; const ny = d > 0 ? dy / d : 0;
     c.x = g.x + nx * min; c.y = g.y + ny * min; // separate so we do not hit every tick
     if (sim.invuln > 0) continue;
-    c.speed *= -0.3;
+    c.speed = sim.foot ? 0 : c.speed * -0.3;
     sim.invuln = sim.t.guardInvuln;
     sim.health = Math.max(0, sim.health - sim.t.guardDamage);
     events.push({ type: 'guard', damage: sim.t.guardDamage, health: sim.health });

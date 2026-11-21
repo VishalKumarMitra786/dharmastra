@@ -2,7 +2,7 @@
   "id": "mauryan-spy",
   "era": "Mauryan empire",
   "title": "The Night Report of Pataliputra",
-  "logline": "On a monsoon night, a young cart driver must carry a ferry clerk's urgent report across timber-walled Pataliputra, dodging night patrols, before the river floods the moat.",
+  "logline": "On a monsoon night, a young courier on foot must carry a ferry clerk's urgent report across timber-walled Pataliputra, dodging night patrols, before the river floods the moat.",
   "objectives": [
     {
       "id": "checkpoint-1",
@@ -21,7 +21,7 @@
     {
       "id": "start-1",
       "speaker": "Sudatta",
-      "text": "Rain on the river means trouble in the city. Keep the cart low and quiet, Ila.",
+      "text": "Rain on the river means trouble in the city. Keep your lamp low and your steps quiet, Ila.",
       "trigger": "start"
     },
     {
@@ -75,13 +75,13 @@
     {
       "id": "hit-2",
       "speaker": "Ila",
-      "text": "Wheel hit a post. Steady now, nothing broken.",
+      "text": "You hit a post. Steady now, nothing broken.",
       "trigger": "hit"
     },
     {
       "id": "fail-1",
       "speaker": "Sudatta",
-      "text": "They stopped the cart. Come back to the yard and try another lane.",
+      "text": "They caught you. Come back to the yard and try another lane.",
       "trigger": "fail"
     },
     {

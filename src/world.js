@@ -22,6 +22,7 @@ export function parseLayout(layout) {
   return {
     tileSize: ts, cols, rows: rows.length, width: cols * ts, height: rows.length * ts,
     solid, walls: mergeWalls(solid, ts), start, checkpoints, guards, timeLimit: layout.timeLimit,
+    mode: layout.mode || 'chariot', theme: layout.theme || 'default', rowsText: rows,
   };
 }
 

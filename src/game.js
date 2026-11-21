@@ -3,6 +3,7 @@ import { createSim, step, setTimerMode } from './sim.js';
 import { createRunner } from './mission.js';
 import { makeFrame } from './renderer.js';
 import { createLoop } from './loop.js';
+import { createMinimap } from './minimap.js';
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
 const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', time: 'Time ran out.' };
@@ -16,6 +17,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   let hintClock = 0;
   let lastSay = {};
 
+  const minimap = createMinimap(typeof document !== 'undefined' ? document.getElementById('minimap') : null, world);
   const loop = createLoop({ update, render });
 
   function newRun() {
@@ -90,7 +92,9 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
 
   function render() {
     if (!sim) return;
-    renderer.render(makeFrame(sim, effects, settings.reduceMotion));
+    const frame = makeFrame(sim, effects, settings.reduceMotion);
+    renderer.render(frame);
+    minimap.draw(frame);
   }
 
   function pause() {

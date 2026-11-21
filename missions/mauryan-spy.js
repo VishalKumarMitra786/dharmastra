@@ -2,6 +2,8 @@
 // Legend: # wall (buildings, palisade, river bank), o pillar, . road, S start tile, 1 2 3 = top-left tile of a 2x2 checkpoint spot, in order.
 // Guard paths are in tile-edge units (world = value * tileSize); alleys are 2 tiles wide so their centres sit on even edges.
 export const layout = {
+  mode: 'foot', // the player walks; the city is seen from above on a map-style camera
+  theme: 'pataliputra', // era look used by the 3D renderer
   tileSize: 72,
   startAngle: 0, // radians, 0 = east
   timeLimit: 180, // seconds in "standard" timer mode; "extended" doubles it

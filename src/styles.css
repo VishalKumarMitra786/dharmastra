@@ -66,20 +66,25 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .caption strong { color: var(--accent); font-family: var(--display); }
 
 /* Touch controls: 2x2 pad, 60px buttons, side chosen in settings. Shown on touch and narrow screens. */
-.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(2, 76px); grid-auto-rows: 60px; gap: 8px; }
+.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(3, 70px); grid-auto-rows: 56px; gap: 6px; }
+.pad.run { background: rgba(255, 106, 61, 0.35); }
+.minimap { position: absolute; bottom: calc(10px + var(--safe-b)); width: 112px; height: 72px; border: 1.5px solid rgba(255, 180, 46, 0.7); border-radius: 12px; background: rgba(10, 7, 38, 0.7); backdrop-filter: blur(4px); pointer-events: none; }
+#game[data-side="right"] .minimap { left: calc(10px + var(--safe-l)); }
+#game[data-side="left"] .minimap { right: calc(10px + var(--safe-r)); }
 #game[data-side="right"] .touch { right: calc(10px + var(--safe-r)); }
 #game[data-side="left"] .touch { left: calc(10px + var(--safe-l)); }
-.pad { min-height: 60px; padding: 0.2rem; border-radius: 18px; background: rgba(22, 15, 58, 0.8); touch-action: none; font-size: 0.9rem; font-weight: 600; backdrop-filter: blur(6px); }
+.pad { min-height: 56px; padding: 0.2rem; border-radius: 18px; background: rgba(22, 15, 58, 0.8); touch-action: none; font-size: 0.9rem; font-weight: 600; backdrop-filter: blur(6px); }
 @media (pointer: coarse), (max-width: 820px) { .touch { display: grid; } }
-@media (pointer: fine) and (min-width: 821px) { .caption { bottom: 24px; } }
+@media (pointer: fine) and (min-width: 821px) { .caption { bottom: calc(112px + var(--safe-b)); } }
 
 /* Short landscape phones: single-row HUD, caption beside the pad. */
 @media (orientation: landscape) and (max-height: 520px) {
   #hud { grid-template-columns: auto 1fr auto; padding-top: calc(4px + var(--safe-t)); padding-bottom: 14px; }
   .stats { grid-column: auto; flex-direction: column; flex-wrap: nowrap; gap: 3px; font-size: 0.8rem; }
   .objective, .hint { font-size: 0.85rem; }
-  .caption { bottom: calc(10px + var(--safe-b)); width: min(32rem, calc(100% - 220px)); left: 8px; transform: none; }
-  #game[data-side="left"] .caption { left: auto; right: 8px; }
+  .minimap { width: 112px; height: 72px; }
+  .caption { bottom: calc(10px + var(--safe-b)); width: min(32rem, calc(100% - 370px)); left: 132px; transform: none; }
+  #game[data-side="left"] .caption { left: auto; right: 132px; }
 }
 @media (max-width: 400px) { .stats .lbl { display: none; } .stats li { padding: 3px 9px; } }
 

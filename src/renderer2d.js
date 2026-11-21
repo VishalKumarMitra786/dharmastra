@@ -61,6 +61,19 @@ export function createRenderer2D(canvas) {
     ctx.restore();
   }
 
+  // A person seen from above: shoulders, head, scarf and a pointer for the way they face.
+  function drawPerson(c) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle);
+    const r = c.radius;
+    ctx.fillStyle = C.chariot; ctx.strokeStyle = C.outline; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.7, r * 1.05, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e8432e'; ctx.fillRect(-r * 1.3, -r * 0.25, r * 0.9, r * 0.5); // scarf
+    ctx.fillStyle = '#c68a5a'; ctx.beginPath(); ctx.arc(r * 0.15, 0, r * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.light; ctx.beginPath(); ctx.moveTo(r * 1.5, 0); ctx.lineTo(r * 0.9, -r * 0.35); ctx.lineTo(r * 0.9, r * 0.35); ctx.closePath(); ctx.fill();
+    if (c.invulnerable) { ctx.setLineDash([6, 6]); ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  }
+
   function drawArrow(frame, scale) {
     const next = frame.checkpoints.find((p) => p.state === 'next');
     if (!next) return;
@@ -93,7 +106,7 @@ export function createRenderer2D(canvas) {
       drawWalls();
       frame.checkpoints.forEach((p, i) => drawCheckpoint(p, i, frame.time, frame.reducedMotion));
       frame.guards.forEach(drawGuard);
-      drawChariot(frame.chariot);
+      if (frame.mode === 'foot') drawPerson(frame.chariot); else drawChariot(frame.chariot);
       ctx.restore();
       drawArrow(frame, scale);
       if (frame.effects.flash > 0 && !frame.reducedMotion) {

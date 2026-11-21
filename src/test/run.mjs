@@ -17,7 +17,7 @@ const test = (name, fn) => { queue.push(async () => { try { await fn(); results.
 const none = { steer: 0, throttle: 0 };
 const missionPath = new URL('../../missions/dvapara-escape.json', import.meta.url);
 const mission = JSON.parse(await readFile(missionPath, 'utf8'));
-const fresh = (o) => createSim(parseLayout(layout), o);
+const fresh = (o) => createSim(parseLayout({ ...layout, mode: 'chariot' }), o); // the chariot rules are still tested on the first map
 const warp = (sim, p) => { sim.chariot.x = p.x; sim.chariot.y = p.y; };
 
 test('mission JSON passes validation and has the exact schema keys', () => {
@@ -202,6 +202,11 @@ function drive(sim, path, tol = 70, careful = false) {
     const near = (p) => Math.hypot(p.x - c.x, p.y - c.y) < tol;
     while (i < path.length - 1 && (near(path[i]) || (!path[i].cp && near(path[i + 1])))) i++; // may skip a point whose successor is already reached, but never skips a checkpoint
     const target = path[i].cp ? path[i] : path[Math.min(i + 1, path.length - 1)]; // look one point ahead, but head straight for a checkpoint
+    if (sim.foot) { // walking: head straight for the target, no steering needed
+      const dx = target.x - c.x; const dy = target.y - c.y; const d = Math.hypot(dx, dy) || 1;
+      for (const e of step(sim, 1 / 60, { mx: dx / d, my: dy / d, run: !careful })) { if (e.type === 'wall') walls++; if (e.type === 'guard') guards++; }
+      t += 1 / 60; continue;
+    }
     let da = Math.atan2(target.y - c.y, target.x - c.x) - c.angle;
     da = Math.atan2(Math.sin(da), Math.cos(da));
     let throttle = Math.abs(da) > 0.6 ? (c.speed > 90 ? -0.3 : 0.3) : (c.speed > 150 ? 0 : 1);
@@ -306,3 +311,15 @@ for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  $
 const failed = results.filter((r) => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 process.exit(failed ? 1 : 0);
+
+test('walking: foot mode is on for both missions and the player stops at walls without losing health', async () => {
+  for (const id of ['dvapara-escape', 'mauryan-spy']) {
+    const { layout: lay } = await import(`../../missions/${id}.js`);
+    const w = parseLayout(lay);
+    assert.equal(w.mode, 'foot', id);
+    const sim = createSim(w, { timerMode: 'off' });
+    for (let i = 0; i < 600; i++) step(sim, 1 / 60, { mx: 0, my: -1, run: true }); // push north into the wall for 10s
+    assert.equal(sim.health, 100, `${id}: walls do not hurt on foot`);
+    assert.ok(sim.chariot.y > sim.chariot.radius - 1, `${id}: stays inside the map`);
+  }
+});

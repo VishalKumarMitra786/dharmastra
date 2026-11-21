@@ -21,7 +21,8 @@ export function assertRenderer(r) {
 export function makeFrame(sim, effects, reducedMotion) {
   const c = sim.chariot;
   return {
-    chariot: { x: c.x, y: c.y, angle: c.angle, radius: c.radius, invulnerable: sim.invuln > 0 },
+    chariot: { x: c.x, y: c.y, angle: c.angle, radius: c.radius, speed: c.speed, invulnerable: sim.invuln > 0 },
+    mode: sim.foot ? 'foot' : 'chariot',
     guards: sim.guards.map(({ x, y, angle, radius }) => ({ x, y, angle, radius })),
     checkpoints: sim.world.checkpoints.map((p, i) => ({
       x: p.x, y: p.y, radius: p.radius, state: i < sim.checkpoint ? 'done' : i === sim.checkpoint ? 'next' : 'later',

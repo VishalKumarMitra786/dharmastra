@@ -2,6 +2,8 @@
 // Legend: # wall, o pillar, . road, S start tile, 1 2 3 = top-left tile of a 2x2 checkpoint spot, in order.
 // Guard paths are in tile-edge units (world = value * tileSize): road centres sit on even-ish edges.
 export const layout = {
+  mode: 'foot', // the player walks; the city is seen from above on a map-style camera
+  theme: 'hastinapur', // era look used by the 3D renderer
   tileSize: 72,
   startAngle: 0, // radians, 0 = east
   timeLimit: 150, // seconds in "standard" timer mode; "extended" doubles it

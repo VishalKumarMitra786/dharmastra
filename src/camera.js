@@ -36,3 +36,12 @@ export function chooseGraphics({ preference, webglAvailable }) {
   if (!webglAvailable) return { mode: '2d', note: '3D graphics are not available on this device, so the 2D view is on.' };
   return { mode: '3d', note: '' };
 }
+
+// City-map camera for walking missions: north is always up the screen, so a direction on the stick or keys is a direction on the map.
+export const MAPCAM = { back: 330, height: 900, lookAhead: 0 };
+export function mapView(c, cfg = MAPCAM) {
+  return {
+    position: { x: c.x, y: cfg.height, z: c.y + cfg.back },
+    target: { x: c.x, y: 20, z: c.y + cfg.lookAhead },
+  };
+}
