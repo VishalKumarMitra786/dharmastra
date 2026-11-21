@@ -10,6 +10,7 @@ import { layout } from '../../missions/dvapara-escape.js';
 import { MISSIONS, pickMissionId } from '../missions.js';
 import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../camera.js';
 import { loadSettings } from '../settings.js';
+import './render1.mjs';
 
 const results = [];
 const queue = [];

@@ -708,6 +708,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       buildCity(w);
       buildCrowd(w);
       buildHero();
+      if (Array.isArray(w.obstacles) && w.obstacles.length) buildObstacles(w.obstacles);
       w.checkpoints.forEach((p, i) => { const c = makeCheckpoint(p, i); cps.push(c); built.add(c.g); applyState(c, 'later', p); });
       scene.add(built);
     },
@@ -733,6 +734,39 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         gg.x = gd.x; gg.y = gd.y;
       });
 
+      // Raiders: club, bandana, orange ring. Pose by state; hit flash is a short white emissive pulse (skipped with reduced motion).
+      const E = frame.enemies; const nE = E ? E.length : 0;
+      while (enemies.length < nE) enemies.push(makeEnemy());
+      for (let i = 0; i < enemies.length; i++) {
+        const en = enemies[i];
+        if (i >= nE || E[i].state === 'down') { en.g.visible = false; continue; }
+        const e = E[i]; const st = e.state || 'patrol'; const eu = en.g.userData;
+        if (en.id !== e.id) { en.id = e.id; en.x = e.x; en.y = e.y; }
+        const moved = Math.hypot(e.x - en.x, e.y - en.y);
+        en.g.visible = true; en.g.position.set(e.x, 0, e.y); en.g.rotation.y = -e.angle;
+        animate(en.g, moved, moved > 0.05 ? 0.8 : 0, t);
+        en.x = e.x; en.y = e.y;
+        if (st === 'windup') { eu.arms[1].rotation.z = 2.6; eu.upper.rotation.z = 0.15; }
+        else if (st === 'stagger') { eu.arms[0].rotation.z = 2.4; eu.arms[1].rotation.z = 2.7; eu.upper.rotation.z = -0.5; }
+        else if (st === 'chase') eu.upper.rotation.z = -0.18;
+        en.flash = Math.max(0, en.flash - dt / 0.12);
+        const f = calm ? 0 : en.flash;
+        en.top.emissive.setRGB(f, f, f);
+        en.g.scale.setScalar(1.12 * (1 + 0.12 * f));
+      }
+      const PK = frame.pickups; const nP = PK ? PK.length : 0;
+      while (pickups.length < nP) pickups.push(makePickup());
+      for (let i = 0; i < pickups.length; i++) {
+        const pk = pickups[i];
+        if (i >= nP || PK[i].taken) { pk.g.visible = false; continue; }
+        pk.g.visible = true; pk.g.position.set(PK[i].x, 30 + (calm ? 0 : Math.sin(t * 2.2 + i) * 5), PK[i].y);
+        if (!calm) pk.s.rotation.y = t * 1.2;
+      }
+      const OB = frame.obstacles;
+      if (OB && OB.length && OB.length !== obstacleSig) buildObstacles(OB);
+      handleEvents(frame, calm);
+      stepParticles(dt);
+
       const c = frame.chariot; // the player (field name kept from the first prototype)
       hero.position.set(c.x, 0, c.y);
       hero.rotation.y = -c.angle;
@@ -741,7 +775,25 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       animate(hero, (c.speed || 0) * Math.max(dt, 0.001), moving ? 0.35 + spd * 0.65 : 0, t);
       hero.userData.upper.rotation.z = moving ? -0.06 - spd * 0.1 : 0; // lean into a run
       protectRing.visible = c.invulnerable;
-      const flash = calm ? 0 : frame.effects.flash;
+      const P = frame.player; const pstate = P ? P.state : 'idle';
+      const hu = hero.userData;
+      // Crouch squashes the whole figure; vault hops and tucks; a staff is held in the right hand and swings while attack.active.
+      const crouchT = P && (P.crouch || pstate === 'crouch') ? 1 : 0;
+      crouchK = calm ? crouchT : crouchK + (crouchT - crouchK) * Math.min(1, dt * 14);
+      hero.scale.set(1 + 0.08 * crouchK, 1 - 0.38 * crouchK, 1 + 0.08 * crouchK);
+      if (pstate === 'vault') { hero.position.y = vaultHop(P.stateT, calm); hu.upper.rotation.z = -0.35; hu.legs[0].rotation.z = 0.9; hu.legs[1].rotation.z = 0.7; } else hero.position.y = 0;
+      const staffOn = !!P && P.weapon === 'staff'; heroStaff.visible = staffOn;
+      const A = frame.attack; const swinging = !!(A && A.active);
+      if (staffOn) {
+        const pr = swinging ? Math.max(0, Math.min(1, A.progress || 0)) : 0;
+        hu.arms[1].rotation.z = swinging ? 2.4 - 2.2 * pr : 1.0 + hu.arms[1].rotation.z * 0.15;
+      }
+      if (swinging) {
+        swingArc.visible = true; swingArc.position.x = c.x; swingArc.position.z = c.y; swingArc.rotation.z = -(A.angle || 0);
+        swingArc.material.opacity = calm ? 0.55 : 0.75 * (1 - Math.max(0, Math.min(1, A.progress || 0)) * 0.8);
+      } else swingArc.visible = false;
+      const hurtFlash = P && pstate === 'hurt' ? Math.max(0, 1 - (P.stateT || 0) / 0.2) : 0;
+      const flash = calm ? 0 : Math.max(frame.effects.flash, hurtFlash);
       heroTop.emissive.setRGB(flash * 0.9, flash * 0.1, flash * 0.1);
       lantern.position.set(c.x + Math.cos(c.angle) * 18, 52, c.y + Math.sin(c.angle) * 18);
 
@@ -796,6 +848,16 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       const sh = calm ? 0 : frame.effects.shake * 5;
       camera.position.set(view.position.x + (Math.random() - 0.5) * sh, view.position.y + (Math.random() - 0.5) * sh, view.position.z);
       camera.lookAt(view.target.x, view.target.y, view.target.z);
+      for (let i = 0; i < enemies.length; i++) { // icons face the camera; patrol and down show none
+        const ic = enemies[i].icons; const live = i < nE && enemies[i].g.visible;
+        const kind = live ? enemyIcon(E[i].state) : null;
+        if (kind !== ic.shown) { if (ic.shown) ic.by[ic.shown].visible = false; if (kind) ic.by[kind].visible = true; ic.shown = kind; ic.root.visible = !!kind; }
+        if (kind) {
+          ic.root.position.set(E[i].x, 98, E[i].y); ic.root.quaternion.copy(camera.quaternion);
+          const pulse = E[i].state === 'windup' && !calm ? 1.25 + Math.sin(t * 18) * 0.1 : 1;
+          ic.root.scale.setScalar(0.95 * pulse);
+        }
+      }
       sky.position.copy(camera.position); stars.position.copy(camera.position);
       moonDisc.position.set(camera.position.x - 1700, 1500, camera.position.z - 1400);
       moon.position.set(c.x - 320, 650, c.y + 260); moon.target.position.set(c.x, 0, c.y);

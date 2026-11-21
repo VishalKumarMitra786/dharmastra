@@ -89,7 +89,6 @@ export function registerUi1(test) {
     assert.equal(els.announcer.textContent, 'Objective Find the staff: done.');
     hud.setAbilities({ abilities: ['walk', 'run', 'crouch'], weapon: 'staff', crouch: true });
     assert.equal(els['kit-text'].textContent, 'Staff, crouching. Can crouch');
-    hud.cue(''); clearTimeout?.(0); // no throw on empty cue
-    process.exitCode = process.exitCode; // timers from cue() are unref-free; run.mjs exits explicitly
+    hud.cue(''); // no throw on empty cue
   });
 }
