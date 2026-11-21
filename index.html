@@ -9,20 +9,48 @@
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="0.55" stop-color="#ffa51f"/><stop offset="1" stop-color="#e8432e"/></linearGradient>
+      <symbol id="chakra" viewBox="-100 -100 200 200">
+        <g fill="none" stroke="url(#gold)" stroke-linecap="round">
+          <circle r="97" stroke-width="1.6"/>
+          <circle r="91" stroke-width="3" stroke-dasharray="0.5 4.6"/>
+          <g class="spin">
+            <circle r="86" stroke-width="1.2"/>
+            <path stroke-width="1.4" d="M0.0 -30.0L0.0 -86.0M7.8 -29.0L22.3 -83.1M15.0 -26.0L43.0 -74.5M21.2 -21.2L60.8 -60.8M26.0 -15.0L74.5 -43.0M29.0 -7.8L83.1 -22.3M30.0 -0.0L86.0 -0.0M29.0 7.8L83.1 22.3M26.0 15.0L74.5 43.0M21.2 21.2L60.8 60.8M15.0 26.0L43.0 74.5M7.8 29.0L22.3 83.1M0.0 30.0L0.0 86.0M-7.8 29.0L-22.3 83.1M-15.0 26.0L-43.0 74.5M-21.2 21.2L-60.8 60.8M-26.0 15.0L-74.5 43.0M-29.0 7.8L-83.1 22.3M-30.0 0.0L-86.0 0.0M-29.0 -7.8L-83.1 -22.3M-26.0 -15.0L-74.5 -43.0M-21.2 -21.2L-60.8 -60.8M-15.0 -26.0L-43.0 -74.5M-7.8 -29.0L-22.3 -83.1"/>
+            <circle r="30" stroke-width="2"/>
+          </g>
+          <g class="spin-r" stroke-width="1.6">
+            <path id="petal" d="M0-62Q9-73 0-86Q-9-73 0-62Z"/>
+            <use href="#petal" transform="rotate(22.5)"/><use href="#petal" transform="rotate(45)"/><use href="#petal" transform="rotate(67.5)"/>
+            <use href="#petal" transform="rotate(90)"/><use href="#petal" transform="rotate(112.5)"/><use href="#petal" transform="rotate(135)"/><use href="#petal" transform="rotate(157.5)"/>
+            <use href="#petal" transform="rotate(180)"/><use href="#petal" transform="rotate(202.5)"/><use href="#petal" transform="rotate(225)"/><use href="#petal" transform="rotate(247.5)"/>
+            <use href="#petal" transform="rotate(270)"/><use href="#petal" transform="rotate(292.5)"/><use href="#petal" transform="rotate(315)"/><use href="#petal" transform="rotate(337.5)"/>
+          </g>
+          <circle r="62" stroke-width="1"/>
+        </g>
+        <circle r="11" fill="url(#gold)"/><circle r="4" fill="#120c33"/>
+      </symbol>
+    </defs>
+  </svg>
   <main id="game" aria-label="Escape from Hastinapur" data-side="right">
     <canvas id="stage3d" aria-hidden="true"></canvas>
     <canvas id="stage" role="img" aria-label="Top-down view of the chariot, guards and checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission."></canvas>
 
+    <div id="fx" aria-hidden="true"></div>
+    <div id="chapter" class="chapter" aria-hidden="true" hidden><p id="chapter-era"></p><p id="chapter-title"></p></div>
+
     <header id="hud">
-      <button id="pause-btn" class="btn" type="button" data-action="pause"><span aria-hidden="true">&#10074;&#10074;</span> Pause</button>
+      <button id="pause-btn" class="btn round" type="button" data-action="pause" aria-label="Pause"><span aria-hidden="true">&#10074;&#10074;</span></button>
       <div class="hud-main">
         <p id="objective" class="objective">Loading mission...</p>
         <p id="hint" class="hint"></p>
       </div>
       <ul class="stats">
-        <li><span aria-hidden="true">&#9829;</span> Health <span id="health-text">100/100</span><span class="bar" aria-hidden="true"><span id="health-fill"></span></span></li>
-        <li><span aria-hidden="true">&#9670;</span> Checkpoints <span id="cp-text">0/3</span></li>
-        <li id="stat-timer"><span aria-hidden="true">&#9201;</span> Time <span id="timer-text"></span></li>
+        <li class="stat-health"><span class="ico" aria-hidden="true">&#9829;</span><span class="lbl">Health</span> <span id="health-text">100/100</span><span class="bar" aria-hidden="true"><span id="health-fill"></span></span></li>
+        <li class="stat-cp"><span class="ico" aria-hidden="true">&#9670;</span><span class="lbl">Checkpoints</span> <span id="cp-text">0/3</span><span id="cp-pips" class="pips" aria-hidden="true"></span></li>
+        <li id="stat-timer"><span class="ico" aria-hidden="true">&#9201;</span><span class="lbl">Time</span> <span id="timer-text"></span></li>
       </ul>
     </header>
 
@@ -37,18 +65,22 @@
     </div>
   </main>
 
-  <div id="screen-start" class="overlay" role="dialog" aria-modal="true" aria-labelledby="start-title">
+  <div id="screen-start" class="overlay poster" role="dialog" aria-modal="true" aria-labelledby="start-title">
+    <svg class="chakra-bg" aria-hidden="true" focusable="false"><use href="#chakra"/></svg>
     <div class="panel">
+      <p class="wordmark" lang="hi" aria-hidden="true">धर्मास्त्र</p>
       <p class="eyebrow" id="era">Dvapara Yuga</p>
       <h1 id="start-title">Escape from Hastinapur</h1>
-      <p id="logline"></p>
+      <p id="logline" class="logline"></p>
       <p id="gfx-note-start" class="note" role="status" hidden></p>
-      <p>Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
-      <h2>Controls</h2>
-      <ul>
-        <li>Keyboard: arrow keys or W A S D. Up or W to go, down or S to brake. Esc or P to pause.</li>
-        <li>Touch: Left, Right, Brake and Go buttons, or drag left and right on the game view to steer.</li>
-      </ul>
+      <p class="goal">Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
+      <details class="how">
+        <summary>How to play</summary>
+        <ul>
+          <li>Keyboard: arrow keys or W A S D. Up or W to go, down or S to brake. Esc or P to pause.</li>
+          <li>Touch: Left, Right, Brake and Go buttons, or drag left and right on the game view to steer.</li>
+        </ul>
+      </details>
       <div class="actions">
         <button id="start-btn" class="btn primary" type="button" data-action="start" data-autofocus disabled>Start mission</button>
         <button class="btn" type="button" data-action="settings">Settings</button>
@@ -99,6 +131,7 @@
 
   <div id="screen-win" class="overlay" role="dialog" aria-modal="true" aria-labelledby="win-title" hidden>
     <div class="panel">
+      <svg class="chakra-win" aria-hidden="true" focusable="false"><use href="#chakra"/></svg>
       <h2 id="win-title">&#10003; Mission complete</h2>
       <p id="win-line"></p>
       <p id="win-stats"></p>

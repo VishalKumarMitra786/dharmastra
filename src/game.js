@@ -35,6 +35,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     screens.hide();
     hud.setHint(1, 0, '');
     document.getElementById('pause-btn').focus();
+    hud.chapter?.(mission.era, mission.title);
     loop.start();
   }
 
@@ -64,6 +65,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     runner.handle(e, sim.elapsed);
     if (e.type === 'wall' || e.type === 'guard') {
       effects.shake = 1; effects.flash = 1;
+      hud.hitFlash?.();
       audio.play('hit');
       hud.announce(`${e.type === 'guard' ? 'Hit by a guard' : 'Hit a wall'}. Health ${e.health}.`);
     } else if (e.type === 'checkpoint') {
