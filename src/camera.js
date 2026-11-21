@@ -50,7 +50,7 @@ export function mapView(c, cfg = MAPCAM) {
 // yaw is the direction the camera looks, in the same angle convention as the world (0 = +x east, +pi/2 = +y south).
 export const FORWARD_UP = -Math.PI / 2; // looking north: identical to the old map view, used by the 2D fallback
 export const TPCAM = {
-  distance: 195, height: 92, shoulder: 30, lookHeight: 50, lookAhead: 260, minDistance: 36,
+  distance: 250, height: 105, shoulder: 34, lookHeight: -15, lookAhead: 300, minDistance: 36,
   pitchMin: -0.12, pitchMax: 0.7, pitch: 0.14, dragYaw: 0.006, dragPitch: 0.004, keyYaw: 2.2, steer: 1.3,
 };
 
@@ -86,20 +86,21 @@ export function relativeMove(mx, my, yaw) {
 export function thirdPersonView(c, o, dt, blocked, reducedMotion, cfg = TPCAM) {
   const fx = Math.cos(o.yaw); const fz = Math.sin(o.yaw);
   const rx = -fz; const rz = fx;
-  const hx = Math.cos(o.pitch); // horizontal share of the boom
+  const hx = Math.cos(o.pitch);
+  const side = () => cfg.shoulder * Math.max(0.3, Math.min(1, o.dist / cfg.distance)); // the shoulder offset shrinks with the boom, so the hero stays in frame // horizontal share of the boom
   let free = cfg.distance;
   if (blocked) {
     for (let d = cfg.minDistance; d <= cfg.distance; d += 8) {
-      const px = c.x - fx * d * hx + rx * cfg.shoulder; const pz = c.y - fz * d * hx + rz * cfg.shoulder;
+      const px = c.x - fx * d * hx + rx * cfg.shoulder; const pz = c.y - fz * d * hx + rz * cfg.shoulder; // probe with the full offset: it is the widest
       if (blocked(px, pz)) { free = Math.max(cfg.minDistance, d - 12); break; }
     }
   }
   if (free < o.dist || reducedMotion || dt > 0.25) o.dist = free; else o.dist += (free - o.dist) * (1 - Math.exp(-3 * dt));
   // When a wall shortens the boom the camera rises instead of crowding the hero, like a GTA camera in a tight alley.
-  const lift = cfg.height + Math.sin(o.pitch) * o.dist + (cfg.distance - o.dist) * 0.9;
+  const lift = cfg.height + Math.sin(o.pitch) * o.dist + (cfg.distance - o.dist) * 0.55;
   return {
-    position: { x: c.x - fx * o.dist * hx + rx * cfg.shoulder, y: lift, z: c.y - fz * o.dist * hx + rz * cfg.shoulder },
-    target: { x: c.x + fx * cfg.lookAhead + rx * cfg.shoulder, y: cfg.lookHeight, z: c.y + fz * cfg.lookAhead + rz * cfg.shoulder },
+    position: { x: c.x - fx * o.dist * hx + rx * side(), y: lift, z: c.y - fz * o.dist * hx + rz * side() },
+    target: { x: c.x + fx * cfg.lookAhead + rx * side(), y: cfg.lookHeight, z: c.y + fz * cfg.lookAhead + rz * side() },
   };
 }
 

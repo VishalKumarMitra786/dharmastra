@@ -1,6 +1,6 @@
 // Mission data loading, validation, and the runner that turns sim events into objectives and dialogue.
 const LABELS = ['History', 'Tradition', 'Invented'];
-const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'hit', 'fail', 'win'];
+const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen'];
 const HIT_GAP = 5; // seconds between "hit" lines so captions do not spam
 
 export function validateMission(m) {
@@ -20,6 +20,9 @@ export function validateMission(m) {
     if (!str(e?.name) || !str(e?.year)) errors.push(`events[${i}] needs name and year`);
     if (!LABELS.includes(e?.label)) errors.push(`events[${i}] label must be one of ${LABELS.join(', ')}`);
   });
+  const ABIL = ['crouch', 'vault', 'staff'];
+  for (const k of ['requires', 'lends']) if (m[k] != null && (!Array.isArray(m[k]) || m[k].some((a) => !ABIL.includes(a)))) errors.push(`"${k}" must be a list of ${ABIL.join(', ')}`);
+  if (m.rewards != null && (typeof m.rewards !== 'object' || (m.rewards.grants != null && (!Array.isArray(m.rewards.grants) || m.rewards.grants.some((a) => !ABIL.includes(a)))))) errors.push('"rewards.grants" must be a list of abilities');
   return errors;
 }
 
@@ -36,6 +39,7 @@ export async function loadMission(url, fetchFn = fetch) {
 export function createRunner(data, handlers = {}) {
   const used = {};
   let lastHit = -Infinity;
+  let lastSeen = -Infinity;
   let index = 0;
 
   function say(trigger) {
@@ -56,7 +60,7 @@ export function createRunner(data, handlers = {}) {
   return {
     get total() { return data.objectives.length; },
     get objectiveIndex() { return index; },
-    start() { lastHit = -Infinity; setObjective(0); say('start'); },
+    start() { lastHit = -Infinity; lastSeen = -Infinity; setObjective(0); say('start'); },
     // `now` is sim seconds, so pausing does not break the hit gap.
     handle(event, now = 0) {
       if (event.type === 'checkpoint') {
@@ -64,7 +68,10 @@ export function createRunner(data, handlers = {}) {
         say(`checkpoint-${event.n}`);
       } else if (event.type === 'wall' || event.type === 'guard') {
         if (now - lastHit >= HIT_GAP) { lastHit = now; say('hit'); }
-      } else if (event.type === 'win') say('win');
+      } else if (event.type === 'pickup') say('pickup');
+      else if (event.type === 'enemy-down') say('enemy-down');
+      else if (event.type === 'seen') { if (now - lastSeen >= HIT_GAP) { lastSeen = now; say('seen'); } }
+      else if (event.type === 'win') say('win');
       else if (event.type === 'fail') say('fail');
     },
   };

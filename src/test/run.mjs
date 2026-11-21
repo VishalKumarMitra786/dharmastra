@@ -23,7 +23,7 @@ const warp = (sim, p) => { sim.chariot.x = p.x; sim.chariot.y = p.y; };
 
 test('mission JSON passes validation and has the exact schema keys', () => {
   assert.deepEqual(validateMission(mission), []);
-  assert.deepEqual(Object.keys(mission), ['id', 'era', 'title', 'logline', 'objectives', 'dialogue', 'events']);
+  assert.deepEqual(Object.keys(mission), ['id', 'era', 'title', 'logline', 'objectives', 'dialogue', 'events', 'rewards']);
   assert.deepEqual(Object.keys(mission.dialogue[0]), ['id', 'speaker', 'text', 'trigger']);
   assert.deepEqual(Object.keys(mission.events[0]), ['name', 'year', 'label']);
 });
@@ -408,6 +408,8 @@ test('third-person camera: stick is relative to the camera, boom stops at walls,
 });
 
 import { registerUi1 } from './ui1.mjs'; registerUi1(test);
+import { registerPhase1 } from './phase1.mjs'; registerPhase1(test);
+import { registerSangam } from './sangam.mjs'; registerSangam(test);
 for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

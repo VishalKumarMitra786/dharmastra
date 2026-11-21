@@ -1,0 +1,117 @@
+{
+ "id": "sangam-staff",
+ "era": "Sangam age, Tamilakam",
+ "title": "The Pepper Road",
+ "logline": "A caravan has lost its pepper sacks on the hill road before the evening tide. {name} borrows a bamboo staff, learns to keep trouble at arm's length and carries the sacks to the harbour.",
+ "objectives": [
+  {
+   "id": "checkpoint-1",
+   "text": "Cross the stone wall and find Poonkodi at the bamboo grove."
+  },
+  {
+   "id": "checkpoint-2",
+   "text": "Duck under the bamboo beam and reach the caravan camp."
+  },
+  {
+   "id": "checkpoint-3",
+   "text": "Bring the sacks to the harbour scales before the tide turns."
+  }
+ ],
+ "dialogue": [
+  {
+   "id": "s1",
+   "speaker": "Poonkodi",
+   "text": "{name}, a staff is only a longer arm. It keeps trouble away from you, and from those walking behind you.",
+   "trigger": "start"
+  },
+  {
+   "id": "s2",
+   "speaker": "{name}",
+   "text": "A wall first. I can vault that. Then the grove.",
+   "trigger": "start"
+  },
+  {
+   "id": "c1",
+   "speaker": "Poonkodi",
+   "text": "Good. Hold it low and let it turn a charge aside. Never swing at a person who has stopped.",
+   "trigger": "checkpoint-1"
+  },
+  {
+   "id": "c2",
+   "speaker": "Caravan master",
+   "text": "My sacks are scattered along the road. Gather them before the tide, and I will pay you in pepper.",
+   "trigger": "checkpoint-2"
+  },
+  {
+   "id": "c3",
+   "speaker": "Harbour clerk",
+   "text": "Three sacks, all sealed. You carried this alone, {name}? Keep that staff. It is yours now.",
+   "trigger": "checkpoint-3"
+  },
+  {
+   "id": "p1",
+   "speaker": "{name}",
+   "text": "One sack. Two more somewhere on this road.",
+   "trigger": "pickup"
+  },
+  {
+   "id": "e1",
+   "speaker": "Poonkodi",
+   "text": "Good. A raider turned aside is a raider who goes home. No need for more.",
+   "trigger": "enemy-down"
+  },
+  {
+   "id": "se1",
+   "speaker": "{name}",
+   "text": "A raider has seen me. Keep the staff low and keep moving.",
+   "trigger": "seen"
+  },
+  {
+   "id": "h1",
+   "speaker": "Poonkodi",
+   "text": "Steady. Your feet first, then the staff.",
+   "trigger": "hit"
+  },
+  {
+   "id": "f1",
+   "speaker": "Poonkodi",
+   "text": "The tide waits for no one. Come back to the grove and try the road again.",
+   "trigger": "fail"
+  },
+  {
+   "id": "w1",
+   "speaker": "Poonkodi",
+   "text": "{name}, you walked the whole road and nobody was badly hurt. That is what the staff is for.",
+   "trigger": "win"
+  }
+ ],
+ "events": [
+  {
+   "name": "Sangam age poems and trade in Tamilakam",
+   "year": "c. 300 BCE to 300 CE (dates debated)",
+   "label": "History"
+  },
+  {
+   "name": "Bamboo staff practice named after the silambu bamboo of the hills (silambam)",
+   "year": "Tradition, said to be at least 4th century BCE (as reported)",
+   "label": "Tradition"
+  },
+  {
+   "name": "Poonkodi, the bamboo cutter, and the lost pepper caravan",
+   "year": "Legend",
+   "label": "Invented"
+  }
+ ],
+ "requires": [
+  "vault",
+  "crouch"
+ ],
+ "lends": [
+  "staff"
+ ],
+ "rewards": {
+  "grants": [
+   "staff"
+  ]
+ }
+}

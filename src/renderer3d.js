@@ -853,9 +853,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         const kind = live ? enemyIcon(E[i].state) : null;
         if (kind !== ic.shown) { if (ic.shown) ic.by[ic.shown].visible = false; if (kind) ic.by[kind].visible = true; ic.shown = kind; ic.root.visible = !!kind; }
         if (kind) {
-          ic.root.position.set(E[i].x, 98, E[i].y); ic.root.quaternion.copy(camera.quaternion);
+          ic.root.position.set(E[i].x, 92, E[i].y); ic.root.quaternion.copy(camera.quaternion);
           const pulse = E[i].state === 'windup' && !calm ? 1.25 + Math.sin(t * 18) * 0.1 : 1;
-          ic.root.scale.setScalar(0.95 * pulse);
+          ic.root.scale.setScalar(0.62 * pulse);
         }
       }
       sky.position.copy(camera.position); stars.position.copy(camera.position);

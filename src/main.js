@@ -10,11 +10,13 @@ import { createAudio } from './audio.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
 import { chooseGraphics } from './camera.js';
-import { pickMissionId } from './missions.js';
+import { pickMissionId, missingFor } from './missions.js';
+import { loadProgress } from './progress.js';
 import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller, avatarSvg } from './characters.js';
 import { createPicker } from './picker.js';
 
 const MISSION_ID = pickMissionId(location.search);
+const DEV = new URLSearchParams(location.search).get('dev') === '1'; // test switch: every ability is lent and nothing is saved
 const $ = (id) => document.getElementById(id);
 const screens = createScreens();
 screens.bindActions({ reload: () => location.reload() });
@@ -61,7 +63,7 @@ async function boot() {
     document.documentElement.classList.toggle('reduce-motion', settings.reduceMotion);
     $('game').dataset.side = settings.side;
   };
-  game = createGame({ mission, world, renderer: renderer2d, input, hud, screens, audio, settings, onSettings: applyVisualSettings });
+  game = createGame({ mission, world, renderer: renderer2d, input, hud, screens, audio, settings, onSettings: applyVisualSettings, dev: DEV });
 
   const resize = () => {
     const w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
@@ -133,7 +135,13 @@ async function boot() {
   game.applySettings();
   resize();
   await applyGraphics();
-  $('start-btn').disabled = false;
+  // A level opens only after the lessons it needs are finished. The note names what to finish first.
+  const missing = DEV ? [] : missingFor(mission, loadProgress().abilities);
+  const lock = $('lock-note');
+  lock.hidden = missing.length === 0;
+  lock.textContent = missing.length ? `Locked: finish ${missing.join(' and ')} first.` : '';
+  $('start-btn').disabled = missing.length > 0;
+  $('start-btn').setAttribute('aria-disabled', String(missing.length > 0));
   if (saved) screens.show('screen-start', 'start-btn');
   else { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); } // first visit: choose a traveller
 }

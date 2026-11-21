@@ -4,12 +4,14 @@ import { createRunner } from './mission.js';
 import { makeFrame } from './renderer.js';
 import { createLoop } from './loop.js';
 import { createMinimap } from './minimap.js';
+import { loadProgress, saveProgress, recordCompletion } from './progress.js';
 import { createOrbit, updateOrbit, relativeMove, FORWARD_UP } from './camera.js';
 
+const hashSeed = (id) => [...String(id)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
-const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', time: 'Time ran out.' };
+const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', time: 'Time ran out.', seen: 'You were seen.' };
 
-export function createGame({ mission, world, renderer: initialRenderer, input, hud, screens, audio, settings, onSettings }) {
+export function createGame({ mission, world, renderer: initialRenderer, input, hud, screens, audio, settings, onSettings, dev = false }) {
   let renderer = initialRenderer;
   let sim = null;
   let runner = null;
@@ -17,6 +19,10 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   let effects = { shake: 0, flash: 0 };
   let hintClock = 0;
   let lastSay = {};
+  let attempt = 0;
+  let progress = loadProgress();
+  let lastKit = '';
+  let lastObj = '';
   const orbit = createOrbit();
   const usesOrbit = () => !!(renderer && renderer.orbit && world.mode === 'foot'); // third-person only with the 3D renderer on foot
   const camera = () => (usesOrbit() ? { yaw: orbit.yaw, pitch: orbit.pitch } : { yaw: FORWARD_UP, pitch: orbit.pitch });
@@ -30,7 +36,14 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   const loop = createLoop({ update, render });
 
   function newRun() {
-    sim = createSim(world, { timerMode: settings.timer });
+    attempt += 1;
+    progress = loadProgress();
+    const kit = dev ? ['crouch', 'vault', 'staff'] : progress.abilities; // ?dev=1 lends every ability for testing
+    const lent = Array.isArray(mission.lends) ? mission.lends : [];
+    const abilities = [...kit, ...lent];
+    const weapon = abilities.includes('staff') ? 'staff' : progress.weapon;
+    sim = createSim(world, { timerMode: settings.timer, abilities, weapon, seed: hashSeed(mission.id) + attempt });
+    lastKit = ''; lastObj = '';
     effects = { shake: 0, flash: 0 };
     lastSay = {};
     hud.clearCaption();
@@ -56,6 +69,18 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     hud.setHealth(sim.health, sim.t.maxHealth);
     hud.setCheckpoints(sim.checkpoint, world.checkpoints.length);
     hud.setTimer(sim.timeLeft);
+    syncRules();
+  }
+
+  // Objective list and kit are redrawn only when they change, so the page is not rebuilt every frame.
+  function syncRules() {
+    if (!sim?.rules2 || !sim.objectives) return;
+    // Checkpoint objectives are already shown as the current objective and the pips, so the list holds the extra ones (collect, evade).
+    const list = sim.objectives.items.filter((o) => o.type !== 'reach').map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: o.type === 'collect' ? { n: o.progress, total: o.goal } : null }));
+    const okey = JSON.stringify(list);
+    if (okey !== lastObj) { lastObj = okey; hud.setObjectives(list); }
+    const key = `${sim.abilities.join()}|${sim.player.weapon}|${sim.player.crouching}`;
+    if (key !== lastKit) { lastKit = key; hud.setAbilities({ abilities: sim.abilities, weapon: sim.player.weapon, crouch: sim.player.crouching }); }
   }
 
   function update(dt) {
@@ -71,7 +96,9 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     effects.shake = Math.max(0, effects.shake - dt * 3);
     effects.flash = Math.max(0, effects.flash - dt * 2.5);
     for (const e of events) onEvent(e);
+    if (sim.rules2) hud.handleEvents(events);
     if (events.length) refreshHud();
+    syncRules();
     hintClock -= dt;
     if (hintClock <= 0) { hintClock = 0.25; updateHint(); hud.setTimer(sim.timeLeft); }
   }
@@ -100,6 +127,9 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     input.reset();
     hud.clearCaption();
     if (won) {
+      const grants = mission.rewards?.grants || [];
+      if (!dev) { progress = recordCompletion(loadProgress(), mission.id, sim.elapsed, grants, grants.includes('staff') ? 'staff' : 'none'); saveProgress(progress); }
+      for (const a of grants) hud.announce(`New ability learned: ${a}.`);
       audio.play('win');
       screens.showWin({ time: fmt(sim.elapsed), health: sim.health }, mission.events, lastSay.win);
     } else {
@@ -110,7 +140,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
 
   function render() {
     if (!sim) return;
-    const frame = makeFrame(sim, effects, settings.reduceMotion, camera());
+    const frame = makeFrame(sim, effects, settings.reduceMotion, camera(), { blood: settings.blood !== false });
     renderer.render(frame);
     minimap.draw(frame);
   }
