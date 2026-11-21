@@ -47,16 +47,27 @@
       <div class="hud-main">
         <p id="objective" class="objective">Loading mission...</p>
         <p id="hint" class="hint"></p>
+        <ul id="objectives" class="objectives" aria-label="Objectives" hidden></ul>
       </div>
       <ul class="stats">
         <li class="stat-health"><span class="ico" aria-hidden="true">&#9829;</span><span class="lbl">Health</span> <span id="health-text">100/100</span><span class="bar" aria-hidden="true"><span id="health-fill"></span></span></li>
+        <li id="stat-kit" class="stat-kit" hidden><span class="ico" aria-hidden="true">&#9876;</span><span class="lbl">Gear</span> <span id="kit-text"></span></li>
         <li class="stat-cp"><span class="ico" aria-hidden="true">&#9670;</span><span class="lbl">Checkpoints</span> <span id="cp-text">0/3</span><span id="cp-pips" class="pips" aria-hidden="true"></span></li>
         <li id="stat-timer"><span class="ico" aria-hidden="true">&#9201;</span><span class="lbl">Time</span> <span id="timer-text"></span></li>
       </ul>
     </header>
 
-    <p id="caption" class="caption" aria-live="polite" aria-atomic="true" hidden></p>
+    <div class="captions">
+      <p id="caption" class="caption" aria-live="polite" aria-atomic="true" hidden></p>
+      <p id="cue" class="cue" hidden></p>
+    </div>
     <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
+
+    <div id="actions" class="actions-pad" role="group" aria-label="Action buttons">
+      <button class="pad act attack" type="button" data-control="attack" aria-label="Attack with staff (J)" hidden><span aria-hidden="true">&#9876;</span> Attack</button>
+      <button class="pad act" type="button" data-control="do" aria-label="Do: vault or pick up (Space or F)" hidden><span aria-hidden="true">&#10548;</span> Do</button>
+      <button class="pad act crouch" type="button" data-control="crouch" aria-label="Crouch (C)" aria-pressed="false" hidden><span aria-hidden="true">&#9662;</span> Crouch</button>
+    </div>
 
     <div id="touch" class="touch" role="group" aria-label="Touch controls">
       <button class="pad look" type="button" data-control="lookleft" aria-label="Turn camera left"><span aria-hidden="true">&#8630;</span> Look</button>
@@ -139,6 +150,7 @@
       </div>
       <div class="field check"><input id="set-auto" type="checkbox"><label for="set-auto">Always run (otherwise hold Run or Shift to run)</label></div>
       <div class="field check"><input id="set-motion" type="checkbox"><label for="set-motion">Reduce motion (no screen shake or flashing, calmer animation)</label></div>
+      <div class="field check"><input id="set-blood" type="checkbox" checked><label for="set-blood">Show small blood spatter on hits (off: neutral sparks instead)</label></div>
       <div class="field">
         <label for="set-side">Touch controls side</label>
         <select id="set-side"><option value="right">Right</option><option value="left">Left</option></select>

@@ -61,12 +61,14 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 #chapter-title { font-family: var(--display); font-size: clamp(1.9rem, 8vw, 3.4rem); font-weight: 800; line-height: 1.1; }
 @keyframes chapter { 0% { opacity: 0; transform: scale(0.96); } 15% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1.03); } }
 
-.caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(190px + var(--safe-b)); width: min(32rem, calc(100% - 16px)); margin: 0;
+.captions { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(228px + var(--safe-b)); width: min(32rem, calc(100% - 16px)); display: flex; flex-direction: column-reverse; gap: 6px; pointer-events: none; }
+.cue { margin: 0; align-self: flex-start; padding: 4px 12px; background: rgba(22, 15, 58, 0.92); border: 1.5px dashed rgba(255, 243, 220, 0.75); border-radius: 999px; font-size: 0.9rem; font-style: italic; }
+.caption { margin: 0;
   padding: 10px 14px; background: rgba(22, 15, 58, 0.92); border: 1.5px solid rgba(255, 180, 46, 0.7); border-left-width: 5px; border-radius: 6px 16px 16px 16px; font-size: 1rem; backdrop-filter: blur(6px); }
 .caption strong { color: var(--accent); font-family: var(--display); }
 
 /* Touch controls: 2x2 pad, 60px buttons, side chosen in settings. Shown on touch and narrow screens. */
-.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(3, 76px); grid-auto-rows: 48px; gap: 6px; }
+.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(3, 68px); grid-auto-rows: 48px; gap: 6px; }
 .pad.run { grid-column: 1 / -1; }
 #game:not([data-cam="orbit"]) .pad.look { visibility: hidden; } /* look buttons only matter with the third-person camera */
 .pad.run { background: rgba(255, 106, 61, 0.35); }
@@ -76,8 +78,25 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 #game[data-side="right"] .touch { right: calc(10px + var(--safe-r)); }
 #game[data-side="left"] .touch { left: calc(10px + var(--safe-l)); }
 .pad { min-height: 48px; padding: 0.2rem; border-radius: 18px; background: rgba(22, 15, 58, 0.8); touch-action: none; font-size: 0.9rem; font-weight: 600; backdrop-filter: blur(6px); }
-@media (pointer: coarse), (max-width: 820px) { .touch { display: grid; } }
-@media (pointer: fine) and (min-width: 821px) { .caption { bottom: calc(112px + var(--safe-b)); } }
+@media (pointer: coarse), (max-width: 820px) { .touch { display: grid; } .actions-pad { display: flex; } }
+@media (pointer: fine) and (min-width: 821px) { .captions { bottom: calc(112px + var(--safe-b)); } }
+
+/* Action buttons: Attack 64px, Do 56px, Crouch toggle 48px high. They sit above the minimap on the side opposite the pad, so neither the minimap nor the caption is covered. */
+.actions-pad { position: absolute; bottom: calc(90px + var(--safe-b)); width: 126px; display: none; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+#game[data-side="right"] .actions-pad { left: calc(10px + var(--safe-l)); }
+#game[data-side="left"] .actions-pad { right: calc(10px + var(--safe-r)); justify-content: flex-end; }
+.pad.act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1.1; font-size: 0.85rem; }
+.pad.attack { width: 64px; height: 64px; border-radius: 50%; border-color: var(--accent); }
+.pad.act[data-control="do"] { width: 56px; height: 56px; border-radius: 50%; border-color: var(--teal); }
+.pad.crouch { width: 100%; height: 48px; flex-direction: row; gap: 6px; }
+.pad.crouch[aria-pressed="true"] { background: linear-gradient(135deg, #ffe08a, #ffa51f 55%, #ff7a3d); color: #1a0f05; border-color: #ffe9b0; border-style: double; border-width: 4px; font-weight: 800; }
+.pad.crouch[aria-pressed="true"]::after { content: "\2713"; }
+.objectives { margin: 4px 0 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.25; }
+.objectives li { display: flex; gap: 6px; padding: 1px 0; }
+.objectives .mark { flex: none; width: 1em; text-align: center; color: var(--accent); }
+.objectives li[data-state="done"] .mark { color: var(--teal); }
+.objectives li[data-state="failed"] { text-decoration: line-through; }
+.stat-kit .ico { color: var(--accent); }
 
 /* Short landscape phones: single-row HUD, caption beside the pad. */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -85,8 +104,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   .stats { grid-column: auto; flex-direction: column; flex-wrap: nowrap; gap: 3px; font-size: 0.8rem; }
   .objective, .hint { font-size: 0.85rem; }
   .minimap { width: 112px; height: 72px; }
-  .caption { bottom: calc(10px + var(--safe-b)); width: min(32rem, calc(100% - 370px)); left: 132px; transform: none; }
-  #game[data-side="left"] .caption { left: auto; right: 132px; }
+  .captions { bottom: calc(10px + var(--safe-b)); width: min(32rem, calc(100% - 150px - 232px)); left: 150px; transform: none; }
+  #game[data-side="left"] .captions { left: auto; right: 150px; }
 }
 @media (max-width: 400px) { .stats .lbl { display: none; } .stats li { padding: 3px 9px; } }
 

@@ -102,3 +102,24 @@ export function thirdPersonView(c, o, dt, blocked, reducedMotion, cfg = TPCAM) {
     target: { x: c.x + fx * cfg.lookAhead + rx * cfg.shoulder, y: cfg.lookHeight, z: c.y + fz * cfg.lookAhead + rz * cfg.shoulder },
   };
 }
+
+// ---- Render helpers shared by renderer3d.js and renderer2d.js (pure, no allocation per call) ----
+export const MAX_PARTICLES = 24;
+// Icon above an enemy's head. Shape carries the meaning (not colour): '!' alert/chase/windup, '?' search, 'shield' stagger. Patrol and down show none.
+const ICONS = { alert: 'bang', chase: 'bang', windup: 'bang', search: 'question', stagger: 'shield' };
+export function enemyIcon(state) { return ICONS[state] || null; }
+// Vault hop height (world units) for stateT seconds into a 0.5 s vault.
+export function vaultHop(stateT, reduced) { const u = Math.max(0, Math.min(1, (stateT || 0) / 0.5)); return Math.sin(Math.PI * u) * (reduced ? 8 : 22); }
+// Burst table: events become small pooled bursts. blood decides red or neutral for the violent ones; sparks stay neutral for pickup and vault.
+const BURSTS = {
+  'hit-enemy': { n: 8, violent: true }, 'enemy-down': { n: 10, violent: true }, hurt: { n: 8, violent: true },
+  pickup: { n: 6, violent: false }, vault: { n: 4, violent: false },
+};
+const CALM = {};
+for (const k of Object.keys(BURSTS)) CALM[k] = { n: Math.min(BURSTS[k].n, 5), violent: BURSTS[k].violent };
+// Returns a shared frozen-style spec {n, violent, life (s), speed (0..1)} or null. Fade is about 300 ms; reduced motion shortens it to 150 ms and slows it.
+const SPEC = {}; const SPEC_CALM = {};
+for (const k of Object.keys(BURSTS)) { SPEC[k] = { ...BURSTS[k], life: 0.3, speed: 1 }; SPEC_CALM[k] = { ...CALM[k], life: 0.15, speed: 0.35 }; }
+export function burstSpec(type, reduced) { return (reduced ? SPEC_CALM : SPEC)[type] || null; }
+// Particle colour: red only when blood is on and the burst is violent; otherwise a neutral spark.
+export function burstColor(spec, blood) { return spec.violent && blood === true ? 0xb3201a : 0xfff0b0; }

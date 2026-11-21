@@ -7,7 +7,7 @@
 // Meaning is never colour alone: checkpoints change height and style and carry a number or a check mark,
 // guards have a spear, a helmet, a ground ring and a facing wedge, and the player shows a ring while protected.
 // The caller passes in the THREE namespace so the large library is only downloaded when 3D is used.
-import { followCamera, createCameraState, createOrbit, thirdPersonView } from './camera.js';
+import { followCamera, createCameraState, createOrbit, thirdPersonView, enemyIcon, vaultHop, burstSpec, burstColor, MAX_PARTICLES } from './camera.js';
 
 const CP = {
   next: { height: 190, color: 0x28e0d0, wire: false },
@@ -48,6 +48,26 @@ function canvasTex(THREE, size, draw, repeat) {
 }
 
 function rng(seed) { let s = seed % 2147483647; if (s <= 0) s += 2147483646; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+
+
+// Icon geometry built from triangles (no textures). Units: about 26 tall, origin at the bottom centre.
+function fan(out, pts) { for (let i = 1; i < pts.length - 1; i++) out.push(pts[0][0], pts[0][1], 0, pts[i][0], pts[i][1], 0, pts[i + 1][0], pts[i + 1][1], 0); }
+function strip(out, a, b, closed) { const n = a.length; for (let i = 0; i < (closed ? n : n - 1); i++) { const j = (i + 1) % n; fan(out, [a[i], a[j], b[j], b[i]]); } }
+function circlePts(cx, cy, r, n = 8) { const p = []; for (let i = 0; i < n; i++) p.push([cx + Math.cos(i / n * Math.PI * 2) * r, cy + Math.sin(i / n * Math.PI * 2) * r]); return p; }
+export function iconVertices(kind) {
+  const v = [];
+  if (kind === 'bang') { fan(v, [[-4, 26], [4, 26], [2.2, 9], [-2.2, 9]]); fan(v, circlePts(0, 3.4, 3.4)); }
+  else if (kind === 'question') {
+    const o = []; const inn = [];
+    for (let i = 0; i <= 10; i++) { const a = (200 - i * 27) * Math.PI / 180; o.push([Math.cos(a) * 9.5, 19 + Math.sin(a) * 9.5]); inn.push([Math.cos(a) * 5.2, 19 + Math.sin(a) * 5.2]); }
+    strip(v, o, inn, false); fan(v, [[-2.2, 5], [2.2, 5], [2.2, 12], [-2.2, 12]]); fan(v, circlePts(0, 1.8, 3.2));
+  } else if (kind === 'shield') {
+    const o = [[-10, 26], [10, 26], [10, 14], [7, 6], [0, 0], [-7, 6], [-10, 14]];
+    const cx = 0; const cy = 15; const inn = o.map(([x, y]) => [cx + (x - cx) * 0.5, cy + (y - cy) * 0.5]);
+    strip(v, o, inn, true); // outlined shield: a hollow shape, different from the solid '!' and '?'
+  }
+  return new Float32Array(v);
+}
 
 export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -143,6 +163,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   let world = null; let theme = THEMES.default;
   let built = null;
   let hero = null; let heroTop = null; let protectRing = null; let heroLook = null;
+  const enemies = []; const pickups = []; let obstacleGroup = null; let obstacleSig = -1; let heroStaff = null; let lastEventsFrame = null;
   const guards = []; const npcs = []; const cps = []; const lamps = []; const boats = [];
   let lastNow = 0; let lost = false; let spawnAcc = 0;
 
@@ -297,7 +318,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     scene.remove(built);
     const shared = new Set(geoCache.values());
     built.traverse((o) => { if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose?.(); });
-    built = null; guards.length = 0; npcs.length = 0; cps.length = 0; lamps.length = 0; boats.length = 0;
+    built = null; obstacleGroup = null; obstacleSig = -1; enemies.length = 0; pickups.length = 0; guards.length = 0; npcs.length = 0; cps.length = 0; lamps.length = 0; boats.length = 0;
     skyTex?.dispose(); groundTex?.dispose(); waterTex?.dispose(); skyTex = groundTex = waterTex = null;
   }
 
@@ -521,7 +542,140 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       scarf: L ? hex(L.accent) : h.scarf, bag: 0x6a4630, hair: L ? hex(L.hair) : h.hair, hairStyle: L ? L.hairStyle : 'short', bun: L?.hairStyle === 'bun', female: L ? L.body === 'f' : false,
       lamp: true, lampColor: theme.lamp, ringColor: 0xfff4de, ring: [24, 28],
     });
+    heroStaff = makeStaff(56); heroStaff.position.y = -26; heroStaff.visible = false; hero.userData.arms[1].add(heroStaff);
     shadowed(hero); built?.add(hero); protectRing = hero.userData.ring;
+  }
+
+  // ---- Phase 1 extras: staff, raiders, obstacles, pickups, icons, bursts ------------------------------------------------
+  const unitBox = () => geo('unit', () => new THREE.BoxGeometry(1, 1, 1));
+  function makeStaff(len) {
+    const g = new THREE.Group();
+    const shaft = cyl(1.7, 1.7, len, 6, mat(0x8a5a2a)); g.add(shaft);
+    const cap = ball(3, mat(0xffc247)); cap.position.y = len / 2; g.add(cap);
+    const foot = ball(2.4, mat(0xffc247)); foot.position.y = -len / 2; g.add(foot);
+    const band = cyl(2.3, 2.3, 3, 6, mat(0xffc247)); band.position.y = len * 0.18; g.add(band);
+    return g;
+  }
+  const iconFill = new THREE.MeshBasicMaterial({ color: 0xffd23a, side: THREE.DoubleSide, fog: false });
+  const iconEdge = new THREE.MeshBasicMaterial({ color: 0x1a0f1f, side: THREE.DoubleSide, fog: false });
+  function iconGeo(kind) { return geo(`icon_${kind}`, () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(iconVertices(kind), 3)); return g; }); }
+  function makeIcons() {
+    const root = new THREE.Group(); const by = {};
+    for (const kind of ['bang', 'question', 'shield']) {
+      const k = new THREE.Group();
+      const edge = new THREE.Mesh(iconGeo(kind), iconEdge); edge.scale.set(1.3, 1.3, 1); edge.position.set(0, -3.9, -0.3); k.add(edge);
+      k.add(new THREE.Mesh(iconGeo(kind), iconFill));
+      k.visible = false; root.add(k); by[kind] = k;
+    }
+    root.visible = false; return { root, by, shown: null };
+  }
+  function makeEnemy() {
+    const top = new THREE.MeshToonMaterial({ color: 0x3f6a4a, gradientMap: toonGradient, emissive: 0x000000 });
+    const g = makePerson({ eyes: '#e0a030', skin: 0x8a5a3a, top: 0x3f6a4a, topMat: top, bottom: 0x2b2018, turban: 0xa8402a, sleeves: true, bag: 0x4a3020, sash: 0xd08a2a, ring: [24, 29], ringColor: 0xff9a2a, ringAlways: true, wedge: true });
+    const club = cyl(3, 1.6, 34, 6, mat(0x5a3a1c)); club.position.y = -32; g.userData.arms[1].add(club);
+    const knob = ball(4.2, mat(0x3a2412)); knob.position.y = -48; g.userData.arms[1].add(knob);
+    g.scale.setScalar(1.12);
+    shadowed(g); built.add(g);
+    const icons = makeIcons(); built.add(icons.root);
+    return { g, top, icons, id: null, x: 0, y: 0, flash: 0 };
+  }
+  function makePickup() {
+    const g = new THREE.Group();
+    const s = makeStaff(44); s.rotation.z = 0.8; s.position.y = 0; g.add(s);
+    const gl = glow(0xffd860, 54, 0.7); g.add(gl);
+    built.add(g); return { g, s };
+  }
+
+  // Obstacles: four or five instanced meshes in total, built once per list.
+  function buildObstacles(list) {
+    if (obstacleGroup) { built.remove(obstacleGroup); obstacleGroup.traverse((o) => o.dispose?.()); }
+    obstacleGroup = new THREE.Group(); obstacleSig = list.length;
+    const walls = []; const beams = []; const grass = [];
+    list.forEach((o, i) => { if (o.kind === 'lowwall') walls.push(o); else if (o.kind === 'beam') beams.push(o); else if (o.kind === 'grass') grass.push({ o, i }); });
+    const dummy = new THREE.Object3D(); const col = new THREE.Color();
+    function inst(geometry, count, fill) {
+      if (!count) return;
+      const m = new THREE.InstancedMesh(geometry, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), count);
+      let n = 0;
+      fill((x, y, z, sx, sy, sz, color, ry = 0) => { dummy.position.set(x, y, z); dummy.rotation.set(0, ry, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix); m.setColorAt(n, col.setHex(color)); n++; });
+      m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      if (shadowsOn) { m.castShadow = true; m.receiveShadow = true; }
+      obstacleGroup.add(m);
+    }
+    // Low wall: a solid block with a pale cap and a row of notches reads as "step over it".
+    inst(unitBox(), walls.length * 2, (put) => walls.forEach((o) => { put(o.x + o.w / 2, 11, o.y + o.d / 2, o.w - 2, 22, o.d - 2, 0x8a7a5e); put(o.x + o.w / 2, 23.5, o.y + o.d / 2, o.w + 2, 5, o.d + 2, 0xd9c79a); }));
+    // Beam: two posts and a bar at head height that a standing person cannot pass but a crouching one can.
+    inst(unitBox(), beams.length * 3, (put) => beams.forEach((o) => {
+      const alongX = o.w >= o.d; const cx = o.x + o.w / 2; const cz = o.y + o.d / 2;
+      const len = alongX ? o.w : o.d;
+      put(cx, 46, cz, alongX ? len : 9, 9, alongX ? 9 : len, 0x5a3a1c);
+      for (const sgn of [-1, 1]) put(alongX ? cx + sgn * (len / 2 - 4) : cx, 26, alongX ? cz : cz + sgn * (len / 2 - 4), 8, 52, 8, 0x3a2412);
+    }));
+    // Tall grass: a darker pad and a scatter of blades (seeded so it never changes).
+    inst(unitBox(), grass.length, (put) => grass.forEach(({ o }) => put(o.x + o.w / 2, 0.8, o.y + o.d / 2, o.w, 1.6, o.d, 0x3a6a30)));
+    let tufts = 0; grass.forEach(({ o }) => { tufts += Math.max(6, Math.round((o.w * o.d) / 1600 * 9)); });
+    const blade = geo('blade', () => new THREE.ConeGeometry(3.2, 24, 4));
+    inst(blade, tufts, (put) => grass.forEach(({ o, i }) => {
+      const r = rng(77 + i * 13); const n = Math.max(6, Math.round((o.w * o.d) / 1600 * 9));
+      for (let k = 0; k < n; k++) put(o.x + 4 + r() * (o.w - 8), 12, o.y + 4 + r() * (o.d - 8), 1, 0.8 + r() * 0.6, 1, [0x4f9a3f, 0x62ad48, 0x3f8438][k % 3], r() * 3);
+    }));
+    built.add(obstacleGroup);
+  }
+
+  // Pooled burst of up to MAX_PARTICLES tiny octahedra in one InstancedMesh; each shrinks to nothing over its life (about 300 ms).
+  const pDummy = new THREE.Object3D(); const pCol = new THREE.Color();
+  const parts = (() => {
+    const m = new THREE.InstancedMesh(geo('spark', () => new THREE.OctahedronGeometry(1, 0)), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), MAX_PARTICLES);
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false;
+    for (let i = 0; i < MAX_PARTICLES; i++) { pDummy.position.set(0, -9999, 0); pDummy.scale.set(0, 0, 0); pDummy.updateMatrix(); m.setMatrixAt(i, pDummy.matrix); m.setColorAt(i, pCol.setHex(0xfff0b0)); }
+    m.visible = false; scene.add(m);
+    const f = () => new Float32Array(MAX_PARTICLES);
+    return { m, x: f(), y: f(), z: f(), vx: f(), vy: f(), vz: f(), life: f(), max: f(), next: 0, live: 0 };
+  })();
+  function burst(spec, x, z, color, up) {
+    for (let k = 0; k < spec.n; k++) {
+      const i = parts.next; parts.next = (parts.next + 1) % MAX_PARTICLES;
+      const a = Math.random() * Math.PI * 2; const sp = (50 + Math.random() * 70) * spec.speed;
+      parts.x[i] = x; parts.y[i] = up; parts.z[i] = z; parts.vx[i] = Math.cos(a) * sp; parts.vz[i] = Math.sin(a) * sp; parts.vy[i] = (40 + Math.random() * 60) * spec.speed;
+      parts.life[i] = parts.max[i] = spec.life; parts.m.setColorAt(i, pCol.setHex(color));
+    }
+    if (parts.m.instanceColor) parts.m.instanceColor.needsUpdate = true;
+  }
+  function stepParticles(dt) {
+    let live = 0;
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      if (parts.life[i] <= 0) continue;
+      parts.life[i] -= dt; live++;
+      const u = Math.max(0, parts.life[i] / parts.max[i]);
+      parts.vy[i] -= 320 * dt;
+      parts.x[i] += parts.vx[i] * dt; parts.y[i] = Math.max(1, parts.y[i] + parts.vy[i] * dt); parts.z[i] += parts.vz[i] * dt;
+      pDummy.position.set(parts.x[i], parts.y[i], parts.z[i]); const sc = u > 0 ? 3.4 * u : 0; pDummy.scale.set(sc, sc, sc); pDummy.updateMatrix();
+      parts.m.setMatrixAt(i, pDummy.matrix);
+    }
+    parts.live = live; parts.m.visible = live > 0;
+    if (live > 0) parts.m.instanceMatrix.needsUpdate = true;
+  }
+  // Sword-arc flat on the ground, shown while attack.active.
+  const swingArc = (() => {
+    const m = new THREE.Mesh(new THREE.RingGeometry(18, 60, 14, 1, -Math.PI / 3, (Math.PI * 2) / 3), new THREE.MeshBasicMaterial({ color: 0xff9d1a, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
+    m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; m.position.y = 14; scene.add(m); return m;
+  })();
+  let crouchK = 0;
+
+  function handleEvents(frame, calm) {
+    if (frame === lastEventsFrame) return; // the same frame object drawn twice must not repeat its one-shot events
+    lastEventsFrame = frame;
+    const ev = frame.events; if (!ev || !ev.length) return;
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i]; if (!e) continue;
+      const spec = burstSpec(e.type, calm); if (!spec) continue;
+      burst(spec, e.x || 0, e.y || 0, burstColor(spec, frame.blood), e.type === 'vault' ? 4 : 30);
+      if (e.type === 'hit-enemy' || e.type === 'enemy-down') {
+        let best = null; let bd = 60 * 60;
+        for (let k = 0; k < enemies.length; k++) { const en = enemies[k]; const d = (en.x - e.x) ** 2 + (en.y - e.y) ** 2; if (d < bd) { bd = d; best = en; } }
+        if (best) best.flash = 1;
+      }
+    }
   }
 
   return {

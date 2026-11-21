@@ -406,6 +406,7 @@ test('third-person camera: stick is relative to the camera, boom stops at walls,
   C.updateOrbit(o5, 0.5, { dx: 0, dy: 0, key: 0 }, { mx: 1, my: -1 }, false); assert.ok(o5.yaw > y1);
 });
 
+import { registerUi1 } from './ui1.mjs'; registerUi1(test);
 for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

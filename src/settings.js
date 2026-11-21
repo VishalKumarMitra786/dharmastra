@@ -8,6 +8,7 @@ export function defaultSettings(win = window) {
     autoDrive: mq('(pointer: coarse)'),
     reduceMotion: mq('(prefers-reduced-motion: reduce)'),
     side: 'right', // which side the touch controls sit on
+    blood: true, // brief small blood spatter on hits; off gives neutral sparks with the same timing
     graphics: '3d', // '3d' | '2d' (3d falls back to 2d automatically when WebGL is unavailable)
   };
 }
@@ -16,14 +17,15 @@ export function loadSettings(storage = safeStorage(), win = window) {
   const base = defaultSettings(win);
   try {
     const saved = JSON.parse(storage?.getItem(KEY) || '{}');
-    return {
+    return wireBloodToggle({
       timer: ['off', 'standard', 'extended'].includes(saved.timer) ? saved.timer : base.timer,
       autoDrive: typeof saved.autoDrive === 'boolean' ? saved.autoDrive : base.autoDrive,
       reduceMotion: typeof saved.reduceMotion === 'boolean' ? saved.reduceMotion : base.reduceMotion,
       side: saved.side === 'left' ? 'left' : 'right',
       graphics: saved.graphics === '2d' ? '2d' : '3d',
-    };
-  } catch { return base; }
+      blood: typeof saved.blood === 'boolean' ? saved.blood : base.blood,
+    }, win, storage);
+  } catch { return wireBloodToggle(base, win, storage); }
 }
 
 export function saveSettings(settings, storage = safeStorage()) {
@@ -32,4 +34,15 @@ export function saveSettings(settings, storage = safeStorage()) {
 
 function safeStorage() {
   try { return window.localStorage; } catch { return null; }
+}
+
+// The Settings screen's `blood` checkbox (#set-blood) updates the live settings object and saves it, so no other file has to know about it.
+function wireBloodToggle(settings, win, storage) {
+  const box = win?.document?.getElementById?.('set-blood');
+  if (box && !box.dataset?.wired) {
+    box.checked = settings.blood;
+    box.addEventListener('change', () => { settings.blood = box.checked; saveSettings(settings, storage); });
+    if (box.dataset) box.dataset.wired = '1';
+  }
+  return settings;
 }

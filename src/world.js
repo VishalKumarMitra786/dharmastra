@@ -19,11 +19,48 @@ export function parseLayout(layout) {
     speed: g.speed,
     path: g.path.map(([x, y]) => ({ x: x * ts, y: y * ts })),
   }));
+  const extras = parseExtras(layout, rows, ts);
   return {
+    ...extras,
+    rules: layout.rules === 2 ? 2 : 1, objectiveDefs: Array.isArray(layout.objectives) ? layout.objectives : null,
     tileSize: ts, cols, rows: rows.length, width: cols * ts, height: rows.length * ts,
     solid, walls: mergeWalls(solid, ts), start, checkpoints, guards, timeLimit: layout.timeLimit,
     mode: layout.mode || 'chariot', theme: layout.theme || 'default', rowsText: rows,
   };
+}
+
+// Rules-2 tiles: = low wall, ~ low beam, , tall grass (obstacles), k pickup spot, a enemy spawn.
+// They are never merged into `walls`; the sim decides when an obstacle is solid.
+const OBSTACLE_KINDS = { '=': 'lowwall', '~': 'beam', ',': 'grass' };
+const DEFAULT_ENTITIES = { k: { kind: 'staff' }, a: { kind: 'raider', hp: 3 } };
+const safeKind = (v, d) => (typeof v === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(v) ? v : d);
+
+function parseExtras(layout, rows, ts) {
+  const obstacles = []; const pickups = []; const spawns = [];
+  const ent = layout.entities || {};
+  const count = { k: 0, a: 0 };
+  rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const ch = row[c];
+      const kind = OBSTACLE_KINDS[ch];
+      if (kind) { // merge a horizontal run of the same kind into one rectangle
+        const c0 = c;
+        while (c + 1 < row.length && row[c + 1] === ch) c++;
+        obstacles.push({ x: c0 * ts, y: r * ts, w: (c - c0 + 1) * ts, d: ts, kind });
+      } else if (ch === 'k' || ch === 'a') {
+        const n = ++count[ch];
+        const def = { ...DEFAULT_ENTITIES[ch], ...(ent[ch] || {}) };
+        const pos = { x: (c + 0.5) * ts, y: (r + 0.5) * ts };
+        if (ch === 'k') pickups.push({ ...pos, id: `k${n}`, kind: safeKind(def.kind, 'staff') });
+        else {
+          const hp = Number.isFinite(def.hp) ? Math.max(1, Math.min(20, Math.floor(def.hp))) : 3;
+          const patrol = Array.isArray(def.patrol) ? def.patrol.filter((q) => Array.isArray(q) && q.every(Number.isFinite)).map(([x, y]) => ({ x: x * ts, y: y * ts })) : [];
+          spawns.push({ ...pos, id: `a${n}`, kind: safeKind(def.kind, 'raider'), hp, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
+        }
+      }
+    }
+  });
+  return { obstacles, pickups, spawns };
 }
 
 // Merge solid tiles into few rectangles: horizontal runs first, then stack identical runs vertically.

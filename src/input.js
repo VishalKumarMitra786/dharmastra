@@ -5,10 +5,29 @@ const KEYS = {
   KeyQ: 'lookLeft', KeyE: 'lookRight', // turn the camera without a mouse or a touch drag
 };
 const BUTTON_FLAG = { left: 'left', right: 'right', go: 'up', brake: 'down', up: 'up', down: 'down', run: 'run', lookleft: 'lookLeft', lookright: 'lookRight' };
+// One-shot actions: attack, jump and interact fire once per press; crouch is a toggle edge. A press waits up to BUFFER_MS for the next read().
+const ACTION_KEYS = { Space: 'jump', KeyJ: 'attack', KeyC: 'crouch', KeyF: 'interact' };
+const ACTION_BUTTONS = { attack: ['attack'], jump: ['jump'], crouch: ['crouch'], interact: ['interact'], do: ['jump', 'interact'] }; // 'Do' is the context button: the sim vaults or picks up, whichever is in front
+export const BUFFER_MS = 150;
+export function createActionBuffer(now = () => performance.now()) {
+  const at = { attack: -Infinity, jump: -Infinity, crouch: -Infinity, interact: -Infinity };
+  return {
+    press(name) { if (name in at) at[name] = now(); },
+    clear() { for (const k in at) at[k] = -Infinity; },
+    take() { // edge: each press is delivered once, and only if it is fresh
+      const t = now(); const out = {};
+      for (const k in at) { out[k] = t - at[k] <= BUFFER_MS; at[k] = -Infinity; }
+      return out;
+    },
+  };
+}
+const NO_ACTION = Object.freeze({ attack: false, jump: false, crouch: false, interact: false });
 const DRAG_FULL = 50; // px of horizontal drag for full steering
 const clamp = (v) => Math.max(-1, Math.min(1, v));
 
-export function createInput({ stage, buttons, onPause }) {
+export function createInput({ stage, buttons, onPause, now }) {
+  const actions = createActionBuffer(now);
+  const act = (names) => { if (state.enabled) names.forEach((n) => actions.press(n)); };
   const down = { left: new Set(), right: new Set(), up: new Set(), down: new Set(), run: new Set(), lookLeft: new Set(), lookRight: new Set() };
   let drag = null; // the finger or mouse steering the walker (chariot mode) or the left-thumb stick
   let look = null; // the finger or mouse turning the camera
@@ -22,6 +41,13 @@ export function createInput({ stage, buttons, onPause }) {
 
   window.addEventListener('keydown', (e) => {
     if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { onPause(); return; }
+    const aname = ACTION_KEYS[e.code];
+    if (aname) {
+      const native = e.code === 'Space' && /^(BUTTON|A|SELECT|INPUT|TEXTAREA)$/.test(e.target?.tagName || ''); // a focused control keeps its own Space
+      if (state.enabled && !e.repeat && !e.defaultPrevented && !native) act([aname]);
+      if (state.enabled && !native) e.preventDefault();
+      return;
+    }
     const flag = KEYS[e.code];
     if (!flag || !state.enabled) return;
     e.preventDefault();
@@ -31,6 +57,15 @@ export function createInput({ stage, buttons, onPause }) {
   window.addEventListener('blur', reset);
 
   buttons.forEach((btn) => {
+    const names = ACTION_BUTTONS[btn.dataset.control];
+    if (names) { // action buttons fire on the press edge (touch, mouse, or Space/Enter on the focused button)
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); act(names); btn.classList.add('active'); });
+      ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'].forEach((ev) => btn.addEventListener(ev, () => btn.classList.remove('active')));
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+      btn.addEventListener('keydown', (e) => { if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); act(names); btn.classList.add('active'); } });
+      btn.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'Enter') btn.classList.remove('active'); });
+      return;
+    }
     const flag = BUTTON_FLAG[btn.dataset.control];
     const src = `btn-${btn.dataset.control}`;
     btn.addEventListener('pointerdown', (e) => { e.preventDefault(); try { btn.setPointerCapture?.(e.pointerId); } catch { /* synthetic or already-released pointer */ } press(flag, src); btn.classList.add('active'); });
@@ -75,13 +110,14 @@ export function createInput({ stage, buttons, onPause }) {
     Object.values(down).forEach((s) => s.clear());
     drag = null; look = null; lookAcc = { dx: 0, dy: 0 }; dragSteer = 0; dragVec = { x: 0, y: 0 };
     buttons.forEach((b) => b.classList.remove('active'));
+    actions.clear();
   }
 
   return {
     state,
     reset,
     read() {
-      if (!state.enabled) return { steer: 0, throttle: 0, mx: 0, my: 0, run: false, look: { dx: 0, dy: 0, key: 0 } };
+      if (!state.enabled) { actions.clear(); return { steer: 0, throttle: 0, mx: 0, my: 0, run: false, look: { dx: 0, dy: 0, key: 0 }, action: { ...NO_ACTION } }; }
       const has = (f) => down[f].size > 0;
       const steer = clamp((has('right') ? 1 : 0) - (has('left') ? 1 : 0) + dragSteer);
       const forward = has('up') || state.autoDrive;
@@ -93,7 +129,7 @@ export function createInput({ stage, buttons, onPause }) {
       const mx = kx || stick.x; const my = ky || stick.y;
       const lk = state.cameraLook ? { dx: lookAcc.dx, dy: lookAcc.dy, key: (has('lookRight') ? 1 : 0) - (has('lookLeft') ? 1 : 0) } : { dx: 0, dy: 0, key: 0 };
       lookAcc = { dx: 0, dy: 0 };
-      return { steer, throttle, mx, my, run: has('run') || state.autoDrive, look: lk };
+      return { steer, throttle, mx, my, run: has('run') || state.autoDrive, look: lk, action: actions.take() };
     },
   };
 }
