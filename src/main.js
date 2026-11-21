@@ -11,6 +11,8 @@ import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
 import { chooseGraphics } from './camera.js';
 import { pickMissionId } from './missions.js';
+import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller } from './characters.js';
+import { createPicker } from './picker.js';
 
 const MISSION_ID = pickMissionId(location.search);
 const $ = (id) => document.getElementById(id);
@@ -23,10 +25,23 @@ async function boot() {
     loadMission(`missions/${MISSION_ID}.json`),
     import(`../missions/${MISSION_ID}.js`),
   ]);
+  const raw = structuredClone(mission); // scripts say {name}; the chosen traveller's name is filled in below
   const world = parseLayout(layout);
   if (world.checkpoints.length !== mission.objectives.length) {
     throw new Error(`The map has ${world.checkpoints.length} checkpoints but the mission has ${mission.objectives.length} objectives.`);
   }
+
+  const saved = loadTraveller();
+  let traveller = saved || defaultTraveller();
+  const personalise = () => {
+    const name = appearance(traveller).name;
+    mission.logline = fill(raw.logline, name);
+    mission.objectives.forEach((o, i) => { o.text = fill(raw.objectives[i].text, name); });
+    mission.dialogue.forEach((d, i) => { d.text = fill(raw.dialogue[i].text, name); });
+    $('logline').textContent = mission.logline;
+    $('who').textContent = `Playing as ${name}.`;
+  };
+  personalise();
 
   const settings = loadSettings();
   const canvas = $('stage');
@@ -71,6 +86,7 @@ async function boot() {
         const THREE = await import('./vendor/three-lite.js');
         const { createRenderer3D } = await import('./renderer3d.js');
         renderer3d = assertRenderer(createRenderer3D(canvas3d, THREE, { onContextLost: () => fallback('WebGL context lost') }));
+        renderer3d.setCharacter(appearance(traveller));
         renderer3d.setWorld(world);
         renderer3d.resize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1);
       }
@@ -105,13 +121,20 @@ async function boot() {
     menu: () => game.menu(),
     settings: () => { backTo = screens.current; screens.show('screen-settings'); },
     'settings-back': () => screens.show(backTo),
+    'char-open': () => { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); },
+    'char-save': () => picker.save(),
+  });
+
+  const picker = createPicker(document, {
+    onSave: (t) => { traveller = t; saveTraveller(t); personalise(); renderer3d?.setCharacter(appearance(t)); screens.show('screen-start', 'start-btn'); },
   });
 
   game.applySettings();
   resize();
   await applyGraphics();
   $('start-btn').disabled = false;
-  screens.show('screen-start', 'start-btn');
+  if (saved) screens.show('screen-start', 'start-btn');
+  else { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); } // first visit: choose a traveller
 }
 
 function webglAvailable() {

@@ -141,3 +141,25 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Character picker */
+.picker { text-align: left; max-width: 38rem; max-height: 100%; overflow: auto; }
+.picker h2 { text-align: center; }
+.picker .goal { text-align: center; margin: 0 auto 8px; }
+.group { border: 0; margin: 12px 0 0; padding: 0; }
+.group legend { font-weight: 700; padding: 0 0 6px; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt input, .look input { position: absolute; opacity: 0; width: 44px; height: 44px; margin: 0; }
+.opt, .look { position: relative; }
+.opt label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 16px; border: 1.5px solid rgba(255, 180, 46, 0.55); border-radius: 999px; background: var(--btn); cursor: pointer; }
+.opt input:checked + label { background: linear-gradient(135deg, #ffe08a, #ffa51f 55%, #ff7a3d); color: #1a0f05; font-weight: 800; border-color: #ffe9b0; }
+.opt input:focus-visible + label, .look input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px #000; }
+.swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; }
+.looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.look label { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 8px; height: 100%; border: 1.5px solid rgba(255, 180, 46, 0.4); border-radius: 16px; background: rgba(255, 243, 220, 0.06); cursor: pointer; }
+.look input:checked + label { border-color: var(--accent); background: rgba(255, 180, 46, 0.18); box-shadow: 0 0 22px rgba(255, 165, 31, 0.35); }
+.avatar { display: block; width: 84px; height: 98px; }
+.avatar svg { width: 100%; height: 100%; display: block; }
+.look-name { font-family: var(--display); font-weight: 800; font-size: 1.1rem; }
+.look-blurb { font-size: 0.85rem; color: var(--muted); }
+.field input[type="text"] { font: inherit; color: var(--text); background: #1d1448; border: 1.5px solid rgba(255, 180, 46, 0.7); border-radius: 12px; min-height: 44px; padding: 6px 12px; }

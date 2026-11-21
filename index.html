@@ -68,6 +68,18 @@
     </div>
   </main>
 
+  <div id="screen-character" class="overlay poster" role="dialog" aria-modal="true" aria-labelledby="char-title" hidden>
+    <div class="panel picker">
+      <h2 id="char-title">Choose your traveller</h2>
+      <p class="goal">You walk the chakra of time. Every era needs a courier, and in each one that courier is you.</p>
+      <fieldset class="group"><legend>Who do you play?</legend><div id="body-list" class="opts"></div></fieldset>
+      <fieldset class="group"><legend>Pick a look</legend><div id="look-list" class="looks"></div></fieldset>
+      <div class="field"><label for="char-name">Name (up to 12 letters)</label><input id="char-name" type="text" autocomplete="off" maxlength="12" spellcheck="false"></div>
+      <fieldset class="group"><legend>Outfit colour</legend><div id="outfit-list" class="opts"></div></fieldset>
+      <div class="actions"><button id="char-save" class="btn primary big" type="button" data-action="char-save">Start journey</button></div>
+    </div>
+  </div>
+
   <div id="screen-start" class="overlay poster" role="dialog" aria-modal="true" aria-labelledby="start-title">
     <svg class="chakra-bg" aria-hidden="true" focusable="false"><use href="#chakra"/></svg>
     <div class="panel">
@@ -75,6 +87,7 @@
       <p class="eyebrow" id="era">Dvapara Yuga</p>
       <h1 id="start-title">Escape from Hastinapur</h1>
       <p id="logline" class="logline"></p>
+      <p class="note" id="who"></p>
       <p id="gfx-note-start" class="note" role="status" hidden></p>
       <p class="goal">Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
       <details class="how">
@@ -86,6 +99,7 @@
       </details>
       <div class="actions">
         <button id="start-btn" class="btn primary" type="button" data-action="start" data-autofocus disabled>Start mission</button>
+        <button class="btn" type="button" data-action="char-open">Change traveller</button>
         <button class="btn" type="button" data-action="settings">Settings</button>
         <a class="btn" href="prototypes/time-chakra/index.html">Time chakra</a>
       </div>

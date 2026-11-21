@@ -306,6 +306,31 @@ test('mission 2: bot can drive S->1->2->3 with guards removed, and guards-on out
   console.log(`   mission 2 bot (guards on, blind to guards): ${sim2.status} in ${r2.t.toFixed(1)}s, health ${sim2.health}, guard hits ${r2.guards}`);
 });
 
+test('characters: roster has both bodies, valid colours, safe names; storage is sanitised', async () => {
+  const C = await import('../characters.js');
+  assert.ok(C.LOOKS.filter((l) => l.body === 'f').length >= 2 && C.LOOKS.filter((l) => l.body === 'm').length >= 2);
+  assert.equal(new Set(C.LOOKS.map((l) => l.id)).size, C.LOOKS.length);
+  for (const l of C.LOOKS) {
+    for (const c of [l.skin, l.hair, l.eyes, l.accent]) assert.match(c, /^#[0-9a-f]{6}$/i, l.id);
+    assert.ok(C.OUTFITS.some((o) => o.id === l.outfit), l.id);
+    assert.ok(l.name.length <= C.NAME_MAX);
+    assert.ok(C.avatarSvg(C.appearance({ look: l.id })).startsWith('<svg'));
+  }
+  const bad = C.sanitize({ look: 'nope', name: '<img src=x onerror=1>' + 'z'.repeat(40), outfit: 'bogus' });
+  assert.equal(bad.look, C.LOOKS[0].id);
+  assert.ok(!/[<>=]/.test(bad.name) && bad.name.length <= C.NAME_MAX);
+  assert.equal(C.sanitize({ look: 'ira', name: '   ' }).name, 'Ira');
+  assert.equal(C.fill('Go, {name}.', 'Meera'), 'Go, Meera.');
+});
+
+test('missions: scripts that use {name} stay within the 140 character limit for the longest name', async () => {
+  const { NAME_MAX } = await import('../characters.js');
+  for (const id of ['dvapara-escape', 'mauryan-spy']) {
+    const m = JSON.parse(await readFile(new URL(`../../missions/${id}.json`, import.meta.url), 'utf8'));
+    for (const d of m.dialogue) assert.ok(d.text.replaceAll('{name}', 'x'.repeat(NAME_MAX)).length <= 140, `${id}/${d.id}`);
+  }
+});
+
 for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

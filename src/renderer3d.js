@@ -1,7 +1,9 @@
 // Three.js renderer implementing the interface in renderer.js.
 // A walking mission is shown as a city map: a high, north-up camera follows a person on foot through streets built to match the era
 // (see THEMES). The city has buildings, market stalls, trees, lamps, walking townspeople, patrolling guards, shadows and a night sky.
-// Everything is built from simple shapes and shared geometry so it stays light; real authored models can replace the people later.
+// Materials are physically based (standard PBR) with filmic tone mapping and an image-based ambient light; capable desktops also get bloom
+// on lamps, windows and checkpoint beams. Buildings are built from simple shapes, and people are articulated shapes unless authored
+// glTF characters are listed in assets/characters/manifest.json (see docs/assets.md), in which case those are used with their own skeleton animation.
 // Meaning is never colour alone: checkpoints change height and style and carry a number or a check mark,
 // guards have a spear, a helmet, a ground ring and a facing wedge, and the player shows a ring while protected.
 // The caller passes in the THREE namespace so the large library is only downloaded when 3D is used.
@@ -50,9 +52,14 @@ function rng(seed) { let s = seed % 2147483647; if (s <= 0) s += 2147483646; ret
 export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true });
   gl.outputColorSpace = THREE.SRGBColorSpace;
+  gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.25;
   const shadowsOn = (navigator.hardwareConcurrency || 8) > 4;
-  if (shadowsOn) gl.shadowMap.enabled = true;
+  if (shadowsOn) { gl.shadowMap.enabled = true; gl.shadowMap.type = THREE.PCFSoftShadowMap; }
+  const fine = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
+  const fancy = shadowsOn && (fine || /[?&]fx=1/.test(location.search)) && !/[?&]fx=0/.test(location.search); // bloom: desktops by default, phones only on request
+  let composer = null;
   const scene = new THREE.Scene();
+  { const pm = new THREE.PMREMGenerator(gl); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32; pm.dispose(); }
   const camera = new THREE.PerspectiveCamera(48, 1, 10, 4200);
   const camState = createCameraState();
   const camPos = { x: 0, z: 0, ready: false };
@@ -134,7 +141,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
 
   let world = null; let theme = THEMES.default;
   let built = null;
-  let hero = null; let heroTop = null; let protectRing = null;
+  let hero = null; let heroTop = null; let protectRing = null; let heroLook = null;
   const guards = []; const npcs = []; const cps = []; const lamps = []; const boats = [];
   let lastNow = 0; let lost = false; let spawnAcc = 0;
 
@@ -144,7 +151,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   // Shared geometry and materials (people reuse these).
   const geoCache = new Map(); const matCache = new Map();
   function geo(key, make) { if (!geoCache.has(key)) geoCache.set(key, make()); return geoCache.get(key); }
-  function mat(color, extra) { const k = color + (extra ? JSON.stringify(extra) : ''); if (!matCache.has(k)) matCache.set(k, new THREE.MeshLambertMaterial({ color, ...extra })); return matCache.get(k); }
+  function mat(color, extra) { const k = color + (extra ? JSON.stringify(extra) : ''); if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: 0.86, metalness: 0, ...extra })); return matCache.get(k); }
   function box(w, h, d, m) { return new THREE.Mesh(geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d)), m); }
   function cyl(rt, rb, h, seg, m) { return new THREE.Mesh(geo(`c${rt}_${rb}_${h}_${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg)), m); }
   function ball(r, m, sx = 1, sy = 1, sz = 1) { const s = new THREE.Mesh(geo(`s${r}`, () => new THREE.SphereGeometry(r, 8, 6)), m); s.scale.set(sx, sy, sz); return s; }
@@ -152,7 +159,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.scale.set(size, size, 1); return s;
   }
-  function shadowed(o, cast = true, receive = false) { if (shadowsOn) o.traverse((m) => { if (m.isMesh) { m.castShadow = cast; m.receiveShadow = receive; } }); return o; }
+  function shadowed(o, cast = true, receive = false) { if (shadowsOn) o.traverse((m) => { if (m.isMesh && !m.userData.outline) { m.castShadow = cast; m.receiveShadow = receive; } }); return o; }
 
   function label(text, bg) {
     return canvasTex(THREE, 128, (g) => {
@@ -163,9 +170,31 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     });
   }
 
+  // ---- Anime-style look for people: cel shading, a dark outline, big eyes ----
+  const toonGradient = (() => { const d = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1, THREE.RedFormat); d.minFilter = d.magFilter = THREE.NearestFilter; d.needsUpdate = true; return d; })();
+  const toonCache = new Map();
+  function toon(color) { if (!toonCache.has(color)) toonCache.set(color, new THREE.MeshToonMaterial({ color, gradientMap: toonGradient })); return toonCache.get(color); }
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a0f1f, side: THREE.BackSide });
+  const eyeTexCache = new Map();
+  function eyeTex(iris) {
+    if (!eyeTexCache.has(iris)) eyeTexCache.set(iris, canvasTex(THREE, 128, (g, sz) => {
+      g.clearRect(0, 0, sz, sz);
+      for (const cx of [34, 94]) {
+        g.fillStyle = '#fff'; g.beginPath(); g.ellipse(cx, 66, 17, 24, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = iris; g.beginPath(); g.ellipse(cx, 70, 12, 19, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#140a14'; g.beginPath(); g.ellipse(cx, 72, 6, 11, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(cx - 5, 60, 4.5, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = '#140a14'; g.lineWidth = 5; g.beginPath(); g.ellipse(cx, 66, 17, 24, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); // upper lash line
+        g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 17, 30); g.quadraticCurveTo(cx, 22, cx + 17, 30); g.stroke(); // brow
+      }
+    }));
+    return eyeTexCache.get(iris);
+  }
+
   // ---- People ----------------------------------------------------------------------------------------------------------
   // Faces +x. About 62 units tall. Limbs hang from pivots so a walk cycle is just a few rotations.
   function makePerson(o) {
+    const mat = toon; // people are cel shaded
     const g = new THREE.Group();
     const skin = mat(o.skin); const top = o.topMat || mat(o.top); const bot = mat(o.bottom); const dark = mat(0x2a1a10);
     const legs = []; const arms = [];
@@ -177,26 +206,34 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     }
     const upper = new THREE.Group(); g.add(upper);
     if (o.skirt) { const sk = cyl(6.2, 8.6, 17, 8, bot); sk.position.y = 24; upper.add(sk); } else { const hip = box(8, 6, 13, bot); hip.position.y = 31; upper.add(hip); }
-    const torso = cyl(6.4, 7.4, 19, 8, top); torso.position.y = 39; upper.add(torso);
+    const torso = o.female ? cyl(5.6, 6.6, 19, 8, top) : cyl(6.6, 7.6, 19, 8, top); torso.position.y = 39; upper.add(torso);
     if (o.sash) { const sh = cyl(7.6, 7.6, 3, 8, mat(o.sash)); sh.position.y = 32; upper.add(sh); }
     for (const side of [-1, 1]) {
-      const pivot = new THREE.Group(); pivot.position.set(0, 46, side * 9);
+      const pivot = new THREE.Group(); pivot.position.set(0, 46, side * (o.female ? 8 : 9.4));
       const arm = cyl(2.3, 1.9, 19, 6, o.sleeves ? top : skin); arm.position.y = -9.5; pivot.add(arm);
       const hand = ball(2.4, skin); hand.position.y = -20; pivot.add(hand);
       upper.add(pivot); arms.push(pivot);
     }
     const neck = cyl(2.2, 2.4, 3, 6, skin); neck.position.y = 49.5; upper.add(neck);
-    const head = ball(5.6, skin); head.position.y = 55; upper.add(head);
-    const nose = box(1.6, 1.6, 1.6, skin); nose.position.set(5.6, 54.5, 0); upper.add(nose);
-    for (const z of [-2, 2]) { const eye = box(0.8, 1.2, 1.2, dark); eye.position.set(5, 56, z); upper.add(eye); }
-    if (o.turban) { const tb = ball(6.6, mat(o.turban), 1, 0.78, 1); tb.position.y = 58; upper.add(tb); const tc = ball(3.4, mat(o.turban), 1, 0.9, 1); tc.position.y = 63; upper.add(tc); }
-    else if (o.helm) { const hm = new THREE.Mesh(geo('helm', () => new THREE.ConeGeometry(6, 12, 8)), mat(o.helm)); hm.position.y = 63; upper.add(hm); const br = cyl(6.4, 6.4, 2, 8, mat(o.helm)); br.position.y = 58; upper.add(br); }
-    else { const hr = ball(5.9, mat(o.hair || 0x1b1210), 1, 0.8, 1.02); hr.position.set(-0.6, 57.5, 0); upper.add(hr); if (o.bun) { const bn = ball(2.6, mat(o.hair || 0x1b1210)); bn.position.set(-5.5, 58, 0); upper.add(bn); } }
+    const head = ball(7.4, skin); head.position.y = 57.5; upper.add(head); // anime proportions: a big head
+    const face = new THREE.Mesh(geo('face', () => new THREE.PlaneGeometry(11.5, 11.5)), new THREE.MeshBasicMaterial({ map: eyeTex(o.eyes || '#3a7bd8'), transparent: true }));
+    face.rotation.y = Math.PI / 2; face.position.set(7.35, 56.5, 0); face.userData.noOutline = true; upper.add(face);
+    const hairMat = mat(o.hair || 0x1b1210);
+    if (o.turban) { const tb = ball(8.4, mat(o.turban), 1, 0.74, 1); tb.position.y = 62; upper.add(tb); const tc = ball(4.4, mat(o.turban), 1, 0.9, 1); tc.position.y = 68; upper.add(tc); }
+    else if (o.helm) { const hm = new THREE.Mesh(geo('helm', () => new THREE.ConeGeometry(7.6, 14, 8)), mat(o.helm)); hm.position.y = 71; upper.add(hm); const br = cyl(8, 8, 2.4, 8, mat(o.helm)); br.position.y = 63.5; upper.add(br); }
+    else {
+      const hr = ball(7.9, hairMat, 1, 0.82, 1.03); hr.position.set(-0.8, 60.5, 0); upper.add(hr);
+      for (const [a, len] of [[-0.9, 9], [-0.35, 11], [0.35, 11], [0.9, 9]]) { const sp = new THREE.Mesh(geo(`hs${len}`, () => new THREE.ConeGeometry(2.6, len, 5)), hairMat); sp.position.set(-6, 60, a * 8); sp.rotation.z = Math.PI / 2 + 0.25; sp.rotation.x = a * 0.4; upper.add(sp); }
+      const bang = ball(5, hairMat, 0.8, 0.5, 1.5); bang.position.set(4.4, 64.5, 0); upper.add(bang);
+      if (o.bun) { const bn = ball(3.2, hairMat); bn.position.set(-7, 64, 0); upper.add(bn); }
+      if (o.hairStyle === 'long') { const lh = cyl(6.4, 4.2, 24, 8, hairMat); lh.position.set(-5.5, 50, 0); upper.add(lh); }
+      if (o.hairStyle === 'braid') { for (let b = 0; b < 4; b++) { const bl = ball(3 - b * 0.35, hairMat); bl.position.set(-7 - b * 1.2, 55 - b * 6.5, 5); upper.add(bl); } }
+    }
     const extras = {};
     if (o.scarf) { const sc = box(16, 2.4, 5, mat(o.scarf)); sc.position.set(-10, 47, 0); upper.add(sc); extras.scarf = sc; const sc2 = box(5, 6, 5.4, mat(o.scarf)); sc2.position.set(1, 46, 0); upper.add(sc2); }
     if (o.bag) { const bg = box(7, 9, 4, mat(o.bag)); bg.position.set(-1, 33, 9.5); upper.add(bg); }
-    if (o.pot) { const pt = ball(5, mat(0xb4552f), 1, 0.9, 1); pt.position.set(0, 65, 0); upper.add(pt); }
-    if (o.bundle) { const bd = ball(6, mat(o.bundle), 1.2, 0.8, 1); bd.position.set(-2, 64, 0); upper.add(bd); }
+    if (o.pot) { const pt = ball(5, mat(0xb4552f), 1, 0.9, 1); pt.position.set(0, 72, 0); upper.add(pt); }
+    if (o.bundle) { const bd = ball(6, mat(o.bundle), 1.2, 0.8, 1); bd.position.set(-2, 71, 0); upper.add(bd); }
     if (o.spear) {
       const sp = cyl(0.9, 0.9, 80, 5, mat(0xd8c39a)); sp.position.set(2, -10, 0); arms[1].add(sp);
       const tip = new THREE.Mesh(geo('tip', () => new THREE.ConeGeometry(2.6, 9, 5)), mat(0xf4f4f4)); tip.position.set(2, 34, 0); arms[1].add(tip);
@@ -207,6 +244,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.8; ring.visible = Boolean(o.ringAlways); g.add(ring);
     if (o.wedge) { const w = new THREE.Mesh(geo('wedge', () => new THREE.ConeGeometry(9, 22, 3)), new THREE.MeshBasicMaterial({ color: 0xff5a48, transparent: true, opacity: 0.85 })); w.rotation.set(Math.PI / 2, 0, -Math.PI / 2); w.position.set(36, 1.5, 0); g.add(w); }
     g.userData = { legs, arms, upper, ring, extras, phase: Math.random() * 6 };
+    const hulls = [];
+    g.traverse((m) => { if (m.isMesh && m.material?.isMeshToonMaterial) hulls.push(m); });
+    hulls.forEach((m) => { const h = new THREE.Mesh(m.geometry, outlineMat); h.scale.setScalar(1.13); h.userData.outline = true; m.add(h); }); // inverted-hull outline
     return g;
   }
 
@@ -303,7 +343,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     groundTex.repeat.set(w.width / 144, w.height / 144);
 
     built = new THREE.Group();
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(w.width, w.height), new THREE.MeshLambertMaterial({ map: groundTex, color: T.groundTint }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(w.width, w.height), new THREE.MeshStandardMaterial({ map: groundTex, bumpMap: groundTex, bumpScale: 2.2, color: T.groundTint, roughness: T.rain ? 0.42 : 0.88, metalness: 0 }));
     ground.rotation.x = -Math.PI / 2; ground.position.set(w.width / 2, 0, w.height / 2);
     if (shadowsOn) ground.receiveShadow = true;
     built.add(ground);
@@ -458,17 +498,33 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     const tops = [0xe8432e, 0xffa51f, 0x1fb6a6, 0xf0c04a, 0xc0407a, 0x4a7ad8, 0x6cc04a, 0xf3ead6];
     const bottoms = [0xf3ead6, 0xe8dcc0, 0x5a3a22, 0xc9b890];
     const skins = [0xc68a5a, 0xb07448, 0xd9a070, 0x9a6440];
-    const n = Math.min(26, Math.floor(segs.length * 1.2));
+    const n = Math.min(20, Math.floor(segs.length * 1.2));
     for (let k = 0; k < n; k++) {
       const s = segs[Math.floor(rand() * segs.length)];
       const kind = k % 5;
-      const p = makePerson({ skin: skins[k % 4], top: tops[Math.floor(rand() * tops.length)], bottom: bottoms[k % 4], skirt: true, legsBare: true, turban: kind === 0 || kind === 3 ? tops[(k + 3) % tops.length] : undefined, hair: 0x1b1210, bun: kind === 2, pot: kind === 2, bundle: kind === 4 ? 0xc9a050 : undefined, sleeves: kind === 1 });
+      const p = makePerson({ eyes: ['#3a7bd8', '#8a5a2a', '#3aa86a', '#9a4ad8'][k % 4], skin: skins[k % 4], top: tops[Math.floor(rand() * tops.length)], bottom: bottoms[k % 4], skirt: true, legsBare: true, turban: kind === 0 || kind === 3 ? tops[(k + 3) % tops.length] : undefined, hair: 0x1b1210, bun: kind === 2, pot: kind === 2, bundle: kind === 4 ? 0xc9a050 : undefined, sleeves: kind === 1 });
       npcs.push({ g: p, s, len: Math.hypot(s.bx - s.ax, s.by - s.ay), speed: 26 + rand() * 24, off: rand(), idle: k % 7 === 6 });
       built.add(p);
     }
   }
 
+  // The player's person, drawn from the traveller chosen on the character screen (or the era's default look).
+  function buildHero() {
+    const h = theme.hero; const L = heroLook;
+    const hex = (c) => parseInt(String(c).slice(1), 16);
+    if (hero) built?.remove(hero);
+    const topColor = L ? hex(L.outfitColor) : h.top;
+    heroTop = new THREE.MeshToonMaterial({ color: topColor, gradientMap: toonGradient, emissive: 0x000000 });
+    hero = makePerson({
+      eyes: L ? L.eyes : '#2fbf8a', skin: L ? hex(L.skin) : h.skin, top: topColor, topMat: heroTop, bottom: h.bottom, skirt: true, legsBare: true,
+      scarf: L ? hex(L.accent) : h.scarf, bag: 0x6a4630, hair: L ? hex(L.hair) : h.hair, hairStyle: L ? L.hairStyle : 'short', bun: L?.hairStyle === 'bun', female: L ? L.body === 'f' : false,
+      lamp: true, lampColor: theme.lamp, ringColor: 0xfff4de, ring: [24, 28],
+    });
+    shadowed(hero); built?.add(hero); protectRing = hero.userData.ring;
+  }
+
   return {
+    setCharacter(look) { heroLook = look; if (built) buildHero(); },
     resize(w, h, dpr = 1) {
       gl.setPixelRatio(Math.min(dpr, 2));
       gl.setSize(w, h, false);
@@ -477,16 +533,24 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       if (h > w) camera.setViewOffset(w, h, 0, Math.round(h * 0.1), w, h);
       else camera.clearViewOffset();
       camera.updateProjectionMatrix();
+      if (fancy) {
+        const pr = Math.min(dpr, 2);
+        if (!composer) {
+          const target = new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType, samples: 4 });
+          composer = new THREE.EffectComposer(gl, target);
+          composer.addPass(new THREE.RenderPass(scene, camera));
+          composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.55, 0.88));
+          composer.addPass(new THREE.OutputPass());
+        }
+        composer.setPixelRatio(pr); composer.setSize(w, h);
+      }
     },
     setWorld(w) {
       clearBuilt();
       world = w; theme = THEMES[w.theme] || THEMES.default;
       buildCity(w);
       buildCrowd(w);
-      const h = theme.hero;
-      heroTop = new THREE.MeshLambertMaterial({ color: h.top, emissive: 0x000000 });
-      hero = makePerson({ skin: h.skin, top: h.top, topMat: heroTop, bottom: h.bottom, skirt: true, legsBare: true, scarf: h.scarf, bag: 0x6a4630, hair: h.hair, lamp: true, lampColor: theme.lamp, ringColor: 0xfff4de, ring: [24, 28] });
-      shadowed(hero); built.add(hero); protectRing = hero.userData.ring;
+      buildHero();
       w.checkpoints.forEach((p, i) => { const c = makeCheckpoint(p, i); cps.push(c); built.add(c.g); applyState(c, 'later', p); });
       scene.add(built);
     },
@@ -502,7 +566,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       const gcfg = theme.guard;
       while (guards.length < frame.guards.length) {
         const src = frame.guards[guards.length];
-        const g = makePerson({ skin: 0xc08a5a, top: gcfg.top, bottom: gcfg.bottom, skirt: true, legsBare: true, helm: gcfg.helm, sash: 0xffc247, sleeves: true, spear: true, shield: 0xc98a2a, lamp: true, lampColor: theme.lamp, ring: [24, 29], ringAlways: true, wedge: true });
+        const g = makePerson({ eyes: '#d84a3a', skin: 0xc08a5a, top: gcfg.top, bottom: gcfg.bottom, skirt: true, legsBare: true, helm: gcfg.helm, sash: 0xffc247, sleeves: true, spear: true, shield: 0xc98a2a, lamp: true, lampColor: theme.lamp, ring: [24, 29], ringAlways: true, wedge: true });
         shadowed(g); built.add(g); guards.push({ g, x: src.x, y: src.y });
       }
       frame.guards.forEach((gd, i) => {
@@ -579,13 +643,14 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       sky.position.copy(camera.position); stars.position.copy(camera.position);
       moonDisc.position.set(camera.position.x - 1700, 1500, camera.position.z - 1400);
       moon.position.set(c.x - 320, 650, c.y + 260); moon.target.position.set(c.x, 0, c.y);
-      gl.render(scene, camera);
+      if (composer) composer.render(); else gl.render(scene, camera);
     },
     dispose() {
       canvas.removeEventListener('webglcontextlost', onLost);
       clearBuilt();
       [glowTex, beamTex, mandalaTex].forEach((tx) => tx.dispose());
       geoCache.forEach((g2) => g2.dispose()); matCache.forEach((m2) => m2.dispose());
+      composer?.dispose?.();
       gl.dispose();
     },
   };

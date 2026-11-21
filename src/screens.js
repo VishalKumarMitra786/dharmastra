@@ -1,5 +1,5 @@
 // Overlay screens (start, pause, settings, win, fail, error) with focus handling and the settings form.
-const ALL = ['screen-start', 'screen-pause', 'screen-settings', 'screen-win', 'screen-fail', 'screen-error'];
+const ALL = ['screen-character', 'screen-start', 'screen-pause', 'screen-settings', 'screen-win', 'screen-fail', 'screen-error'];
 
 export function createScreens(doc = document) {
   const $ = (id) => doc.getElementById(id);

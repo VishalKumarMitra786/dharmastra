@@ -21,12 +21,12 @@
     {
       "id": "start-1",
       "speaker": "Sudatta",
-      "text": "Rain on the river means trouble in the city. Keep your lamp low and your steps quiet, Ila.",
+      "text": "Rain on the river means trouble in the city. Keep your lamp low and your steps quiet, {name}.",
       "trigger": "start"
     },
     {
       "id": "start-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "Three stops. The wharf, the timber lane, the sluice house. I will be fast.",
       "trigger": "start"
     },
@@ -38,7 +38,7 @@
     },
     {
       "id": "cp1-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "A secret at night. Fine. The timber lane is next.",
       "trigger": "checkpoint-1"
     },
@@ -50,7 +50,7 @@
     },
     {
       "id": "cp2-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "Past the palisade posts. The sluice house is near.",
       "trigger": "checkpoint-2"
     },
@@ -62,7 +62,7 @@
     },
     {
       "id": "cp3-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "That was the secret? Water. I was ready for worse.",
       "trigger": "checkpoint-3"
     },
@@ -74,7 +74,7 @@
     },
     {
       "id": "hit-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "You hit a post. Steady now, nothing broken.",
       "trigger": "hit"
     },
@@ -98,7 +98,7 @@
     },
     {
       "id": "win-2",
-      "speaker": "Ila",
+      "speaker": "{name}",
       "text": "No glory in it. Just a wall that held and a city still asleep.",
       "trigger": "win"
     }
@@ -125,7 +125,7 @@
       "label": "History"
     },
     {
-      "name": "Ila carries a ferry clerk's flood warning across the city",
+      "name": "{name} carries a ferry clerk's flood warning across the city",
       "year": "Legend",
       "label": "Invented"
     }
