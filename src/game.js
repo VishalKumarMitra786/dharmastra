@@ -7,7 +7,8 @@ import { createLoop } from './loop.js';
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
 const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', time: 'Time ran out.' };
 
-export function createGame({ mission, world, renderer, input, hud, screens, audio, settings, onSettings }) {
+export function createGame({ mission, world, renderer: initialRenderer, input, hud, screens, audio, settings, onSettings }) {
+  let renderer = initialRenderer;
   let sim = null;
   let runner = null;
   let paused = true;
@@ -115,6 +116,7 @@ export function createGame({ mission, world, renderer, input, hud, screens, audi
       screens.show('screen-start');
     },
     showFrame() { render(); },
+    setRenderer(r) { renderer = r; render(); },
     get status() { return sim?.status; },
   };
 }

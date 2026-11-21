@@ -12,6 +12,10 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px #000; }
 
 #game { position: fixed; inset: 0; height: 100dvh; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+#stage3d { position: absolute; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
+#game[data-graphics="3d"] #stage3d { display: block; }
+#game[data-graphics="3d"] #stage { opacity: 0; } /* stays on top to receive touch and pointer steering */
+.note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
 #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
 .btn, .pad, select { font: inherit; color: var(--text); background: var(--btn); border: 2px solid var(--accent); border-radius: 10px; min-height: 44px; min-width: 44px; padding: 0.4rem 0.9rem; cursor: pointer; }

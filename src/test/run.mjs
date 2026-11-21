@@ -7,6 +7,8 @@ import { validateMission, loadMission, createRunner } from '../mission.js';
 import { createLoop } from '../loop.js';
 import { assertRenderer, makeFrame } from '../renderer.js';
 import { layout } from '../../missions/dvapara-escape.js';
+import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../camera.js';
+import { loadSettings } from '../settings.js';
 
 const results = [];
 const test = (name, fn) => { try { fn(); results.push(['ok', name]); } catch (e) { results.push(['FAIL', name, e.message]); } };
@@ -178,6 +180,48 @@ function drive(sim, path) {
   }
   return { t, walls, guards };
 }
+
+
+test('camera: angleDelta takes the short way round', () => {
+  assert.ok(Math.abs(angleDelta(3.0, -3.0) - (2 * Math.PI - 6.0)) < 1e-9);
+  assert.ok(Math.abs(angleDelta(0, 1) - 1) < 1e-9);
+  assert.ok(Math.abs(angleDelta(-3.0, 3.0) + (2 * Math.PI - 6.0)) < 1e-9);
+});
+
+test('camera: sits behind the chariot, snaps on first frame, lags otherwise, never lags with reduced motion', () => {
+  const st = createCameraState();
+  const c = { x: 100, y: 200, angle: 0 };
+  const v = followCamera(st, c, 0.016, false);
+  assert.ok(v.position.x < c.x && Math.abs(v.position.z - c.y) < 1e-9, 'behind the chariot along its heading');
+  assert.ok(v.target.x > c.x, 'looks ahead of the chariot');
+  const turned = { ...c, angle: Math.PI / 2 };
+  followCamera(st, turned, 0.016, false);
+  assert.ok(st.angle > 0 && st.angle < Math.PI / 2, 'smoothing lags a little');
+  for (let i = 0; i < 200; i++) followCamera(st, turned, 0.016, false);
+  assert.ok(Math.abs(st.angle - Math.PI / 2) < 0.01, 'converges');
+  const rm = createCameraState();
+  followCamera(rm, c, 0.016, true);
+  followCamera(rm, turned, 0.016, true);
+  assert.equal(rm.angle, Math.PI / 2, 'reduced motion has no camera lag');
+});
+
+test('graphics choice: 3D when possible, 2D when asked or when WebGL is missing', () => {
+  assert.equal(chooseGraphics({ preference: '3d', webglAvailable: true }).mode, '3d');
+  assert.equal(chooseGraphics({ preference: '2d', webglAvailable: true }).mode, '2d');
+  const fb = chooseGraphics({ preference: '3d', webglAvailable: false });
+  assert.equal(fb.mode, '2d');
+  assert.ok(fb.note.length > 0, 'fallback explains itself');
+  assert.equal(chooseGraphics({ preference: '2d', webglAvailable: false }).note, '');
+});
+
+test('settings: graphics defaults to 3d and rejects bad saved values', () => {
+  const win = { matchMedia: () => ({ matches: false }) };
+  const store = (v) => ({ getItem: () => v });
+  assert.equal(loadSettings(store(null), win).graphics, '3d');
+  assert.equal(loadSettings(store('{"graphics":"2d"}'), win).graphics, '2d');
+  assert.equal(loadSettings(store('{"graphics":"hologram"}'), win).graphics, '3d');
+  assert.equal(loadSettings(store('not json'), win).graphics, '3d');
+});
 
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

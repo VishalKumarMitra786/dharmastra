@@ -30,13 +30,14 @@ export function createScreens(doc = document) {
   }
 
   function bindSettings(settings, onChange) {
-    const f = { timer: $('set-timer'), autoDrive: $('set-auto'), reduceMotion: $('set-motion'), side: $('set-side') };
+    const f = { timer: $('set-timer'), autoDrive: $('set-auto'), reduceMotion: $('set-motion'), side: $('set-side'), graphics: $('set-graphics') };
     f.timer.value = settings.timer; f.autoDrive.checked = settings.autoDrive;
-    f.reduceMotion.checked = settings.reduceMotion; f.side.value = settings.side;
+    f.reduceMotion.checked = settings.reduceMotion; f.side.value = settings.side; f.graphics.value = settings.graphics;
     f.timer.addEventListener('change', () => onChange({ timer: f.timer.value }));
     f.autoDrive.addEventListener('change', () => onChange({ autoDrive: f.autoDrive.checked }));
     f.reduceMotion.addEventListener('change', () => onChange({ reduceMotion: f.reduceMotion.checked }));
     f.side.addEventListener('change', () => onChange({ side: f.side.value }));
+    f.graphics.addEventListener('change', () => onChange({ graphics: f.graphics.value }));
   }
 
   function showWin(stats, events, line) {

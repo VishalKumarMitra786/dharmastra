@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Dharmastra - Escape from Hastinapur</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
   <main id="game" aria-label="Escape from Hastinapur" data-side="right">
+    <canvas id="stage3d" aria-hidden="true"></canvas>
     <canvas id="stage" role="img" aria-label="Top-down view of the chariot, guards and checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission."></canvas>
 
     <header id="hud">
@@ -40,6 +42,7 @@
       <p class="eyebrow" id="era">Dvapara Yuga</p>
       <h1 id="start-title">Escape from Hastinapur</h1>
       <p id="logline"></p>
+      <p id="gfx-note-start" class="note" role="status" hidden></p>
       <p>Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
       <h2>Controls</h2>
       <ul>
@@ -74,6 +77,14 @@
           <option value="standard">Standard (2:30)</option>
           <option value="extended">Extended (5:00)</option>
         </select>
+      </div>
+      <div class="field">
+        <label for="set-graphics">Graphics</label>
+        <select id="set-graphics">
+          <option value="3d">3D (recommended)</option>
+          <option value="2d">2D (lighter, works everywhere)</option>
+        </select>
+        <p id="gfx-note" class="note" role="status" hidden></p>
       </div>
       <div class="field check"><input id="set-auto" type="checkbox"><label for="set-auto">Auto-accelerate (the chariot moves forward by itself; use Brake or Down to slow)</label></div>
       <div class="field check"><input id="set-motion" type="checkbox"><label for="set-motion">Reduce motion (no screen shake or flashing, calmer animation)</label></div>

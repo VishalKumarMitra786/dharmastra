@@ -9,6 +9,7 @@ import { createScreens } from './screens.js';
 import { createAudio } from './audio.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
+import { chooseGraphics } from './camera.js';
 
 const MISSION_ID = 'dvapara-escape';
 const $ = (id) => document.getElementById(id);
@@ -28,8 +29,12 @@ async function boot() {
 
   const settings = loadSettings();
   const canvas = $('stage');
-  const renderer = assertRenderer(createRenderer2D(canvas));
-  renderer.setWorld(world);
+  const canvas3d = $('stage3d');
+  const renderer2d = assertRenderer(createRenderer2D(canvas));
+  renderer2d.setWorld(world);
+  let renderer3d = null;
+  const ARIA_2D = canvas.getAttribute('aria-label');
+  const ARIA_3D = 'Chase view of the chariot, guards and checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission.';
   const hud = createHud();
   const audio = createAudio();
   let game = null;
@@ -39,12 +44,38 @@ async function boot() {
     document.documentElement.classList.toggle('reduce-motion', settings.reduceMotion);
     $('game').dataset.side = settings.side;
   };
-  game = createGame({ mission, world, renderer, input, hud, screens, audio, settings, onSettings: applyVisualSettings });
+  game = createGame({ mission, world, renderer: renderer2d, input, hud, screens, audio, settings, onSettings: applyVisualSettings });
 
   const resize = () => {
-    renderer.resize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+    renderer2d.resize(w, h, dpr);
+    renderer3d?.resize(w, h, dpr);
     game.showFrame();
   };
+
+  // Graphics: 3D when possible, otherwise 2D with a visible note. The saved preference is never overwritten by a fallback.
+  const note = (text) => { for (const id of ['gfx-note', 'gfx-note-start']) { const n = $(id); n.textContent = text; n.hidden = !text; } if (text) hud.announce(text); };
+  const show = (mode) => {
+    $('game').dataset.graphics = mode;
+    canvas.setAttribute('aria-label', mode === '3d' ? ARIA_3D : ARIA_2D);
+    game.setRenderer(mode === '3d' ? renderer3d : renderer2d);
+  };
+  const fallback = (why) => { console.warn(why); show('2d'); note('3D graphics could not start on this device, so the 2D view is on.'); };
+  async function applyGraphics() {
+    const pick = chooseGraphics({ preference: settings.graphics, webglAvailable: webglAvailable() });
+    note(pick.note);
+    if (pick.mode === '2d') { show('2d'); return; }
+    try {
+      if (!renderer3d) {
+        const THREE = await import('./vendor/three-lite.js');
+        const { createRenderer3D } = await import('./renderer3d.js');
+        renderer3d = assertRenderer(createRenderer3D(canvas3d, THREE, { onContextLost: () => fallback('WebGL context lost') }));
+        renderer3d.setWorld(world);
+        renderer3d.resize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1);
+      }
+      show('3d');
+    } catch (err) { fallback(err); }
+  }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden) game.pause(); });
@@ -62,6 +93,7 @@ async function boot() {
     Object.assign(settings, change);
     saveSettings(settings);
     game.applySettings();
+    if ('graphics' in change) applyGraphics();
   });
   screens.bindActions({
     start: () => game.start(),
@@ -76,8 +108,18 @@ async function boot() {
 
   game.applySettings();
   resize();
+  await applyGraphics();
   $('start-btn').disabled = false;
   screens.show('screen-start', 'start-btn');
+}
+
+function webglAvailable() {
+  try {
+    const c = document.createElement('canvas');
+    const g = c.getContext('webgl2') || c.getContext('webgl');
+    g?.getExtension('WEBGL_lose_context')?.loseContext(); // free the probe context straight away
+    return Boolean(g);
+  } catch { return false; }
 }
 
 function clock(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }

@@ -46,3 +46,13 @@ To swap in a 3D renderer, implement `resize(w, h, dpr)`, `setWorld(world)` and `
 - The loader rejects files that break this schema and shows the reason on screen.
 
 Map layout and tuning live in `missions/<id>.js` (exports `layout`): an ASCII grid (`#` wall, `o` pillar, `.` road, `S` start, digits = top-left tile of a 2x2 checkpoint spot), guard paths and the time limit.
+
+## 3D graphics
+
+The game has a 3D chase-camera view (Three.js) and the original 2D top-down view. Both draw from the same plain frame snapshot through the renderer interface in `renderer.js`, so game rules are identical.
+
+- Settings > Graphics switches between them at any time. The default is 3D.
+- If WebGL is missing, fails to start, or the context is lost, the game falls back to 2D and shows a note. The saved preference is not overwritten by a fallback.
+- Three.js loads only when 3D is used. `src/vendor/three-lite.js` is a tree-shaken build (about 540 KB, 138 KB gzipped). See `THIRD_PARTY_LICENSES.md` for the version and rebuild steps.
+- `src/camera.js` holds the chase-camera maths and the graphics choice rules, both covered by node tests. With reduced motion on, the camera has no lag, there is no shake, and the screen flash is off.
+- Meaning is not carried by colour alone in 3D: checkpoints change height and style and show a number or a check mark; guards have a spear, a ground ring and a facing wedge; a ring shows while the chariot is protected.
