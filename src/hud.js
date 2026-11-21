@@ -1,5 +1,6 @@
 // HUD in the DOM: objective, health, checkpoints, timer, captions and screen-reader announcements.
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.ceil(s) % 60).padStart(2, '0')}`;
+const RELATIVE = ['straight ahead', 'ahead and to the right', 'to the right', 'behind you and to the right', 'behind you', 'behind you and to the left', 'to the left', 'ahead and to the left'];
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 
 export function createHud(doc = document) {
@@ -38,9 +39,12 @@ export function createHud(doc = document) {
       if (seconds != null) el.timerText.textContent = fmtTime(seconds);
     },
     // Text alternative to the on-canvas arrow. Not a live region, so it does not chatter.
-    setHint(dx, dy, label) {
-      const dir = COMPASS[Math.round(Math.atan2(dy, dx) / (Math.PI / 4) + 8) % 8];
-      el.hint.textContent = label ? `${label} is to the ${dir}.` : '';
+    // With a camera yaw the hint is relative to where the camera looks (ahead, to the left, behind), otherwise it is a compass direction.
+    setHint(dx, dy, label, yaw) {
+      const dir = yaw == null
+        ? COMPASS[Math.round(Math.atan2(dy, dx) / (Math.PI / 4) + 8) % 8]
+        : RELATIVE[((Math.round((Math.atan2(dy, dx) - yaw) / (Math.PI / 4)) % 8) + 8) % 8];
+      el.hint.textContent = label ? (yaw == null ? `${label} is to the ${dir}.` : `${label} is ${dir}.`) : '';
     },
     showCaption(line) {
       clearTimeout(captionTimer);

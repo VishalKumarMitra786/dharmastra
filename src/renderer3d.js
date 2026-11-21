@@ -7,7 +7,7 @@
 // Meaning is never colour alone: checkpoints change height and style and carry a number or a check mark,
 // guards have a spear, a helmet, a ground ring and a facing wedge, and the player shows a ring while protected.
 // The caller passes in the THREE namespace so the large library is only downloaded when 3D is used.
-import { followCamera, createCameraState, mapView } from './camera.js';
+import { followCamera, createCameraState, createOrbit, thirdPersonView } from './camera.js';
 
 const CP = {
   next: { height: 190, color: 0x28e0d0, wire: false },
@@ -62,7 +62,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   { const pm = new THREE.PMREMGenerator(gl); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32; pm.dispose(); }
   const camera = new THREE.PerspectiveCamera(48, 1, 10, 4200);
   const camState = createCameraState();
-  const camPos = { x: 0, z: 0, ready: false };
+  const orbit = createOrbit();
+  let blocked = null; // wall test for the camera boom, set in setWorld
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
   scene.add(hemi);
@@ -525,6 +526,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
 
   return {
     setCharacter(look) { heroLook = look; if (built) buildHero(); },
+    orbit: true, // tells the game this renderer uses the third-person camera (the 2D renderer keeps the fixed north-up view)
     resize(w, h, dpr = 1) {
       gl.setPixelRatio(Math.min(dpr, 2));
       gl.setSize(w, h, false);
@@ -548,6 +550,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     setWorld(w) {
       clearBuilt();
       world = w; theme = THEMES[w.theme] || THEMES.default;
+      blocked = (x, z) => { const col = Math.floor(x / w.tileSize); const row = Math.floor(z / w.tileSize); return !!(w.solid[row] && w.solid[row][col]); };
       buildCity(w);
       buildCrowd(w);
       buildHero();
@@ -633,9 +636,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       // City-map camera for walking missions; the old chase camera is kept for any world still in chariot mode.
       let view;
       if (frame.mode === 'foot') {
-        if (!camPos.ready || calm || dt > 0.25) { camPos.x = c.x; camPos.z = c.y; camPos.ready = true; }
-        else { const k = 1 - Math.exp(-7 * dt); camPos.x += (c.x - camPos.x) * k; camPos.z += (c.y - camPos.z) * k; }
-        view = mapView({ x: camPos.x, y: camPos.z });
+        orbit.yaw = frame.camYaw ?? orbit.yaw; orbit.pitch = frame.camPitch ?? orbit.pitch;
+        view = thirdPersonView(c, orbit, dt, blocked, calm);
       } else view = followCamera(camState, c, dt, calm);
       const sh = calm ? 0 : frame.effects.shake * 5;
       camera.position.set(view.position.x + (Math.random() - 0.5) * sh, view.position.y + (Math.random() - 0.5) * sh, view.position.z);

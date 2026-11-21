@@ -11,7 +11,7 @@ import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
 import { chooseGraphics } from './camera.js';
 import { pickMissionId } from './missions.js';
-import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller } from './characters.js';
+import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller, avatarSvg } from './characters.js';
 import { createPicker } from './picker.js';
 
 const MISSION_ID = pickMissionId(location.search);
@@ -40,14 +40,15 @@ async function boot() {
     mission.dialogue.forEach((d, i) => { d.text = fill(raw.dialogue[i].text, name); });
     $('logline').textContent = mission.logline;
     $('who').textContent = `Playing as ${name}.`;
+    $('who-avatar').innerHTML = avatarSvg(appearance(traveller)); // decorative: the name is in the adjacent text, and the svg is aria-hidden (empty alt equivalent)
+    renderer2d?.setCharacter?.(appearance(traveller));
   };
-  personalise();
-
   const settings = loadSettings();
   const canvas = $('stage');
   const canvas3d = $('stage3d');
   const renderer2d = assertRenderer(createRenderer2D(canvas));
   renderer2d.setWorld(world);
+  personalise();
   let renderer3d = null;
   const ARIA_2D = canvas.getAttribute('aria-label');
   const ARIA_3D = 'City view of you, the guards and the checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission.';
@@ -126,7 +127,7 @@ async function boot() {
   });
 
   const picker = createPicker(document, {
-    onSave: (t) => { traveller = t; saveTraveller(t); personalise(); renderer3d?.setCharacter(appearance(t)); screens.show('screen-start', 'start-btn'); },
+    onSave: (t) => { traveller = t; saveTraveller(t); personalise(); renderer3d?.setCharacter(appearance(t)); game?.showFrame?.(); screens.show('screen-start', 'start-btn'); },
   });
 
   game.applySettings();

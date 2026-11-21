@@ -3,6 +3,7 @@
 //
 //   resize(width, height, pixelRatio)  fit the drawing surface (CSS pixels)
 //   setWorld(world)                    called once per mission to build static geometry
+//   setCharacter(look)                 optional: appearance() from characters.js, used to draw the hero (call as renderer.setCharacter?.(look))
 //   render(frame)                      draw one frame from a plain snapshot, never from live sim objects
 //
 // frame = {
@@ -18,7 +19,7 @@ export function assertRenderer(r) {
   return r;
 }
 
-export function makeFrame(sim, effects, reducedMotion) {
+export function makeFrame(sim, effects, reducedMotion, cam = {}) {
   const c = sim.chariot;
   return {
     chariot: { x: c.x, y: c.y, angle: c.angle, radius: c.radius, speed: c.speed, invulnerable: sim.invuln > 0 },
@@ -29,6 +30,7 @@ export function makeFrame(sim, effects, reducedMotion) {
     })),
     effects: { shake: effects.shake, flash: effects.flash },
     reducedMotion,
+    camYaw: cam.yaw, camPitch: cam.pitch, // third-person camera angles; the 2D renderer ignores them
     time: sim.elapsed,
   };
 }

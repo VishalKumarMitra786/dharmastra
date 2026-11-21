@@ -10,6 +10,7 @@ export function createRenderer2D(canvas) {
   let world = null;
   let size = { w: 300, h: 150 };
   let hatch = null;
+  let look = null; // chosen traveller's appearance from characters.js, or null for the default colours
 
   function makeHatch() {
     const p = document.createElement('canvas');
@@ -61,14 +62,22 @@ export function createRenderer2D(canvas) {
     ctx.restore();
   }
 
-  // A person seen from above: shoulders, head, scarf and a pointer for the way they face.
+  // A person seen from above: shoulders in the outfit colour, scarf in the accent colour, skin, hair in the chosen style and a pointer for the way they face.
   function drawPerson(c) {
+    const L = look;
+    const col = { top: L?.outfitColor || C.chariot, scarf: L?.accent || '#e8432e', skin: L?.skin || '#c68a5a', hair: L?.hair || null };
     ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle);
     const r = c.radius;
-    ctx.fillStyle = C.chariot; ctx.strokeStyle = C.outline; ctx.lineWidth = 4;
+    ctx.fillStyle = col.top; ctx.strokeStyle = C.outline; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.ellipse(0, 0, r * 0.7, r * 1.05, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#e8432e'; ctx.fillRect(-r * 1.3, -r * 0.25, r * 0.9, r * 0.5); // scarf
-    ctx.fillStyle = '#c68a5a'; ctx.beginPath(); ctx.arc(r * 0.15, 0, r * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col.scarf; ctx.fillRect(-r * 1.3, -r * 0.25, r * 0.9, r * 0.5); // scarf
+    if (col.hair && L.hairStyle === 'long') { ctx.fillStyle = col.hair; ctx.beginPath(); ctx.ellipse(-r * 0.45, 0, r * 0.75, r * 0.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    if (col.hair && L.hairStyle === 'braid') { ctx.strokeStyle = col.hair; ctx.lineWidth = r * 0.28; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-r * 0.2, 0); ctx.lineTo(-r * 1.5, r * 0.15); ctx.stroke(); ctx.lineCap = 'butt'; ctx.strokeStyle = C.outline; ctx.lineWidth = 4; }
+    ctx.fillStyle = col.skin; ctx.beginPath(); ctx.arc(r * 0.15, 0, r * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (col.hair) { // hair seen from above covers the back of the head; the face stays toward the facing direction
+      ctx.fillStyle = col.hair; ctx.beginPath(); ctx.arc(r * 0.05, 0, r * 0.46, Math.PI * 0.5, Math.PI * 1.5); ctx.closePath(); ctx.fill();
+      if (L.hairStyle === 'bun') { ctx.beginPath(); ctx.arc(-r * 0.15, 0, r * 0.26, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    }
     ctx.fillStyle = C.light; ctx.beginPath(); ctx.moveTo(r * 1.5, 0); ctx.lineTo(r * 0.9, -r * 0.35); ctx.lineTo(r * 0.9, r * 0.35); ctx.closePath(); ctx.fill();
     if (c.invulnerable) { ctx.setLineDash([6, 6]); ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, Math.PI * 2); ctx.stroke(); }
     ctx.restore();
@@ -91,6 +100,7 @@ export function createRenderer2D(canvas) {
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     },
+    setCharacter(l) { look = l || null; },
     setWorld(w) { world = w; hatch = makeHatch(); },
     render(frame) {
       if (!world) return;

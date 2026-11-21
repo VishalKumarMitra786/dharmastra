@@ -331,11 +331,38 @@ test('missions: scripts that use {name} stay within the 140 character limit for 
   }
 });
 
-for (const run of queue) await run(); // run in order, awaiting async tests
-for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
-const failed = results.filter((r) => r[0] === 'FAIL').length;
-console.log(`\n${results.length - failed}/${results.length} passed`);
-process.exit(failed ? 1 : 0);
+test('renderer2d: setCharacter makes the hero use the traveller colours and hair style', async () => {
+  const { createRenderer2D } = await import('../renderer2d.js');
+  const C = await import('../characters.js');
+  const run = (look) => {
+    const fills = []; let fs = '';
+    const ctx = new Proxy({}, { get: (_, k) => (k === 'fillStyle' ? fs : k === 'createPattern' ? () => 'pat' : () => { fills.push(`call:${String(k)}`); }), set: (_, k, v) => { if (k === 'fillStyle') { fs = v; fills.push(v); } return true; } });
+    globalThis.document = { createElement: () => ({ getContext: () => ctx }) };
+    const r = createRenderer2D({ getContext: () => ctx, width: 0, height: 0 });
+    r.resize(360, 640, 1); r.setWorld({ width: 100, height: 100, walls: [], checkpoints: [] });
+    if (look) r.setCharacter(look);
+    r.render({ chariot: { x: 50, y: 50, angle: 0, radius: 14 }, mode: 'foot', guards: [], checkpoints: [], effects: { shake: 0, flash: 0 }, reducedMotion: true, time: 0 });
+    return fills;
+  };
+  const tara = C.appearance({ look: 'tara', outfit: 'indigo' });
+  const f = run(tara);
+  for (const c of [tara.outfitColor, tara.skin, tara.hair, tara.accent]) assert.ok(f.includes(c), c);
+  const generic = run(null);
+  assert.ok(!generic.includes(tara.outfitColor) && !generic.includes(tara.hair));
+  const bun = run(C.appearance({ look: 'ira' })).length; const short = run(C.appearance({ look: 'neel' })).length;
+  assert.notEqual(bun, short, 'hair style changes what is drawn');
+  delete globalThis.document;
+});
+
+test('start screen: avatar sits beside the Playing as note and is decorative', async () => {
+  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="who-avatar"[\s\S]*id="who"/);
+  const C = await import('../characters.js');
+  assert.match(C.avatarSvg(C.appearance({ look: 'meera' })), /aria-hidden="true"/);
+  const main = await readFile(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(main, /who-avatar[\s\S]*avatarSvg/);
+  assert.equal(typeof assertRenderer({ resize() {}, setWorld() {}, render() {} }).render, 'function'); // setCharacter stays optional
+});
 
 test('walking: foot mode is on for both missions and the player stops at walls without losing health', async () => {
   for (const id of ['dvapara-escape', 'mauryan-spy']) {
@@ -348,3 +375,39 @@ test('walking: foot mode is on for both missions and the player stops at walls w
     assert.ok(sim.chariot.y > sim.chariot.radius - 1, `${id}: stays inside the map`);
   }
 });
+
+test('third-person camera: stick is relative to the camera, boom stops at walls, look input turns it', async () => {
+  const C = await import('../camera.js');
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
+  // Facing north (the 2D fallback view): up is north, right is east, so it matches the old map controls.
+  let m = C.relativeMove(0, -1, C.FORWARD_UP); near(m.mx, 0); near(m.my, -1);
+  m = C.relativeMove(1, 0, C.FORWARD_UP); near(m.mx, 1); near(m.my, 0);
+  // Facing east: forward is east, right-hand side is south (y grows down the map).
+  m = C.relativeMove(0, -1, 0); near(m.mx, 1); near(m.my, 0);
+  m = C.relativeMove(1, 0, 0); near(m.mx, 0); near(m.my, 1);
+  m = C.relativeMove(0, 1, 0); near(m.mx, -1); // back = west
+  // The camera sits behind the hero, above the ground, and looks ahead.
+  const o = C.createOrbit(); o.yaw = 0;
+  const v = C.thirdPersonView({ x: 500, y: 500 }, o, 0.016, null, true);
+  assert.ok(v.position.x < 500 && v.target.x > 500 && v.position.y > 40);
+  // A wall right behind the hero pulls the camera in, but never closer than the minimum.
+  const o2 = C.createOrbit(); o2.yaw = 0;
+  const v2 = C.thirdPersonView({ x: 500, y: 500 }, o2, 0.016, (x) => x < 450, true);
+  assert.ok(v2.position.x >= 450 && v2.position.x > v.position.x);
+  const o3 = C.createOrbit(); o3.yaw = 0;
+  const v3 = C.thirdPersonView({ x: 500, y: 500 }, o3, 0.016, () => true, true);
+  assert.ok(500 - v3.position.x >= C.TPCAM.minDistance * Math.cos(o3.pitch) - 1e-6);
+  // Look input: a drag to the right turns the camera clockwise, pitch is clamped, reduced motion disables auto-steer.
+  const o4 = C.createOrbit(); const y0 = o4.yaw;
+  C.updateOrbit(o4, 0.016, { dx: 100, dy: 0, key: 0 }, { mx: 0, my: 0 }, false); assert.ok(o4.yaw > y0);
+  C.updateOrbit(o4, 0.016, { dx: 0, dy: 99999, key: 0 }, { mx: 0, my: 0 }, false); assert.equal(o4.pitch, C.TPCAM.pitchMax);
+  const o5 = C.createOrbit(); const y1 = o5.yaw;
+  C.updateOrbit(o5, 0.5, { dx: 0, dy: 0, key: 0 }, { mx: 1, my: -1 }, true); assert.equal(o5.yaw, y1);
+  C.updateOrbit(o5, 0.5, { dx: 0, dy: 0, key: 0 }, { mx: 1, my: -1 }, false); assert.ok(o5.yaw > y1);
+});
+
+for (const run of queue) await run(); // run in order, awaiting async tests
+for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
+const failed = results.filter((r) => r[0] === 'FAIL').length;
+console.log(`\n${results.length - failed}/${results.length} passed`);
+process.exit(failed ? 1 : 0);

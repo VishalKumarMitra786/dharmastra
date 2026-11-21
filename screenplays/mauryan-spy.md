@@ -4,7 +4,7 @@
 Setting: Pataliputra, capital of the Mauryan empire, in the 3rd century BCE. No ruler or famous figure appears on screen (docs/decisions.md, item 1). The ruler is mentioned only as "the king" in passing. Statecraft texts are treated as Tradition, and their date is contested.
 
 ## Logline
-On a monsoon night, a young cart driver must carry a ferry clerk's urgent report across timber-walled Pataliputra, dodging night patrols, before the river floods the moat.
+On a monsoon night, a young courier on foot must carry a ferry clerk's urgent report across timber-walled Pataliputra, dodging night patrols, before the river floods the moat.
 
 ## Era anchors
 | Name | Year | Label | Confidence note |
@@ -13,21 +13,21 @@ On a monsoon night, a young cart driver must carry a ferry clerk's urgent report
 | L. A. Waddell finds remains of a timber palisade near Patna (double rows of sal-wood uprights joined by planks) | 1892-1899 CE | History | Verified against a ThePrint essay summarizing the excavation history, and a Wikipedia note that remains have been traced over several kilometres. The link from these remains to the Mauryan wall rests on scholars such as Kosmin (as reported). No stone fortification has been found. |
 | Arthashastra, traditionally credited to Kautilya, describes organized spies and informers in many guises | Contested. One scholar (Olivelle) dates its oldest layers c. 150 BCE to 50 CE and final form c. 175-300 CE | Tradition | Authorship and date are debated. Kangle saw no strong reason to deny Kautilya a role. Others see several authors over centuries. The text also forbids wood in fortifications, which scholars use as an argument against a Mauryan date. So we use it as lore, not as a record of Mauryan practice. |
 | An Ashokan edict records medical care, wells dug and trees planted along roads | c. 257 BCE (as reported) | History | Rock Edict 2 wording and the c. 257 BCE dating (Sugandhi) taken from the Wikipedia Major Rock Edicts page. Edict 6 also says reporters were to bring the king news of the people's affairs at any time. Neither edict was read in a primary translation. |
-| Ila carries a ferry clerk's flood warning across the city | Legend | Invented | Our original story. |
+| {name} carries a ferry clerk's flood warning across the city | Legend | Invented | Our original story. |
 
 Unverified and not used as facts: the founding date of the city (sources conflict), and the figures for towers, gates and army size.
 
 ## Characters
-- **Ila** (protagonist, mortal). A young cart driver for a river-trade carrier. She hauls goods from the Ganga wharves.
-  - Want: prove she can be trusted with the hard night runs.
-  - Flaw: she assumes the worst and acts alone.
+- **{name}** (protagonist, mortal, female or male, named by the player). The traveller who walks the chakra of time and is the courier each era needs. Here {name} goes on foot, with no cart or oxen, and lodges at Sudatta's carrier yard.
+  - Want: prove they can be trusted with the hard night runs.
+  - Flaw: assumes the worst and acts alone.
   - Voice: short, dry, a little sceptical.
-- **Vasuka**. A ferry clerk at the Ganga wharf who counts boats and listens to talk. He is an informer in the everyday sense of someone who reports what he sees. He rides in the cart in a pilgrim's cloak.
+- **Vasuka**. A ferry clerk at the Ganga wharf who counts boats and listens to talk. He is an informer in the everyday sense of someone who reports what he sees. He wears a pilgrim's cloak and stays a few paces behind {name} on the lanes (the JSON hit lines say "we").
   - Want: get his report to the right officer before the river rises.
   - Flaw: secretive from habit, and slow to say what matters.
   - Voice: calm, careful, hints before facts.
-- **Sudatta**. Carrier master and Ila's employer.
-  - Want: his cart and driver back unharmed.
+- **Sudatta**. Carrier master who lodges the traveller.
+  - Want: {name} back unharmed.
   - Flaw: worry that turns into lecturing.
   - Voice: gruff and warm.
 - **Overseer Kshema**. The city works officer in charge of the moat sluice and palisade repair.
@@ -37,26 +37,26 @@ Unverified and not used as facts: the founding date of the city (sources conflic
 - **Sergeant Bhanu** (optional). A night watch sergeant, seen only at a distance and heard in one hit line if wanted. Ordinary soldiers on a hard night. No group is a villain.
 
 ## Mission beats
-- **Opening:** night, the carrier yard near the Ganga wharves. Heavy rain. The watch has doubled patrols after rumors of a "secret message" going round the city. Ila is asked to carry one.
+- **Opening:** night, the carrier yard near the Ganga wharves. Heavy rain. The watch has doubled patrols after rumors of a "secret message" going round the city. {name} is asked to carry one, on foot.
 - **Objective 1, checkpoint-1:** reach the Ganga ferry wharf and take the sealed report from Vasuka.
 - **Objective 2, checkpoint-2:** pass the timber yard and the palisade lane without being stopped.
 - **Objective 3, checkpoint-3:** deliver the report to Overseer Kshema at the moat sluice house.
 - **Twist:** the "secret" is not about spies or treason. The Son is rising, a sluice in the moat has jammed, and water is soaking the footing of one stretch of the timber wall. Vasuka used a plain cloak and the back lanes because a report outside the usual channel might be dismissed as rumor, and the delay would cost the wall. Kshema reads it and acts at once.
-- **Finale:** a short run along the palisade road, using the cart's lantern to flash a relay signal to the timber crews, ending at the weak stretch as dawn comes.
-- **Fail and retry:** a hit costs nothing and slows the cart. Three hits, or the watch drum seal closing a lane, ends the run. Sudatta calls Ila back. Retry restarts from the last checkpoint with patrol routes shifted a little. Fail lines stay kind.
+- **Finale:** a short run along the palisade road, using {name}'s lantern to flash a relay signal to the timber crews, ending at the weak stretch as dawn comes.
+- **Fail and retry:** a hit costs nothing and slows {name}'s pace. Three hits, or the watch drum seal closing a lane, ends the run. Sudatta calls {name} back. Retry restarts from the last checkpoint with patrol routes shifted a little. Fail lines stay kind.
 
 ## Scenes
 
 ### SCENE 1: EXT. CARRIER YARD, PATALIPUTRA, NIGHT
-Rain on thatch. Oxen shift in their stalls. Ila checks the wheel pins.
+Rain on thatch. Oxen shift in their stalls. {name} checks the lamp and the sandal straps.
 
 SUDATTA
-Rain on the river means trouble in the city. Keep the cart low and quiet, Ila.
+Rain on the river means trouble in the city. Keep your lamp low and your steps quiet, {name}.
 
-ILA
+{name}
 Three stops. The wharf, the timber lane, the sluice house. I will be fast.
 
-*Hook:* driving tutorial. Steering, braking on wet planks, a lantern cone to avoid. Subtitle plus arrow to checkpoint 1.
+*Hook:* on-foot tutorial. Walking, sprinting, slipping on wet planks, a lantern cone to avoid. Subtitle plus arrow to checkpoint 1.
 
 ### SCENE 2: EXT. GANGA FERRY WHARF, NIGHT (checkpoint 1)
 Boats knock against the pier. A man in a pilgrim's cloak steps from behind a stack of baskets.
@@ -64,10 +64,10 @@ Boats knock against the pier. A man in a pilgrim's cloak steps from behind a sta
 VASUKA
 Take this to the overseer. Do not read it here, and do not stop for anyone.
 
-ILA
+{name}
 A secret at night. Fine. The timber lane is next.
 
-*Hook:* stealth driving. Weave around patrol lantern cones. Patrol path loops every 20 seconds so it can be learned. Vasuka rides along as a passenger.
+*Hook:* on-foot stealth. Weave around patrol lantern cones. Patrol path loops every 20 seconds so it can be learned. Vasuka follows close behind.
 
 ### SCENE 3: EXT. TIMBER YARD AND PALISADE LANE, NIGHT (checkpoint 2)
 Tall wooden posts line the lane, joined by planks. Drums sound from a watch tower. A lantern sweeps the road.
@@ -75,10 +75,10 @@ Tall wooden posts line the lane, joined by planks. Drums sound from a watch towe
 VASUKA
 Hear the watch drums? They are searching the lanes tonight. Hold steady.
 
-ILA
+{name}
 Past the palisade posts. The sluice house is near.
 
-*Hook:* denser patrols and a lane that narrows between the posts, so contact with a post counts as a hit. Drums are paired with a visible tower flash and a pulsing on-screen icon. Timber stacks give cover pockets.
+*Hook:* denser patrols and a lane that narrows between the posts, so touching a post counts as a hit. Drums are paired with a visible tower flash and a pulsing on-screen icon. Timber stacks give cover pockets.
 
 ### SCENE 4: EXT. MOAT SLUICE HOUSE, NIGHT (checkpoint 3, twist)
 Black water presses at a wooden gate. Overseer Kshema reads the tablet by lamp. Her face changes.
@@ -86,25 +86,25 @@ Black water presses at a wooden gate. Overseer Kshema reads the tablet by lamp. 
 OVERSEER KSHEMA
 A jammed sluice, not a plot. Thank you. Wake the timber crews at once.
 
-ILA
+{name}
 That was the secret? Water. I was ready for worse.
 
 *Hook:* short cutscene, then a timed pickup of the lamp for the relay signal.
 
 ### SCENE 5: EXT. PALISADE ROAD, BEFORE DAWN (finale)
-Ila drives along the wall flashing the lantern. Crews with timbers come running. Gray light on the water.
+{name} runs along the wall flashing the lantern. Crews with timbers come running. Gray light on the water.
 
 OVERSEER KSHEMA
 The crews have reached the weak stretch. The wall will stand tonight.
 
-ILA
+{name}
 No glory in it. Just a wall that held and a city still asleep.
 
-*Hook:* wind-down drive. The player tags 3 posts with the lantern to relay the signal, then drives to the finish marker. No fail state in the last stretch.
+*Hook:* wind-down run. The player tags 3 posts with the lantern to relay the signal, then runs to the finish marker. No fail state in the last stretch.
 
 ### Fail and hit lines (any scene)
-- Hit: VASUKA, "A lantern swept us. Back into the shadow of the posts!" or ILA, "Wheel hit a post. Steady now, nothing broken."
-- Fail: SUDATTA, "They stopped the cart. Come back to the yard and try another lane." or VASUKA, "The watch changes at the drum. Wait for it, and we go again."
+- Hit: VASUKA, "A lantern swept us. Back into the shadow of the posts!" or {name}, "You hit a post. Steady now, nothing broken."
+- Fail: SUDATTA, "They caught you. Come back to the yard and try another lane." or VASUKA, "The watch changes at the drum. Wait for it, and we go again."
 
 ## Player choices (deferred until the engine supports branching)
 - At the wharf: back lanes (slower, fewer patrols) or the main wharf road (faster, more patrols).
@@ -114,11 +114,11 @@ No glory in it. Just a wall that held and a city still asleep.
 ## Gameplay hooks (summary)
 | Scene | Activity |
 |---|---|
-| 1 | Driving tutorial |
-| 2 | Stealth driving past patrol cones |
+| 1 | On-foot tutorial |
+| 2 | Stealth on foot past patrol cones |
 | 3 | Dense patrols, narrow lane |
 | 4 | Cutscene plus short timed pickup |
-| 5 | Relay signal drive to finish |
+| 5 | Relay signal run to finish |
 
 ## Accessibility notes
 - Every spoken line is captioned, with the speaker's name shown. Lines are 140 characters or fewer.

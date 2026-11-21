@@ -59,12 +59,13 @@
     <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
 
     <div id="touch" class="touch" role="group" aria-label="Touch controls">
-      <button class="pad run" type="button" data-control="run">Run</button>
-      <button class="pad" type="button" data-control="up"><span aria-hidden="true">&#9650;</span> Up</button>
-      <span class="pad-gap" aria-hidden="true"></span>
+      <button class="pad look" type="button" data-control="lookleft" aria-label="Turn camera left"><span aria-hidden="true">&#8630;</span> Look</button>
+      <button class="pad" type="button" data-control="up"><span aria-hidden="true">&#9650;</span> Forward</button>
+      <button class="pad look" type="button" data-control="lookright" aria-label="Turn camera right">Look <span aria-hidden="true">&#8631;</span></button>
       <button class="pad" type="button" data-control="left"><span aria-hidden="true">&#9664;</span> Left</button>
-      <button class="pad" type="button" data-control="down"><span aria-hidden="true">&#9660;</span> Down</button>
+      <button class="pad" type="button" data-control="down"><span aria-hidden="true">&#9660;</span> Back</button>
       <button class="pad" type="button" data-control="right">Right <span aria-hidden="true">&#9654;</span></button>
+      <button class="pad run" type="button" data-control="run">Run</button>
     </div>
   </main>
 
@@ -87,7 +88,7 @@
       <p class="eyebrow" id="era">Dvapara Yuga</p>
       <h1 id="start-title">Escape from Hastinapur</h1>
       <p id="logline" class="logline"></p>
-      <p class="note" id="who"></p>
+      <div class="who-row"><span class="who-avatar" id="who-avatar"></span><p class="note" id="who"></p></div>
       <p id="gfx-note-start" class="note" role="status" hidden></p>
       <p class="goal">Reach the three numbered checkpoints in order. Guards and walls cost health. If health reaches zero, you can retry at once.</p>
       <details class="how">

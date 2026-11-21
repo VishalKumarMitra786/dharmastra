@@ -61,19 +61,21 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 #chapter-title { font-family: var(--display); font-size: clamp(1.9rem, 8vw, 3.4rem); font-weight: 800; line-height: 1.1; }
 @keyframes chapter { 0% { opacity: 0; transform: scale(0.96); } 15% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1.03); } }
 
-.caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(160px + var(--safe-b)); width: min(32rem, calc(100% - 16px)); margin: 0;
+.caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(190px + var(--safe-b)); width: min(32rem, calc(100% - 16px)); margin: 0;
   padding: 10px 14px; background: rgba(22, 15, 58, 0.92); border: 1.5px solid rgba(255, 180, 46, 0.7); border-left-width: 5px; border-radius: 6px 16px 16px 16px; font-size: 1rem; backdrop-filter: blur(6px); }
 .caption strong { color: var(--accent); font-family: var(--display); }
 
 /* Touch controls: 2x2 pad, 60px buttons, side chosen in settings. Shown on touch and narrow screens. */
-.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(3, 70px); grid-auto-rows: 56px; gap: 6px; }
+.touch { position: absolute; bottom: calc(10px + var(--safe-b)); display: none; grid-template-columns: repeat(3, 76px); grid-auto-rows: 48px; gap: 6px; }
+.pad.run { grid-column: 1 / -1; }
+#game:not([data-cam="orbit"]) .pad.look { visibility: hidden; } /* look buttons only matter with the third-person camera */
 .pad.run { background: rgba(255, 106, 61, 0.35); }
 .minimap { position: absolute; bottom: calc(10px + var(--safe-b)); width: 112px; height: 72px; border: 1.5px solid rgba(255, 180, 46, 0.7); border-radius: 12px; background: rgba(10, 7, 38, 0.7); backdrop-filter: blur(4px); pointer-events: none; }
 #game[data-side="right"] .minimap { left: calc(10px + var(--safe-l)); }
 #game[data-side="left"] .minimap { right: calc(10px + var(--safe-r)); }
 #game[data-side="right"] .touch { right: calc(10px + var(--safe-r)); }
 #game[data-side="left"] .touch { left: calc(10px + var(--safe-l)); }
-.pad { min-height: 56px; padding: 0.2rem; border-radius: 18px; background: rgba(22, 15, 58, 0.8); touch-action: none; font-size: 0.9rem; font-weight: 600; backdrop-filter: blur(6px); }
+.pad { min-height: 48px; padding: 0.2rem; border-radius: 18px; background: rgba(22, 15, 58, 0.8); touch-action: none; font-size: 0.9rem; font-weight: 600; backdrop-filter: blur(6px); }
 @media (pointer: coarse), (max-width: 820px) { .touch { display: grid; } }
 @media (pointer: fine) and (min-width: 821px) { .caption { bottom: calc(112px + var(--safe-b)); } }
 
@@ -163,3 +165,8 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 .look-name { font-family: var(--display); font-weight: 800; font-size: 1.1rem; }
 .look-blurb { font-size: 0.85rem; color: var(--muted); }
 .field input[type="text"] { font: inherit; color: var(--text); background: #1d1448; border: 1.5px solid rgba(255, 180, 46, 0.7); border-radius: 12px; min-height: 44px; padding: 6px 12px; }
+
+.who-row { display: flex; align-items: center; gap: 12px; }
+.who-avatar { flex: none; display: block; width: 48px; height: 56px; }
+.who-avatar svg { width: 100%; height: 100%; display: block; }
+.who-row .note { margin: 0; }
