@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dharmastra performance probe</title>
+<style>body{font:16px system-ui;margin:0;background:#120c33;color:#f4ecd8}main{padding:12px}iframe{width:100%;height:60vh;border:1px solid #ffb42e;background:#000}
+button{font:inherit;min-height:48px;padding:8px 18px;border-radius:24px;border:1.5px solid #ffb42e;background:#2a1f66;color:inherit}pre{white-space:pre-wrap;background:#0b0724;padding:10px;border-radius:8px}</style></head>
+<body><main>
+<h1>Performance probe</h1>
+<p>Loads the game in a frame, lets you play for 20 seconds, and reports the frame rate. Run it on a phone, then copy the result text and send it back.</p>
+<p><label>Level <select id="m"><option value="sangam-staff&dev=1">The Pepper Road</option><option value="dvapara-escape">Escape from Hastinapur</option><option value="mauryan-spy">Night Report of Pataliputra</option></select></label>
+<button id="go" type="button">Start 20 second test</button></p>
+<iframe id="f" title="Game under test"></iframe>
+<pre id="out" role="status" aria-live="polite">Waiting.</pre>
+</main>
+<script>
+const out = document.getElementById('out');
+document.getElementById('go').onclick = () => {
+  const f = document.getElementById('f');
+  f.src = 'index.html?mission=' + document.getElementById('m').value;
+  out.textContent = 'Loading the game. When it shows the start screen, press Start mission and play. Measuring begins in 8 seconds.';
+  setTimeout(() => {
+    const t = []; let last = performance.now(); const end = last + 20000; const long = [];
+    const tick = (now) => { const d = now - last; last = now; t.push(d); if (d > 100) long.push(Math.round(d)); if (now < end) requestAnimationFrame(tick); else report(); };
+    requestAnimationFrame(tick);
+  }, 8000);
+  function report() {
+    const s = [...t].sort((a, b) => a - b); const q = (p) => s[Math.min(s.length - 1, Math.floor(s.length * p))];
+    const avg = t.reduce((a, b) => a + b, 0) / t.length;
+    const c = document.createElement('canvas'); const gl = c.getContext('webgl2') || c.getContext('webgl'); const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    out.textContent = ['Dharmastra performance probe', 'device: ' + navigator.userAgent, 'cores: ' + navigator.hardwareConcurrency + ', memory GB: ' + (navigator.deviceMemory || 'n/a'),
+      'screen: ' + screen.width + 'x' + screen.height + ' @' + devicePixelRatio + 'x', 'gpu: ' + (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'n/a'),
+      'frames: ' + t.length, 'average fps: ' + (1000 / avg).toFixed(1), 'median frame ms: ' + q(0.5).toFixed(1), '95th percentile frame ms: ' + q(0.95).toFixed(1), 'worst frame ms: ' + s[s.length - 1].toFixed(0),
+      'frames over 100 ms: ' + long.length, 'Target: average at least 30 fps and 95th percentile under 50 ms.'].join('\n');
+  }
+};
+</script></body></html>
