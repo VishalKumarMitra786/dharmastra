@@ -25,3 +25,8 @@ Early prototype. The time chakra works, and the first mission, Escape from Hasti
 ## License
 
 Private project. All rights reserved for now.
+
+
+## Copyright
+
+© 2026 Vishal Kumar Mitra. All rights reserved. See `LICENSE`. Third-party components keep their own licenses (`THIRD_PARTY_LICENSES.md`).
