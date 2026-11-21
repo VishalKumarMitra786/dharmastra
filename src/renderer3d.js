@@ -579,11 +579,17 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     const icons = makeIcons(); built.add(icons.root);
     return { g, top, icons, id: null, x: 0, y: 0, flash: 0 };
   }
-  function makePickup() {
+  function makePickup(kind) {
     const g = new THREE.Group();
-    const s = makeStaff(44); s.rotation.z = 0.8; s.position.y = 0; g.add(s);
+    let s;
+    if (kind === 'sack') { // a plain cloth sack with a tied neck
+      s = new THREE.Group();
+      const body = ball(13, mat(0xc9a066), 1, 1.1, 1); body.position.y = 0; s.add(body);
+      const tie = box(7, 3, 7, mat(0x6b4a2a)); tie.position.y = 15; s.add(tie);
+      g.add(s);
+    } else { s = makeStaff(44); s.rotation.z = 0.8; s.position.y = 0; g.add(s); }
     const gl = glow(0xffd860, 54, 0.7); g.add(gl);
-    built.add(g); return { g, s };
+    built.add(g); return { g, s, kind };
   }
 
   // Obstacles: four or five instanced meshes in total, built once per list.
@@ -755,8 +761,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         en.g.scale.setScalar(1.12 * (1 + 0.12 * f));
       }
       const PK = frame.pickups; const nP = PK ? PK.length : 0;
-      while (pickups.length < nP) pickups.push(makePickup());
+      while (pickups.length < nP) pickups.push(makePickup(PK[pickups.length].kind));
       for (let i = 0; i < pickups.length; i++) {
+        if (i < nP && pickups[i].kind !== (PK[i].kind || 'staff')) { built.remove(pickups[i].g); pickups[i] = makePickup(PK[i].kind); } // the kind changed: swap the model
         const pk = pickups[i];
         if (i >= nP || PK[i].taken) { pk.g.visible = false; continue; }
         pk.g.visible = true; pk.g.position.set(PK[i].x, 30 + (calm ? 0 : Math.sin(t * 2.2 + i) * 5), PK[i].y);
