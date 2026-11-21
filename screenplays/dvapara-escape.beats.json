@@ -4,30 +4,124 @@
   "title": "Escape from Hastinapur",
   "logline": "On a tense night before the great war, a young chariot driver must carry a villagers' plea for grain relief through Hastinapur's lantern-lit streets and out the east gate before dawn.",
   "objectives": [
-    {"id": "checkpoint-1", "text": "Reach the Lamp Bazaar and take on Suvrata and the sealed plea."},
-    {"id": "checkpoint-2", "text": "Cross the canal bridge before the watch bells close it."},
-    {"id": "checkpoint-3", "text": "Reach the East Gate before the first light of dawn."}
+    {
+      "id": "checkpoint-1",
+      "text": "Reach the Lamp Bazaar and take on Suvrata and the sealed plea."
+    },
+    {
+      "id": "checkpoint-2",
+      "text": "Cross the canal bridge before the watch bells close it."
+    },
+    {
+      "id": "checkpoint-3",
+      "text": "Reach the East Gate before the first light of dawn."
+    }
   ],
   "dialogue": [
-    {"id": "start-1", "speaker": "Bhadra", "text": "The city is on edge. Keep your lamp low and your wheels quiet, Tarak.", "trigger": "start"},
-    {"id": "start-2", "speaker": "Tarak", "text": "Three stops, then the east road. I know the way.", "trigger": "start"},
-    {"id": "cp1-1", "speaker": "Suvrata", "text": "Here. The plea from the farm villages. Hold the tablet flat and drive.", "trigger": "checkpoint-1"},
-    {"id": "cp1-2", "speaker": "Tarak", "text": "Hold tight. The canal bridge is next.", "trigger": "checkpoint-1"},
-    {"id": "cp2-1", "speaker": "Suvrata", "text": "The bells are ringing. Once the bridge lifts, we are stuck.", "trigger": "checkpoint-2"},
-    {"id": "cp2-2", "speaker": "Tarak", "text": "Across. Now the east gate, and the dawn is coming.", "trigger": "checkpoint-2"},
-    {"id": "cp3-1", "speaker": "Captain Dandaka", "text": "Open the gate. I read your tablet. Those fields feed my kin too.", "trigger": "checkpoint-3"},
-    {"id": "hit-1", "speaker": "Suvrata", "text": "That was a lantern cone. Stay in the shadows!", "trigger": "hit"},
-    {"id": "hit-2", "speaker": "Tarak", "text": "The wheel is shaking. Steady, steady.", "trigger": "hit"},
-    {"id": "fail-1", "speaker": "Bhadra", "text": "They stopped the cart. Come back to the stable and try another lane.", "trigger": "fail"},
-    {"id": "fail-2", "speaker": "Suvrata", "text": "We can still go. The watch changes at the bells. Wait for them.", "trigger": "fail"},
-    {"id": "win-1", "speaker": "Suvrata", "text": "The plea will reach the village elders by morning. Thank you, Tarak.", "trigger": "win"},
-    {"id": "win-2", "speaker": "Tarak", "text": "No glory in this. Just a road that stayed open.", "trigger": "win"}
+    {
+      "id": "start-1",
+      "speaker": "Bhadra",
+      "text": "The city is on edge. Keep your lamp low and your wheels quiet, Tarak.",
+      "trigger": "start"
+    },
+    {
+      "id": "start-2",
+      "speaker": "Tarak",
+      "text": "Three stops, then the east road. I know the way.",
+      "trigger": "start"
+    },
+    {
+      "id": "cp1-1",
+      "speaker": "Suvrata",
+      "text": "Here. The plea from the farm villages. Hold the tablet flat and drive.",
+      "trigger": "checkpoint-1"
+    },
+    {
+      "id": "cp1-2",
+      "speaker": "Tarak",
+      "text": "Hold tight. The canal bridge is next.",
+      "trigger": "checkpoint-1"
+    },
+    {
+      "id": "cp2-1",
+      "speaker": "Suvrata",
+      "text": "The bells are ringing. Once the bridge lifts, we are stuck.",
+      "trigger": "checkpoint-2"
+    },
+    {
+      "id": "cp2-2",
+      "speaker": "Tarak",
+      "text": "Across. Now the east gate, and the dawn is coming.",
+      "trigger": "checkpoint-2"
+    },
+    {
+      "id": "cp3-1",
+      "speaker": "Captain Dandaka",
+      "text": "Open the gate. I read your tablet. Those fields feed my kin too.",
+      "trigger": "checkpoint-3"
+    },
+    {
+      "id": "hit-1",
+      "speaker": "Suvrata",
+      "text": "That was a lantern cone. Stay in the shadows!",
+      "trigger": "hit"
+    },
+    {
+      "id": "hit-2",
+      "speaker": "Tarak",
+      "text": "The wheel is shaking. Steady, steady.",
+      "trigger": "hit"
+    },
+    {
+      "id": "fail-1",
+      "speaker": "Bhadra",
+      "text": "They stopped the cart. Come back to the stable and try another lane.",
+      "trigger": "fail"
+    },
+    {
+      "id": "fail-2",
+      "speaker": "Suvrata",
+      "text": "We can still go. The watch changes at the bells. Wait for them.",
+      "trigger": "fail"
+    },
+    {
+      "id": "win-1",
+      "speaker": "Suvrata",
+      "text": "The plea will reach the village elders by morning. Thank you, Tarak.",
+      "trigger": "win"
+    },
+    {
+      "id": "win-2",
+      "speaker": "Tarak",
+      "text": "No glory in this. Just a road that stayed open.",
+      "trigger": "win"
+    }
   ],
   "events": [
-    {"name": "Hastinapur Period II: Painted Grey Ware occupation (B. B. Lal)", "year": "c. 1100-800 BCE", "label": "History"},
-    {"name": "2021-22 Hastinapur excavation: earliest layer with Painted Grey Ware", "year": "c. 1500-1000 BCE", "label": "History"},
-    {"name": "Traditional start of Kali Yuga, ending the Dvapara Yuga", "year": "Legend", "label": "Tradition"},
-    {"name": "Peace embassy to Hastinapura before the Kurukshetra war", "year": "Legend", "label": "Tradition"},
-    {"name": "Tarak carries the villagers' grain plea out of the city", "year": "Legend", "label": "Invented"}
+    {
+      "name": "Hastinapur Period II: Painted Grey Ware occupation (B. B. Lal)",
+      "year": "c. 1100-800 BCE",
+      "label": "History"
+    },
+    {
+      "name": "Hastinapur 2021-22 excavation reports an earlier Painted Grey Ware layer",
+      "year": "c. 1500-1000 BCE (as reported)",
+      "label": "History"
+    },
+    {
+      "name": "Traditional start of Kali Yuga, ending the Dvapara Yuga",
+      "year": "Legend",
+      "label": "Tradition"
+    },
+    {
+      "name": "Peace embassy to Hastinapura before the Kurukshetra war",
+      "year": "Legend",
+      "label": "Tradition"
+    },
+    {
+      "name": "Tarak carries the villagers' grain plea out of the city",
+      "year": "Legend",
+      "label": "Invented"
+    }
   ]
 }

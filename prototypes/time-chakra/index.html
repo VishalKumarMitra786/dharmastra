@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dharmastra time chakra</title>
+<link rel="icon" href="data:,">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0914;--panel:#15122a;--line:#2e2859;--gold:#e8b84a;--text:#efe9d8;--mute:#a79fc4}
@@ -45,6 +46,7 @@ select{font:inherit;color:var(--text);background:#0d0b1f;border:1px solid var(--
 .name{font-family:Cinzel,Georgia,serif;font-size:21px;margin:2px 0 0;color:var(--gold)}
 .span{font-size:13px;color:var(--mute);margin:0 0 8px}
 .mission{font-size:14px;margin:0}
+.play{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:10px;padding:0 18px;border-radius:10px;background:var(--gold);color:#1a1405;font-weight:600;text-decoration:none}
 .nav{display:flex;gap:8px;margin-top:12px}
 button{font:inherit;color:var(--text);background:transparent;border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer}
 button:hover{border-color:var(--gold)}
@@ -109,6 +111,8 @@ form button{grid-column:1/-1;background:var(--gold);color:#1a1405;border:0;font-
 <p class="name" id="eName"></p>
 <p class="span" id="eSpan"></p>
 <p class="mission" id="eMission"></p>
+<p class="span" id="playNote"></p>
+<a id="play" class="play" href="../../index.html" hidden>Play this mission</a>
 <div class="nav">
 <button id="pv" aria-label="Earlier era">&#8592; Earlier</button>
 <button id="nx" aria-label="Later era">Later &#8594;</button>
@@ -243,6 +247,7 @@ try{var raw=localStorage.getItem("dharmastra_custom");if(raw)custom=JSON.parse(r
 function save(){try{localStorage.setItem("dharmastra_custom",JSON.stringify(custom))}catch(x){}}
 
 var cur=14,curEv=-1,dotEls=[];
+var MISSIONS={4:"../../index.html"};
 
 function events(i){return E[i][4].concat(custom[i]||[])}
 
@@ -323,6 +328,8 @@ $("eName").textContent=d[1];
 $("eSpan").textContent=d[2];
 $("eMission").textContent="Mission hook: "+d[3];
 $("jump").value=String(i);
+var pl=$("play");pl.hidden=!MISSIONS[i];if(MISSIONS[i]){pl.href=MISSIONS[i];pl.textContent="Play: Escape from Hastinapur"}
+$("playNote").textContent=MISSIONS[i]?"A playable mission is ready.":"No playable mission here yet.";
 $("live").textContent=d[1]+", "+d[2]+". "+events(i).length+" events.";
 renderDots();renderList();
 }

@@ -9,8 +9,8 @@ On a tense night before the great war, a young chariot driver must carry a villa
 ## Era anchors
 | Name | Year | Label | Confidence note |
 |---|---|---|---|
-| Hastinapur Period II, Painted Grey Ware occupation (B. B. Lal's excavations) | c. 1100-800 BCE | History | Approximate. Later work gives a different chronology. Not proof of the epic. |
-| 2021-22 Hastinapur excavation, earliest layer with Painted Grey Ware | c. 1500-1000 BCE | History | Newer report. Its chronology differs from Lal's. Do not treat the two as interchangeable. |
+| Hastinapur Period II, Painted Grey Ware occupation (B. B. Lal's excavations) | c. 1100-800 BCE | History | Verified against Lal's own chapter and a university summary. Later radiocarbon work puts the start no later than 1000 BCE. Not proof of the epic. |
+| Hastinapur 2021-22 excavation reports an earlier Painted Grey Ware layer | c. 1500-1000 BCE (as reported) | History | Taken from a Wikipedia summary of the 2022 excavation report (Garnayak, Puratattva). The report itself has not been read, so treat the date as reported, not verified. Its chronology differs from Lal's. |
 | Traditional start of Kali Yuga, ending the Dvapara Yuga | Legend | Tradition | Traditional computation. Not a historical date. |
 | Peace embassy to Hastinapura before the Kurukshetra war | Legend | Tradition | Appears in Udyoga Parva. Versions differ in detail. |
 | Tarak carries the grain plea out of the city | Legend | Invented | Our original story. |
@@ -127,8 +127,9 @@ No glory in this. Just a road that stayed open.
 ## Sources
 - Hastinapur (archaeology summary, Lal and 2021-22 excavation): https://en.wikipedia.org/wiki/Hastinapur
 - Udyoga Parva overview: https://en.wikipedia.org/wiki/Udyoga_Parva
-- Further reading found in search, not yet read in full: https://www.lkouniv.ac.in/site/writereaddata/siteContent/202003281454237573durgesh_Hastinapur.pdf
-- Further reading found in search, not yet read in full: https://en.unesco.org/silkroad/sites/default/files/knowledge-bank-article/vol_I%20silk%20road_the%20painted%20grey%20ware%20culture%20of%20the%20iron%20age.pdf
-- Further reading found in search, not yet read in full: https://www.amrita.edu/strategical-silhouette-of-an-extraordinary-peace-mission/
+- B. B. Lal, "The Painted Grey Ware Culture of the Iron Age" (UNESCO Silk Road knowledge bank), read: https://en.unesco.org/silkroad/sites/default/files/knowledge-bank-article/vol_I%20silk%20road_the%20painted%20grey%20ware%20culture%20of%20the%20iron%20age.pdf . Gives 1100-800 BCE for Hastinapura's Painted Grey Ware level, with later radiocarbon dates pointing to a start no later than 1000 BCE. It ties the culture to Vedic literature and does not mention the Mahabharata.
+- Lucknow University course note on Hastinapur, read: https://www.lkouniv.ac.in/site/writereaddata/siteContent/202003281454237573durgesh_Hastinapur.pdf . Lists five occupation periods, with Period II c. 1100-800 BCE per Lal. Does not claim the excavations confirmed the war.
+- 2021-22 Ulta Kheda excavation report (Garnayak, Puratattva 2022): not read. The 1500-1000 BCE figure comes from the Wikipedia Hastinapur page above.
+- Amrita essay on Krishna's peace mission, read: https://www.amrita.edu/strategical-silhouette-of-an-extraordinary-peace-mission/ . A devotional essay, not scholarly. It is used only to show that the peace-embassy episode is part of the tradition, never as a historical claim.
 
 All dialogue and characters are original.
