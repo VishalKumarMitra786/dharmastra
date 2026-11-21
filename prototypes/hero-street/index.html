@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark"><title>Dharmastra hero spike: skinned hero on a painted street</title><link rel="icon" href="data:,">
+<style>
+html,body{margin:0;height:100%;background:#1b1424;color:#fff;font:16px/1.35 system-ui,sans-serif;overscroll-behavior:none}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#hud{position:fixed;left:8px;top:8px;right:8px;max-width:30em;margin:0;padding:6px 8px;background:rgba(27,20,36,.82);border-radius:8px;font:12px/1.3 ui-monospace,monospace;white-space:pre-wrap;pointer-events:none}
+#panel{position:fixed;left:0;right:0;bottom:0;background:rgba(27,20,36,.94);border-top:2px solid #ffb42e;padding:0 8px calc(6px + env(safe-area-inset-bottom));max-height:46vh;overflow:auto}
+summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.row>span{flex:0 0 100%;font-size:13px;color:#ffd98a}
+button{font:inherit;min-height:44px;min-width:44px;padding:6px 12px;border-radius:22px;border:1.5px solid #ffb42e;background:#2a1f66;color:#fff;cursor:pointer}
+button[aria-pressed=true]{background:#ffb42e;color:#1b1424;font-weight:700}
+button:focus-visible,summary:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#out{margin:6px 0;padding:8px;background:#0b0724;border-radius:8px;white-space:pre-wrap;font:12px/1.3 ui-monospace,monospace}
+body.clean #hud,body.clean #panel{display:none}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style></head>
+<body>
+<canvas id="stage" role="img" aria-label="Three-dimensional preview: a skinned hero in a saffron top and cream dhoti walks along a painted daylight street. A box-built hero from the current game stands beside it for comparison."></canvas>
+<pre id="hud" aria-hidden="true"></pre>
+<details id="panel" open><summary>Controls</summary>
+<div class="row" role="group" aria-label="Camera"><span>Camera</span><button data-view="game" aria-pressed="true">Game camera</button><button data-view="front" aria-pressed="false">Front</button><button data-view="side" aria-pressed="false">Side</button><button data-view="back" aria-pressed="false">Back</button><button data-view="three" aria-pressed="false">Three-quarter</button></div>
+<div class="row" role="group" aria-label="Motion"><span>Motion</span><button data-mode="walk" aria-pressed="true">Walk</button><button data-mode="idle" aria-pressed="false">Idle</button><button id="pause" aria-pressed="false">Pause</button></div>
+<div class="row" role="group" aria-label="Scene"><span>Scene</span><button data-heroes="1" aria-pressed="true">1 hero</button><button data-heroes="12" aria-pressed="false">12 heroes</button><button id="compare" aria-pressed="true">Box hero beside</button></div>
+<div class="row"><button id="run">Run 20 second performance test</button></div>
+<pre id="out" role="status" aria-live="polite">Press the test button to measure the frame rate. Copy the text and send it back.</pre>
+</details>
+<script type="module" src="main.js"></script>
+</body></html>

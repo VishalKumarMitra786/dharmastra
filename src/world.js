@@ -29,16 +29,18 @@ export function parseLayout(layout) {
   };
 }
 
-// Rules-2 tiles: = low wall, ~ low beam, , tall grass (obstacles), k pickup spot, a enemy spawn.
-// They are never merged into `walls`; the sim decides when an obstacle is solid.
-const OBSTACLE_KINDS = { '=': 'lowwall', '~': 'beam', ',': 'grass' };
+// Rules-2 tiles: = low wall (vault), ~ low beam (crouch), , tall grass (cover), H marked ledge (climb), _ pit or ditch (a shoved raider falls in; nobody walks in),
+// k l m n p q pickup spots, a b c d raider and sparring-partner spawns, t u training posts.
+// They are never merged into `walls`; the sim decides when an obstacle is solid. Details live in layout.entities keyed by the letter.
+const OBSTACLE_KINDS = { '=': 'lowwall', '~': 'beam', ',': 'grass', H: 'ledge', _: 'pit' };
+const PICKUP_CHARS = 'klmnpq'; const ENEMY_CHARS = 'abcd'; const TARGET_CHARS = 'tu';
 const DEFAULT_ENTITIES = { k: { kind: 'staff' }, a: { kind: 'raider', hp: 3 } };
 const safeKind = (v, d) => (typeof v === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(v) ? v : d);
 
 function parseExtras(layout, rows, ts) {
   const obstacles = []; const pickups = []; const spawns = [];
   const ent = layout.entities || {};
-  const count = { k: 0, a: 0 };
+  let nk = 0; let na = 0; let nt = 0;
   rows.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) {
       const ch = row[c];
@@ -47,15 +49,16 @@ function parseExtras(layout, rows, ts) {
         const c0 = c;
         while (c + 1 < row.length && row[c + 1] === ch) c++;
         obstacles.push({ x: c0 * ts, y: r * ts, w: (c - c0 + 1) * ts, d: ts, kind });
-      } else if (ch === 'k' || ch === 'a') {
-        const n = ++count[ch];
+      } else if (PICKUP_CHARS.includes(ch) || ENEMY_CHARS.includes(ch) || TARGET_CHARS.includes(ch)) {
         const def = { ...DEFAULT_ENTITIES[ch], ...(ent[ch] || {}) };
         const pos = { x: (c + 0.5) * ts, y: (r + 0.5) * ts };
-        if (ch === 'k') pickups.push({ ...pos, id: `k${n}`, kind: safeKind(def.kind, 'staff') });
+        if (PICKUP_CHARS.includes(ch)) pickups.push({ ...pos, id: `k${++nk}`, kind: safeKind(def.kind, 'staff'), n: Number.isFinite(def.n) ? Math.max(1, Math.min(12, Math.floor(def.n))) : 1 });
+        else if (TARGET_CHARS.includes(ch)) spawns.push({ ...pos, id: `t${++nt}`, kind: 'target', hp: 1, angle: 0, patrol: [] });
         else {
           const hp = Number.isFinite(def.hp) ? Math.max(1, Math.min(20, Math.floor(def.hp))) : 3;
           const patrol = Array.isArray(def.patrol) ? def.patrol.filter((q) => Array.isArray(q) && q.every(Number.isFinite)).map(([x, y]) => ({ x: x * ts, y: y * ts })) : [];
-          spawns.push({ ...pos, id: `a${n}`, kind: safeKind(def.kind, 'raider'), hp, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
+          const k = safeKind(def.kind, 'raider');
+          spawns.push({ ...pos, id: `a${++na}`, kind: k === 'sparrer' ? 'sparrer' : 'raider', hp, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
         }
       }
     }

@@ -1,0 +1,278 @@
+[
+ {
+  "id": "arch-early-harappan-phase",
+  "yuga": "kali",
+  "year": -3300,
+  "label": "Early Harappan phase",
+  "kind": "History",
+  "region": "Indus basin",
+  "summary": "Village and early town life across the Indus plains. The phase is dated c. 3300-2600 BCE, though one scholar extends it back to about 5000 BCE.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -3300,
+   -2600
+  ],
+  "flag": "Sources differ on the start of the phase."
+ },
+ {
+  "id": "arch-mature-harappan-phase",
+  "yuga": "kali",
+  "year": -2600,
+  "label": "Mature Harappan phase",
+  "kind": "History",
+  "region": "Indus basin",
+  "summary": "The era of planned cities, standard weights and brick sizes is dated c. 2600-1900 BCE in the main periodisation used.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -2600,
+   -1900
+  ]
+ },
+ {
+  "id": "arch-late-harappan-phase",
+  "yuga": "kali",
+  "year": -1900,
+  "label": "Late Harappan phase",
+  "kind": "History",
+  "region": "Indus basin",
+  "summary": "Cities fade and settlement spreads east and south. The phase runs c. 1900-1300 BCE.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -1900,
+   -1300
+  ]
+ },
+ {
+  "id": "arch-excavation-of-harappa-and-mohenjo-daro",
+  "yuga": "kali",
+  "year": 1921,
+  "label": "Excavation of Harappa and Mohenjo-daro",
+  "kind": "History",
+  "region": "Punjab and Sindh",
+  "summary": "Excavations led by John Marshall, with Daya Ram Sahni at Harappa and K. N. Dikshit at Mohenjo-daro from 1924-25, revealed the civilisation.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   1921,
+   1925
+  ],
+  "flag": "Start year differs by account; the 1924 announcement is from memory."
+ },
+ {
+  "id": "arch-lothal-and-the-brick-basin",
+  "yuga": "kali",
+  "year": -2400,
+  "label": "Lothal and the brick basin",
+  "kind": "History",
+  "region": "Gujarat",
+  "summary": "A coastal Harappan town with a large brick basin. Scholars disagree whether it was a dock or a water tank, and the game takes no side.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -2400,
+   -1900
+  ],
+  "flag": "Dates from memory; the Wikipedia page gives no dates for Lothal."
+ },
+ {
+  "id": "arch-dholavira-on-the-unesco-list",
+  "yuga": "kali",
+  "year": 2021,
+  "label": "Dholavira on the UNESCO list",
+  "kind": "History",
+  "region": "Gujarat",
+  "summary": "Dholavira, a Harappan city in Kutch, was named a World Heritage Site in 2021.",
+  "source": "Wikipedia, 'Indus Valley Civilisation' <https://en.wikipedia.org/wiki/Indus_Valley_Civilisation>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide."
+ },
+ {
+  "id": "arch-rigveda-composed",
+  "yuga": "kali",
+  "year": -1200,
+  "label": "Rigveda composed",
+  "kind": "History",
+  "region": "North-west India",
+  "summary": "The Rigveda, the oldest Vedic text, is placed by scholars between about 1400 and 1000 BCE and was passed on by memory.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -1400,
+   -1000
+  ],
+  "flag": "Range as stated on the page; other scholars differ."
+ },
+ {
+  "id": "arch-battle-of-the-ten-kings",
+  "yuga": "kali",
+  "year": "Legend",
+  "label": "Battle of the Ten Kings",
+  "kind": "Tradition",
+  "region": "Punjab",
+  "summary": "A Rigvedic hymn tells how Sudas of the Bharata tribe defeated ten tribes on the river Parushni (Ravi). The event has no firm date.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide."
+ },
+ {
+  "id": "arch-painted-grey-ware-culture",
+  "yuga": "kali",
+  "year": -1200,
+  "label": "Painted Grey Ware culture",
+  "kind": "History",
+  "region": "Upper Gangetic plain",
+  "summary": "A pottery culture of the Kuru-Panchala region, including Hastinapur, dated c. 1200-500 BCE, though some studies give an earlier start.",
+  "source": "Wikipedia, 'Painted Grey Ware culture' <https://en.wikipedia.org/wiki/Painted_Grey_Ware_culture>, accessed 2026-11-22 ; Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -1500,
+   -500
+  ],
+  "flag": "Start date varies from 1500 to 1200 BCE across studies."
+ },
+ {
+  "id": "arch-rise-of-the-kuru-kingdom",
+  "yuga": "kali",
+  "year": -1000,
+  "label": "Rise of the Kuru kingdom",
+  "kind": "History",
+  "region": "Doab",
+  "summary": "After about 1200 BCE the Kuru kingdom became a centre of ritual and rule in the Ganga-Yamuna doab. Parikshit and Janamejaya are named kings in the texts.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -1200,
+   -900
+  ]
+ },
+ {
+  "id": "arch-iron-tools-spread-in-the-doab",
+  "yuga": "kali",
+  "year": -1000,
+  "label": "Iron tools spread in the Doab",
+  "kind": "History",
+  "region": "Doab",
+  "summary": "After about 1000 BCE iron axes and ploughs help settlers clear forest in the Ganga-Yamuna doab.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide."
+ },
+ {
+  "id": "arch-videha-under-janaka",
+  "yuga": "kali",
+  "year": -750,
+  "label": "Videha under Janaka",
+  "kind": "History",
+  "region": "Bihar",
+  "summary": "Videha rises as a third centre of Vedic culture in the 8th or 7th century BCE.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -800,
+   -600
+  ]
+ },
+ {
+  "id": "arch-end-of-the-vedic-period",
+  "yuga": "kali",
+  "year": -500,
+  "label": "End of the Vedic period",
+  "kind": "History",
+  "region": "North India",
+  "summary": "The Vedic period is usually said to close around 500 BCE, when large kingdoms and the grammar of Panini mark a new age.",
+  "source": "Wikipedia, 'Vedic period' <https://en.wikipedia.org/wiki/Vedic_period>, accessed 2026-11-22 ; Wikipedia, 'Timeline of Indian history' <https://en.wikipedia.org/wiki/Timeline_of_Indian_history>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide."
+ },
+ {
+  "id": "arch-ramayana-text-composed-range",
+  "yuga": "kali",
+  "year": -500,
+  "label": "Ramayana text composed (range)",
+  "kind": "History",
+  "region": "North India",
+  "summary": "Scholars place the early oral Ramayana between about 750 and 400 BCE with later layers to about the 3rd century CE.",
+  "source": "Wikipedia, 'Ramayana' <https://en.wikipedia.org/wiki/Ramayana>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -750,
+   300
+  ],
+  "flag": "Range from several scholars cited on the page."
+ },
+ {
+  "id": "arch-mahabharata-text-composed-range",
+  "yuga": "kali",
+  "year": -200,
+  "label": "Mahabharata text composed (range)",
+  "kind": "History",
+  "region": "North India",
+  "summary": "Most scholars place the bulk of the Mahabharata text between about the 3rd century BCE and the 3rd century CE.",
+  "source": "Wikipedia, 'Mahabharata' <https://en.wikipedia.org/wiki/Mahabharata>, accessed 2026-11-22",
+  "requires": [],
+  "approx": true,
+  "review": "pending",
+  "verification": "web (one source); second source needed",
+  "placement": "Placement in a yuga pending: by Puranic count 3102 BCE onward is Kali, but docs/timeline-levels.md rings differ. TPO to decide.",
+  "yearRange": [
+   -400,
+   400
+  ],
+  "flag": "Range as stated on the page."
+ }
+]

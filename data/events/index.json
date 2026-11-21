@@ -1,0 +1,236 @@
+{
+ "version": 1,
+ "note": "Small index loaded first. Each yuga shard in data/events/<yuga>.json loads when that yuga is opened. spine lists every level (playable or planned) so locks work without loading other shards. Counts are computed by tools/check-events.mjs, never typed by hand.",
+ "yugas": [
+  {
+   "id": "satya",
+   "file": "events/satya.json",
+   "count": 8,
+   "levels": 4
+  },
+  {
+   "id": "treta",
+   "file": "events/treta.json",
+   "count": 9,
+   "levels": 4
+  },
+  {
+   "id": "dvapara",
+   "file": "events/dvapara.json",
+   "count": 10,
+   "levels": 5
+  },
+  {
+   "id": "kali",
+   "file": "events/kali.json",
+   "count": 25,
+   "levels": 5
+  },
+  {
+   "id": "kalki",
+   "file": "events/kalki.json",
+   "count": 6,
+   "levels": 4
+  }
+ ],
+ "spine": [
+  {
+   "id": "sat-l1",
+   "yuga": "satya",
+   "level": 1,
+   "label": "The Still Ford",
+   "mission": null,
+   "requires": null,
+   "needsObjective": false
+  },
+  {
+   "id": "sat-l2",
+   "yuga": "satya",
+   "level": 2,
+   "label": "The Drain-Lane Dusk",
+   "mission": null,
+   "requires": "sat-l1",
+   "needsObjective": false
+  },
+  {
+   "id": "sat-l3",
+   "yuga": "satya",
+   "level": 3,
+   "label": "The Reed Harbour",
+   "mission": null,
+   "requires": "sat-l2",
+   "needsObjective": false
+  },
+  {
+   "id": "sat-l4",
+   "yuga": "satya",
+   "level": 4,
+   "label": "The Teaching Grove",
+   "mission": null,
+   "requires": "sat-l3",
+   "needsObjective": true
+  },
+  {
+   "id": "tre-l5",
+   "yuga": "treta",
+   "level": 5,
+   "label": "The Southern Road at Dusk",
+   "mission": null,
+   "requires": "sat-l4",
+   "needsObjective": false
+  },
+  {
+   "id": "tre-l6",
+   "yuga": "treta",
+   "level": 6,
+   "label": "The Camp of Stone and Rope",
+   "mission": null,
+   "requires": "tre-l5",
+   "needsObjective": false
+  },
+  {
+   "id": "tre-l7",
+   "yuga": "treta",
+   "level": 7,
+   "label": "The Hall of Small Fires",
+   "mission": null,
+   "requires": "tre-l6",
+   "needsObjective": false
+  },
+  {
+   "id": "tre-l8",
+   "yuga": "treta",
+   "level": 8,
+   "label": "The Herb Path",
+   "mission": null,
+   "requires": "tre-l7",
+   "needsObjective": true
+  },
+  {
+   "id": "dva-l9",
+   "yuga": "dvapara",
+   "level": 9,
+   "label": "The Well-Rope at Dawn",
+   "mission": null,
+   "requires": "tre-l8",
+   "needsObjective": false
+  },
+  {
+   "id": "dva-l10",
+   "yuga": "dvapara",
+   "level": 10,
+   "label": "Escape from Hastinapur",
+   "mission": "dvapara-escape",
+   "requires": "dva-l9",
+   "needsObjective": false
+  },
+  {
+   "id": "dva-l11",
+   "yuga": "dvapara",
+   "level": 11,
+   "label": "The Lac-House Lane",
+   "mission": null,
+   "requires": "dva-l10",
+   "needsObjective": false
+  },
+  {
+   "id": "dva-l12",
+   "yuga": "dvapara",
+   "level": 12,
+   "label": "The Ferry at the Sea City",
+   "mission": null,
+   "requires": "dva-l11",
+   "needsObjective": false
+  },
+  {
+   "id": "dva-l13",
+   "yuga": "dvapara",
+   "level": 13,
+   "label": "The Water-Bearers' Road",
+   "mission": null,
+   "requires": "dva-l12",
+   "needsObjective": true
+  },
+  {
+   "id": "kal-l14",
+   "yuga": "kali",
+   "level": 14,
+   "label": "The Night Report of Pataliputra",
+   "mission": "mauryan-spy",
+   "requires": "dva-l13",
+   "needsObjective": false
+  },
+  {
+   "id": "kal-l15",
+   "yuga": "kali",
+   "level": 15,
+   "label": "The Hill Stream and the Harbour Road",
+   "mission": "sangam-staff",
+   "requires": "kal-l14",
+   "needsObjective": false
+  },
+  {
+   "id": "kal-l16",
+   "yuga": "kali",
+   "level": 16,
+   "label": "The Forge Road",
+   "mission": null,
+   "requires": "kal-l15",
+   "needsObjective": false
+  },
+  {
+   "id": "kal-l17",
+   "yuga": "kali",
+   "level": 17,
+   "label": "The Tank and the Sluice",
+   "mission": null,
+   "requires": "kal-l16",
+   "needsObjective": false
+  },
+  {
+   "id": "kal-l18",
+   "yuga": "kali",
+   "level": 18,
+   "label": "The Lamp Road of the River Fair",
+   "mission": null,
+   "requires": "kal-l17",
+   "needsObjective": true
+  },
+  {
+   "id": "klk-l19",
+   "yuga": "kalki",
+   "level": 19,
+   "label": "The Night Before the Lamps",
+   "mission": null,
+   "requires": "kal-l18",
+   "needsObjective": false
+  },
+  {
+   "id": "klk-l20",
+   "yuga": "kalki",
+   "level": 20,
+   "label": "The Bridge of Many Hands",
+   "mission": null,
+   "requires": "klk-l19",
+   "needsObjective": false
+  },
+  {
+   "id": "klk-l21",
+   "yuga": "kalki",
+   "level": 21,
+   "label": "The Pass Without a Lamp",
+   "mission": null,
+   "requires": "klk-l20",
+   "needsObjective": false
+  },
+  {
+   "id": "klk-l22",
+   "yuga": "kalki",
+   "level": 22,
+   "label": "The Dawn Road",
+   "mission": null,
+   "requires": "klk-l21",
+   "needsObjective": true
+  }
+ ]
+}

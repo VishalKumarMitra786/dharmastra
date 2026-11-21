@@ -1,0 +1,158 @@
+{
+ "id": "gupta-forge",
+ "era": "Gupta age, forge road",
+ "title": "The Forge Road",
+ "logline": "A smith named Ayasa keeps a training yard on the forge road. {name} learns to roll, shove, climb, cut, block and draw a bow there, then walks the road and turns two raiders aside without hunting anyone.",
+ "objectives": [
+  {
+   "id": "checkpoint-1",
+   "text": "Roll, shove and climb the marked ledge into Ayasa's forge yard."
+  },
+  {
+   "id": "checkpoint-2",
+   "text": "Learn the sword and cross the forge yard."
+  },
+  {
+   "id": "checkpoint-3",
+   "text": "Take up the bow and cross the archery range."
+  },
+  {
+   "id": "checkpoint-4",
+   "text": "Turn the road-raiders aside and reach the gate."
+  }
+ ],
+ "dialogue": [
+  {
+   "id": "g1",
+   "speaker": "Ayasa",
+   "text": "{name}, this yard is for learning. Nothing here bites. Take what I leave on the ground, one lesson at a time.",
+   "trigger": "start"
+  },
+  {
+   "id": "a1",
+   "speaker": "Ayasa",
+   "text": "A roll is not running away. Tap Dodge (X) to slip a blow, but it tires you. Roll twice.",
+   "trigger": "ability"
+  },
+  {
+   "id": "a2",
+   "speaker": "Ayasa",
+   "text": "Push (V) buys room, nothing more. Shove the straw post. A raider shoved off a ledge only has to climb back.",
+   "trigger": "ability"
+  },
+  {
+   "id": "a3",
+   "speaker": "Ayasa",
+   "text": "Marked ledges can be climbed. Face the stone and press Do (Space or F). No hurry.",
+   "trigger": "ability"
+  },
+  {
+   "id": "a4",
+   "speaker": "Ayasa",
+   "text": "Light cut J, heavy cut K. Hold Block (B) as my stick comes. Block just before it lands and you turn it aside.",
+   "trigger": "ability"
+  },
+  {
+   "id": "a5",
+   "speaker": "Ayasa",
+   "text": "Hold Draw (Z), let go to loose. Posts only. Pick your arrows up again; they are not endless.",
+   "trigger": "ability"
+  },
+  {
+   "id": "c1",
+   "speaker": "Ayasa",
+   "text": "Over the ledge. A wall climbed is a door most people never open. Now the blade.",
+   "trigger": "checkpoint-1"
+  },
+  {
+   "id": "c2",
+   "speaker": "Ayasa",
+   "text": "You held your guard and nobody was hurt. Now the bow: breathe out, hold, then let go.",
+   "trigger": "checkpoint-2"
+  },
+  {
+   "id": "c3",
+   "speaker": "Ayasa",
+   "text": "Two raiders ahead, hungry and frightened. Turn them aside. Do not chase them.",
+   "trigger": "checkpoint-3"
+  },
+  {
+   "id": "c4",
+   "speaker": "Ayasa",
+   "text": "The gate stands open and the road is quiet. Keep it that way, {name}.",
+   "trigger": "checkpoint-4"
+  },
+  {
+   "id": "e1",
+   "speaker": "Ayasa",
+   "text": "Turned aside, not hunted. Let them go home.",
+   "trigger": "enemy-down"
+  },
+  {
+   "id": "p1",
+   "speaker": "Ayasa",
+   "text": "That was a parry. You used their strength and spent none of yours.",
+   "trigger": "parry"
+  },
+  {
+   "id": "se1",
+   "speaker": "{name}",
+   "text": "They have seen me. Roll if a blow comes, then shove or cut.",
+   "trigger": "seen"
+  },
+  {
+   "id": "h1",
+   "speaker": "Ayasa",
+   "text": "Breathe. Roll out of reach, then answer.",
+   "trigger": "hit"
+  },
+  {
+   "id": "f1",
+   "speaker": "Ayasa",
+   "text": "The yard waits. Come back, rest, and try the road again.",
+   "trigger": "fail"
+  },
+  {
+   "id": "w1",
+   "speaker": "Ayasa",
+   "text": "{name}, a sword sheathed has done its best work. You can roll, shove, climb, cut, block and shoot. Use them to shield someone.",
+   "trigger": "win"
+  }
+ ],
+ "events": [
+  {
+   "name": "Gupta empire",
+   "year": "c. 320 to 550 CE",
+   "label": "History"
+  },
+  {
+   "name": "Wrought-iron pillar at Delhi, date and original site debated",
+   "year": "c. 4th to 5th century CE",
+   "label": "History"
+  },
+  {
+   "name": "The Dhanurveda, the science of the bow, lists swords and bows among arms; its date and text versions are unclear",
+   "year": "Tradition, date unclear",
+   "label": "Tradition"
+  },
+  {
+   "name": "Ayasa the smith, his training yard and the road-raiders",
+   "year": "Legend",
+   "label": "Invented"
+  }
+ ],
+ "requires": [
+  "vault",
+  "crouch",
+  "staff"
+ ],
+ "rewards": {
+  "grants": [
+   "dodge",
+   "push",
+   "climb",
+   "sword",
+   "bow"
+  ]
+ }
+}

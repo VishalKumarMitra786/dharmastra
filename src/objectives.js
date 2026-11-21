@@ -1,5 +1,7 @@
 // Objective state machine. Pure: feed it sim events, read the states. Win = every non-optional objective done.
-export const OBJECTIVE_TYPES = ['reach', 'collect', 'evade'];
+// do: perform a move N times (a teaching exercise): {event:'dodge', count:2, via?}. defeat: drive off N raiders (they are never killed).
+export const OBJECTIVE_TYPES = ['reach', 'collect', 'evade', 'do', 'defeat'];
+const DO_EVENTS = ['dodge', 'shove', 'shove-hit', 'climb', 'swing', 'heavy', 'blocked', 'parry', 'shot', 'target-hit', 'hit-enemy', 'enemy-fell', 'vault', 'weapon'];
 
 const cpIndex = (t) => (typeof t === 'number' ? t : /^cp(\d+)$/.test(t || '') ? Number(t.slice(2)) : NaN);
 
@@ -14,6 +16,8 @@ export function validateObjectiveDefs(defs, checkpointCount = Infinity) {
     if (!OBJECTIVE_TYPES.includes(d.type)) errors.push(`objectives[${i}] unknown type ${d.type}`);
     if (d.type === 'reach' && !(cpIndex(d.target) >= 1 && cpIndex(d.target) <= checkpointCount)) errors.push(`objectives[${i}] reach needs a checkpoint target`);
     if (d.type === 'collect' && !(Number.isInteger(d.count) && d.count >= 1 && d.count <= 99)) errors.push(`objectives[${i}] collect needs count 1..99`);
+    if (d.type === 'do' && !DO_EVENTS.includes(d.event)) errors.push(`objectives[${i}] do needs an event from ${DO_EVENTS.join(', ')}`);
+    if ((d.type === 'do' || d.type === 'defeat') && !(Number.isInteger(d.count) && d.count >= 1 && d.count <= 99)) errors.push(`objectives[${i}] ${d.type} needs count 1..99`);
     if (d.type === 'evade' && d.max != null && !(Number.isInteger(d.max) && d.max >= 0 && d.max <= 99)) errors.push(`objectives[${i}] evade max must be 0..99`);
   });
   return errors;
@@ -32,8 +36,8 @@ export function createObjectives(defs, checkpointCount) {
 }
 
 function item(d) {
-  const goal = d.type === 'collect' ? d.count : d.type === 'evade' ? (d.max ?? 0) : 1;
-  return { id: d.id, type: d.type, text: d.text || d.id, optional: !!d.optional, state: 'active', progress: 0, goal, kind: d.kind || null, target: cpIndex(d.target) };
+  const goal = d.type === 'collect' || d.type === 'do' || d.type === 'defeat' ? d.count : d.type === 'evade' ? (d.max ?? 0) : 1;
+  return { id: d.id, type: d.type, text: d.text || d.id, optional: !!d.optional, state: 'active', progress: 0, goal, kind: d.kind || null, target: cpIndex(d.target), unlock: Number.isInteger(d.unlock) ? d.unlock : 0, event: d.event || null, via: d.via || null, heavy: d.heavy ?? null };
 }
 
 // Applies one sim event (or null) and settles evade objectives. Returns [{id, state}] for every state change.
@@ -45,6 +49,14 @@ export function updateObjectives(obj, ev) {
     if (o.state !== 'active') continue;
     if (ev?.type === 'checkpoint' && o.type === 'reach' && ev.n === o.target) { o.progress = 1; set(o, 'done'); }
     if (ev?.type === 'pickup' && o.type === 'collect' && (!o.kind || o.kind === ev.kind)) {
+      o.progress = Math.min(o.goal, o.progress + 1);
+      if (o.progress >= o.goal) set(o, 'done');
+    }
+    if (o.type === 'do' && ev && ev.type === o.event && (!o.via || ev.via === o.via) && (o.heavy == null || !!ev.heavy === o.heavy)) {
+      o.progress = Math.min(o.goal, o.progress + 1);
+      if (o.progress >= o.goal) set(o, 'done');
+    }
+    if (o.type === 'defeat' && ev && (ev.type === 'enemy-down' || ev.type === 'enemy-fell')) {
       o.progress = Math.min(o.goal, o.progress + 1);
       if (o.progress >= o.goal) set(o, 'done');
     }

@@ -51,6 +51,8 @@
       </div>
       <ul class="stats">
         <li class="stat-health"><span class="ico" aria-hidden="true">&#9829;</span><span class="lbl">Health</span> <span id="health-text">100/100</span><span class="bar" aria-hidden="true"><span id="health-fill"></span></span></li>
+        <li id="stat-stamina" class="stat-stamina" hidden><span class="ico" aria-hidden="true">&#9889;</span><span class="lbl">Stamina</span> <span id="stamina-text">100%</span><span class="bar" aria-hidden="true"><span id="stamina-fill"></span></span></li>
+        <li id="stat-arrows" class="stat-arrows" hidden><span class="ico" aria-hidden="true">&#10140;</span><span class="lbl">Arrows</span> <span id="arrows-text">0</span></li>
         <li id="stat-kit" class="stat-kit" hidden><span class="ico" aria-hidden="true">&#9876;</span><span class="lbl">Gear</span> <span id="kit-text"></span></li>
         <li class="stat-cp"><span class="ico" aria-hidden="true">&#9670;</span><span class="lbl">Checkpoints</span> <span id="cp-text">0/3</span><span id="cp-pips" class="pips" aria-hidden="true"></span></li>
         <li id="stat-timer"><span class="ico" aria-hidden="true">&#9201;</span><span class="lbl">Time</span> <span id="timer-text"></span></li>
@@ -64,8 +66,14 @@
     <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
 
     <div id="actions" class="actions-pad" role="group" aria-label="Action buttons">
-      <button class="pad act attack" type="button" data-control="attack" aria-label="Attack with staff (J)" hidden><span aria-hidden="true">&#9876;</span> Attack</button>
-      <button class="pad act" type="button" data-control="do" aria-label="Do: vault or pick up (Space or F)" hidden><span aria-hidden="true">&#10548;</span> Do</button>
+      <button class="pad act attack" type="button" data-control="attack" aria-label="Attack with staff (J)" hidden><span aria-hidden="true">&#9876;</span> <span class="t">Attack</span></button>
+      <button class="pad act" type="button" data-control="do" aria-label="Do: pick up, vault or climb (Space or F)" hidden><span aria-hidden="true">&#10548;</span> Do</button>
+      <button class="pad act sm" type="button" data-control="dodge" aria-label="Dodge roll (X)" hidden><span aria-hidden="true">&#8634;</span> Dodge</button>
+      <button class="pad act sm" type="button" data-control="push" aria-label="Shove (V)" hidden><span aria-hidden="true">&#10145;</span> Shove</button>
+      <button class="pad act sm" type="button" data-control="heavy" aria-label="Heavy cut, slow and tiring (K)" hidden><span aria-hidden="true">&#9876;&#9876;</span> Heavy</button>
+      <button class="pad act sm" type="button" data-control="block" aria-label="Block: hold (B)" hidden><span aria-hidden="true">&#9921;</span> Block</button>
+      <button class="pad act sm" type="button" data-control="aim" aria-label="Draw bow: hold, then release to loose (Z)" hidden><span aria-hidden="true">&#10140;</span> Draw</button>
+      <button class="pad act sm" type="button" data-control="swap" aria-label="Swap weapon (R, or 1 2 3)" hidden><span aria-hidden="true">&#8646;</span> Swap</button>
       <button class="pad act crouch" type="button" data-control="crouch" aria-label="Crouch (C)" aria-pressed="false" hidden><span aria-hidden="true">&#9662;</span> Crouch</button>
     </div>
 
@@ -79,6 +87,64 @@
       <button class="pad run" type="button" data-control="run">Run</button>
     </div>
   </main>
+
+  <div id="screen-chakra" class="overlay chakra" role="dialog" aria-modal="true" aria-labelledby="chakra-title" data-zoom="0" hidden>
+    <header id="ch-head" class="ch-head">
+      <p class="ch-mark" lang="hi" aria-hidden="true">धर्मास्त्र</p>
+      <h1 id="chakra-title">Chakra of the Yugas</h1>
+      <p id="ch-here" class="ch-here"></p>
+    </header>
+    <div id="ch-main" class="ch-main">
+      <section class="ch-stage-wrap" aria-label="Wheel of yugas">
+        <div id="ch-stage" class="ch-stage" tabindex="0" role="group" aria-label="Wheel of yugas. Press plus and minus to zoom, arrow keys to move, Enter to open." aria-describedby="ch-help">
+          <canvas id="ch-canvas" aria-hidden="true"></canvas>
+        </div>
+        <div class="ch-zoom" role="group" aria-label="Zoom controls">
+          <button id="ch-in" class="btn round" type="button" aria-label="Zoom in"><span aria-hidden="true">+</span></button>
+          <button id="ch-out" class="btn round" type="button" aria-label="Zoom out"><span aria-hidden="true">&minus;</span></button>
+          <button id="ch-whole" class="btn" type="button">Whole wheel</button>
+        </div>
+        <p id="ch-help" class="sr-only">Five yugas form the wheel: Satya, Treta, Dvapara, Kali, then the Kalki era. Plus and minus zoom. Arrow keys move between yugas or events. Page Up and Page Down change yuga. Enter opens the selected event. Escape zooms out. The same events are in the list below.</p>
+      </section>
+      <section class="ch-panel" aria-label="Events">
+        <div id="ch-yugas" class="ch-yugas" role="group" aria-label="Choose a yuga"></div>
+        <div class="ch-listhead"><h2 id="ch-list-title"></h2><p id="ch-progress" class="note"></p></div>
+        <details id="ch-filter" class="ch-filter" hidden>
+          <summary>Search and filter</summary>
+          <form id="ch-filter-form" class="ch-form" role="search" aria-label="Search events in this yuga">
+            <div class="field"><label for="ch-q">Search words</label><input id="ch-q" type="search" autocomplete="off" spellcheck="false"></div>
+            <div class="field"><label for="ch-kind">Kind</label><select id="ch-kind"><option value="">Any kind</option><option>History</option><option>Tradition</option><option>Invented</option></select></div>
+            <div class="field"><label for="ch-region">Region</label><select id="ch-region"><option value="">Any region</option></select></div>
+            <fieldset class="field ch-years"><legend>Year range (leave empty for any)</legend>
+              <div class="ch-yr"><label for="ch-from">From</label><input id="ch-from" type="number" inputmode="numeric" min="0" max="99999"><label class="sr-only" for="ch-from-era">From era</label><select id="ch-from-era"><option>BCE</option><option>CE</option></select></div>
+              <div class="ch-yr"><label for="ch-to">To</label><input id="ch-to" type="number" inputmode="numeric" min="0" max="99999"><label class="sr-only" for="ch-to-era">To era</label><select id="ch-to-era"><option>BCE</option><option selected>CE</option></select></div>
+            </fieldset>
+            <button id="ch-clear" class="btn" type="button">Clear filters</button>
+          </form>
+        </details>
+        <p id="ch-count" class="note" role="status"></p>
+        <p id="ch-loading" class="note" hidden>Loading events...</p>
+        <div id="ch-error" class="ch-error" role="alert" hidden><p id="ch-error-text"></p><button id="ch-retry" class="btn" type="button">Try again</button></div>
+        <div id="ch-scroll" class="ch-scroll"><div id="ch-spacer" class="ch-spacer"><ul id="ch-rows" class="ch-rows" aria-labelledby="ch-list-title"></ul></div></div>
+        <div class="actions ch-bottom"><button class="btn" type="button" data-action="settings">Settings</button><button class="btn" type="button" data-action="chakra-skip">Open the mission screen</button></div>
+      </section>
+    </div>
+    <div id="ch-card" class="ch-card" role="dialog" aria-modal="true" aria-labelledby="ch-card-title" aria-describedby="ch-card-status" hidden>
+      <div class="ch-card-in panel">
+        <p id="ch-card-kicker" class="eyebrow"></p>
+        <h2 id="ch-card-title" tabindex="-1"></h2>
+        <p id="ch-card-meta" class="ch-meta"></p>
+        <p id="ch-card-status" class="ch-status"></p>
+        <p id="ch-card-intro"></p>
+        <p id="ch-card-skill" class="note" hidden></p>
+        <p id="ch-card-reach" class="ch-reach"></p>
+        <p id="ch-card-note" class="note" hidden></p>
+        <p id="ch-card-source" class="note"></p>
+        <div class="actions"><button id="ch-play" class="btn primary" type="button" aria-describedby="ch-card-status">Play</button><button id="ch-card-close" class="btn" type="button">Close</button></div>
+      </div>
+    </div>
+    <p id="ch-live" class="sr-only" role="status" aria-live="polite"></p>
+  </div>
 
   <div id="screen-character" class="overlay poster" role="dialog" aria-modal="true" aria-labelledby="char-title" hidden>
     <div class="panel picker">
@@ -114,7 +180,7 @@
         <button id="start-btn" class="btn primary" type="button" data-action="start" data-autofocus disabled>Start mission</button>
         <button class="btn" type="button" data-action="char-open">Change traveller</button>
         <button class="btn" type="button" data-action="settings">Settings</button>
-        <a class="btn" href="prototypes/time-chakra/index.html">Time chakra</a>
+        <button class="btn" type="button" data-action="chakra-open">Chakra of the yugas</button>
       </div>
     </div>
   </div>

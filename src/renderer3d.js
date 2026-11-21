@@ -163,7 +163,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   let world = null; let theme = THEMES.default;
   let built = null;
   let hero = null; let heroTop = null; let protectRing = null; let heroLook = null;
-  const enemies = []; const pickups = []; let obstacleGroup = null; let obstacleSig = -1; let heroStaff = null; let lastEventsFrame = null;
+  const enemies = []; const pickups = []; let obstacleGroup = null; let obstacleSig = -1; let heroStaff = null; let heroSword = null; let heroBow = null; let lastEventsFrame = null; const targets3 = []; const arrows3 = [];
   const guards = []; const npcs = []; const cps = []; const lamps = []; const boats = [];
   let lastNow = 0; let lost = false; let spawnAcc = 0;
 
@@ -318,7 +318,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     scene.remove(built);
     const shared = new Set(geoCache.values());
     built.traverse((o) => { if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose?.(); });
-    built = null; obstacleGroup = null; obstacleSig = -1; enemies.length = 0; pickups.length = 0; guards.length = 0; npcs.length = 0; cps.length = 0; lamps.length = 0; boats.length = 0;
+    built = null; obstacleGroup = null; obstacleSig = -1; enemies.length = 0; pickups.length = 0; targets3.length = 0; arrows3.length = 0; guards.length = 0; npcs.length = 0; cps.length = 0; lamps.length = 0; boats.length = 0;
     skyTex?.dispose(); groundTex?.dispose(); waterTex?.dispose(); skyTex = groundTex = waterTex = null;
   }
 
@@ -543,6 +543,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       lamp: true, lampColor: theme.lamp, ringColor: 0xfff4de, ring: [24, 28],
     });
     heroStaff = makeStaff(56); heroStaff.position.y = -26; heroStaff.visible = false; hero.userData.arms[1].add(heroStaff);
+    heroSword = makeSword(46); heroSword.position.y = -30; heroSword.visible = false; hero.userData.arms[1].add(heroSword);
+    heroBow = makeBow(); heroBow.position.y = -26; heroBow.visible = false; hero.userData.arms[1].add(heroBow);
     shadowed(hero); built?.add(hero); protectRing = hero.userData.ring;
   }
 
@@ -554,6 +556,32 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     const cap = ball(3, mat(0xffc247)); cap.position.y = len / 2; g.add(cap);
     const foot = ball(2.4, mat(0xffc247)); foot.position.y = -len / 2; g.add(foot);
     const band = cyl(2.3, 2.3, 3, 6, mat(0xffc247)); band.position.y = len * 0.18; g.add(band);
+    return g;
+  }
+  // Sword: a pale blade, a gold guard and a leather grip. Bow: a curved limb (a torus arc) with a thin string.
+  function makeSword(len) {
+    const g = new THREE.Group();
+    const blade = box(3.2, len, 1.2, mat(0xd8dde4, { metalness: 0.3 })); blade.position.y = -len / 2 + 6; g.add(blade);
+    const guard = box(15, 3.4, 3.4, mat(0xffc247)); guard.position.y = 7; g.add(guard);
+    const grip = cyl(1.8, 1.8, 11, 6, mat(0x5a3a1c)); grip.position.y = 12; g.add(grip);
+    return g;
+  }
+  function makeBow() {
+    const g = new THREE.Group();
+    const limb = new THREE.Mesh(geo('bowlimb', () => new THREE.TorusGeometry(20, 1.8, 5, 12, Math.PI * 0.8)), mat(0x8a5a2a)); limb.rotation.z = Math.PI / 2 - Math.PI * 0.4; limb.position.x = -6; g.add(limb);
+    const string = box(0.8, 24, 0.8, mat(0xfff4de)); string.position.x = -6 + 20 * Math.cos(Math.PI * 0.4) - 1; g.add(string);
+    return g;
+  }
+  // A lesson token: a small symbol on a glowing disc. Sacks and the staff keep their old models.
+  function makeToken(kind) {
+    const g = new THREE.Group(); const gold = mat(0xffc247);
+    const disc = cyl(15, 15, 3, 12, mat(0x2b1d10)); disc.position.y = -6; g.add(disc);
+    if (kind === 'sword') { const b = makeSword(30); b.rotation.z = 0.6; b.position.y = 6; g.add(b); }
+    else if (kind === 'bow') { const b = makeBow(); b.scale.setScalar(0.7); b.rotation.z = -Math.PI / 2; b.position.set(0, 6, 0); g.add(b); }
+    else if (kind === 'arrows') for (let i = -1; i <= 1; i++) { const a = cyl(0.9, 0.9, 30, 5, mat(0xc9a066)); a.rotation.z = 0.5; a.position.set(i * 5, 6, 0); g.add(a); const h = cyl(0, 3, 6, 5, gold); h.rotation.z = 0.5; h.position.set(i * 5 - 7, 21, 0); g.add(h); }
+    else if (kind === 'climb') { for (const x of [-6, 6]) { const r = box(2.4, 28, 2.4, mat(0x8a5a2a)); r.position.set(x, 8, 0); g.add(r); } for (const y of [0, 8, 16]) { const r = box(14, 2, 2, gold); r.position.y = y; g.add(r); } }
+    else if (kind === 'push') { const sh = box(22, 5, 5, gold); sh.position.y = 8; g.add(sh); const tip = cyl(0, 8, 10, 4, gold); tip.rotation.z = -Math.PI / 2; tip.position.set(14, 8, 0); g.add(tip); }
+    else if (kind === 'dodge') { const r = new THREE.Mesh(geo('dodgering', () => new THREE.TorusGeometry(10, 2.2, 5, 12, Math.PI * 1.5)), gold); r.position.y = 8; g.add(r); const tip = cyl(0, 5, 8, 4, gold); tip.position.set(10, 12, 0); g.add(tip); }
     return g;
   }
   const iconFill = new THREE.MeshBasicMaterial({ color: 0xffd23a, side: THREE.DoubleSide, fog: false });
@@ -577,7 +605,28 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     g.scale.setScalar(1.12);
     shadowed(g); built.add(g);
     const icons = makeIcons(); built.add(icons.root);
-    return { g, top, icons, id: null, x: 0, y: 0, flash: 0 };
+    // Telegraph: a flat wedge in front that fills up through the wind-up (outline = full reach, fill = how close the blow is). Ring = the sparring partner's marker.
+    const wedge = geo('telewedge', () => new THREE.CircleGeometry(50, 10, -0.7, 1.4));
+    const teleFull = new THREE.Mesh(wedge, new THREE.MeshBasicMaterial({ color: 0xfff4de, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    const tele = new THREE.Mesh(wedge, new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    const ring = new THREE.Mesh(geo('sparring', () => new THREE.RingGeometry(23, 27, 16)), new THREE.MeshBasicMaterial({ color: 0xfff4de, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    for (const m of [teleFull, tele, ring]) { m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; m.position.y = 2; built.add(m); }
+    return { g, top, icons, id: null, x: 0, y: 0, flash: 0, tele, teleFull, ring, kind: null };
+  }
+  // A straw training post: a stake and a target disc with three rings (the rings are shape; they do not depend on colour).
+  function makeTarget() {
+    const g = new THREE.Group();
+    const stake = cyl(3, 3.4, 38, 6, mat(0x5a3a1c)); stake.position.y = 19; g.add(stake);
+    const rings = [[16, 0xfff4de, 0], [10, 0x9a3a2a, 1.6], [4, 0xfff4de, 3.2]];
+    for (const [r, c, x] of rings) { const d = cyl(r, r, 2.4, 16, mat(c)); d.rotation.z = Math.PI / 2; d.position.set(x, 44, 0); g.add(d); }
+    shadowed(g); built.add(g); return g;
+  }
+  function makeArrow() {
+    const g = new THREE.Group();
+    const shaft = cyl(0.9, 0.9, 26, 5, mat(0xc9a066)); shaft.rotation.z = Math.PI / 2; g.add(shaft);
+    const head = cyl(0, 3, 7, 5, mat(0xd8dde4)); head.rotation.z = -Math.PI / 2; head.position.x = 15; g.add(head);
+    const fl = box(7, 0.8, 5, mat(0xfff4de)); fl.position.x = -11; g.add(fl);
+    g.visible = false; built.add(g); return g;
   }
   function makePickup(kind) {
     const g = new THREE.Group();
@@ -587,7 +636,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       const body = ball(13, mat(0xc9a066), 1, 1.1, 1); body.position.y = 0; s.add(body);
       const tie = box(7, 3, 7, mat(0x6b4a2a)); tie.position.y = 15; s.add(tie);
       g.add(s);
-    } else { s = makeStaff(44); s.rotation.z = 0.8; s.position.y = 0; g.add(s); }
+    } else if (['dodge', 'push', 'climb', 'sword', 'bow', 'arrows'].includes(kind)) { s = makeToken(kind); s.position.y = 0; g.add(s); }
+    else { s = makeStaff(44); s.rotation.z = 0.8; s.position.y = 0; g.add(s); }
     const gl = glow(0xffd860, 54, 0.7); g.add(gl);
     built.add(g); return { g, s, kind };
   }
@@ -596,8 +646,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   function buildObstacles(list) {
     if (obstacleGroup) { built.remove(obstacleGroup); obstacleGroup.traverse((o) => o.dispose?.()); }
     obstacleGroup = new THREE.Group(); obstacleSig = list.length;
-    const walls = []; const beams = []; const grass = [];
-    list.forEach((o, i) => { if (o.kind === 'lowwall') walls.push(o); else if (o.kind === 'beam') beams.push(o); else if (o.kind === 'grass') grass.push({ o, i }); });
+    const walls = []; const beams = []; const grass = []; const ledges = []; const pits = [];
+    list.forEach((o, i) => { if (o.kind === 'lowwall') walls.push(o); else if (o.kind === 'beam') beams.push(o); else if (o.kind === 'grass') grass.push({ o, i }); else if (o.kind === 'ledge') ledges.push(o); else if (o.kind === 'pit') pits.push(o); });
     const dummy = new THREE.Object3D(); const col = new THREE.Color();
     function inst(geometry, count, fill) {
       if (!count) return;
@@ -610,6 +660,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     }
     // Low wall: a solid block with a pale cap and a row of notches reads as "step over it".
     inst(unitBox(), walls.length * 2, (put) => walls.forEach((o) => { put(o.x + o.w / 2, 11, o.y + o.d / 2, o.w - 2, 22, o.d - 2, 0x8a7a5e); put(o.x + o.w / 2, 23.5, o.y + o.d / 2, o.w + 2, 5, o.d + 2, 0xd9c79a); }));
+    // Marked ledge: a tall stone block with a gold rope band and pale pegs along the top, so it reads as "climb here". Pit: a dark sunken pad with a pale rim.
+    inst(unitBox(), ledges.length * 3, (put) => ledges.forEach((o) => { put(o.x + o.w / 2, 40, o.y + o.d / 2, o.w - 2, 80, o.d - 2, 0x6f6a62); put(o.x + o.w / 2, 62, o.y + o.d / 2, o.w + 1, 5, o.d + 1, 0xffc247); put(o.x + o.w / 2, 82, o.y + o.d / 2, o.w + 2, 4, o.d + 2, 0xe6dcc4); }));
+    inst(unitBox(), pits.length * 2, (put) => pits.forEach((o) => { put(o.x + o.w / 2, 0.6, o.y + o.d / 2, o.w, 1.2, o.d, 0x0b0812); put(o.x + o.w / 2, 3, o.y + o.d / 2, o.w + 6, 6, o.d + 6, 0xe6dcc4); }));
     // Beam: two posts and a bar at head height that a standing person cannot pass but a crouching one can.
     inst(unitBox(), beams.length * 3, (put) => beams.forEach((o) => {
       const alongX = o.w >= o.d; const cx = o.x + o.w / 2; const cz = o.y + o.d / 2;
@@ -667,6 +720,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; m.position.y = 14; scene.add(m); return m;
   })();
   let crouchK = 0;
+  const flatBox = (len, wid, color, opacity) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, fog: false })); m.scale.set(len, 1, wid); m.visible = false; scene.add(m); return m; };
+  const aimLine = flatBox(200, 2.5, 0xfff4de, 0.45); const aimBar = flatBox(1, 6, 0xfff4de, 0.9);
+  const guardArc = (() => { const m = new THREE.Mesh(new THREE.RingGeometry(26, 33, 12, 1, -1, 2), new THREE.MeshBasicMaterial({ color: 0xfff4de, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, fog: false })); m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); return m; })();
 
   function handleEvents(frame, calm) {
     if (frame === lastEventsFrame) return; // the same frame object drawn twice must not repeat its one-shot events
@@ -745,9 +801,18 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       while (enemies.length < nE) enemies.push(makeEnemy());
       for (let i = 0; i < enemies.length; i++) {
         const en = enemies[i];
-        if (i >= nE || E[i].state === 'down') { en.g.visible = false; continue; }
+        if (i >= nE || E[i].state === 'down') { en.g.visible = false; en.tele.visible = en.teleFull.visible = en.ring.visible = false; continue; }
         const e = E[i]; const st = e.state || 'patrol'; const eu = en.g.userData;
         if (en.id !== e.id) { en.id = e.id; en.x = e.x; en.y = e.y; }
+        if (en.kind !== e.kind) { en.kind = e.kind; en.top.color.setHex(e.kind === 'sparrer' ? 0x7a5a8a : 0x3f6a4a); en.ring.visible = e.kind === 'sparrer'; }
+        if (en.ring.visible) en.ring.position.set(e.x, 2, e.y);
+        const wind = st === 'windup';
+        en.tele.visible = en.teleFull.visible = wind;
+        if (wind) {
+          const u = Math.max(0, Math.min(1, e.windup || 0));
+          for (const m of [en.tele, en.teleFull]) { m.position.set(e.x, 2, e.y); m.rotation.z = -e.angle; }
+          en.tele.scale.set(0.28 + 0.72 * u, 0.28 + 0.72 * u, 1); en.tele.material.opacity = 0.25 + 0.5 * u;
+        }
         const moved = Math.hypot(e.x - en.x, e.y - en.y);
         en.g.visible = true; en.g.position.set(e.x, 0, e.y); en.g.rotation.y = -e.angle;
         animate(en.g, moved, moved > 0.05 ? 0.8 : 0, t);
@@ -768,6 +833,18 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         if (i >= nP || PK[i].taken) { pk.g.visible = false; continue; }
         pk.g.visible = true; pk.g.position.set(PK[i].x, 30 + (calm ? 0 : Math.sin(t * 2.2 + i) * 5), PK[i].y);
         if (!calm) pk.s.rotation.y = t * 1.2;
+      }
+      const TG = frame.targets; const nT = TG ? TG.length : 0;
+      while (targets3.length < nT) targets3.push(makeTarget());
+      for (let i = 0; i < targets3.length; i++) {
+        const tg = targets3[i]; if (i >= nT) { tg.visible = false; continue; }
+        tg.visible = true; tg.position.set(TG[i].x, 0, TG[i].y); tg.scale.setScalar(calm ? 1 : 1 + 0.18 * TG[i].flash);
+      }
+      const AR = frame.arrows; const nA = AR ? AR.length : 0;
+      while (arrows3.length < Math.min(16, nA)) arrows3.push(makeArrow());
+      for (let i = 0; i < arrows3.length; i++) {
+        const ar = arrows3[i]; if (i >= nA) { ar.visible = false; continue; }
+        ar.visible = true; ar.position.set(AR[i].x, 28, AR[i].y); ar.rotation.y = -(AR[i].angle || 0);
       }
       const OB = frame.obstacles;
       if (OB && OB.length && OB.length !== obstacleSig) buildObstacles(OB);
@@ -790,14 +867,33 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       hero.scale.set(1 + 0.08 * crouchK, 1 - 0.38 * crouchK, 1 + 0.08 * crouchK);
       if (pstate === 'vault') { hero.position.y = vaultHop(P.stateT, calm); hu.upper.rotation.z = -0.35; hu.legs[0].rotation.z = 0.9; hu.legs[1].rotation.z = 0.7; } else hero.position.y = 0;
       const staffOn = !!P && P.weapon === 'staff'; heroStaff.visible = staffOn;
+      const swordOn = !!P && P.weapon === 'sword'; heroSword.visible = swordOn;
+      const bowOn = !!P && P.weapon === 'bow'; heroBow.visible = bowOn;
       const A = frame.attack; const swinging = !!(A && A.active);
-      if (staffOn) {
-        const pr = swinging ? Math.max(0, Math.min(1, A.progress || 0)) : 0;
-        hu.arms[1].rotation.z = swinging ? 2.4 - 2.2 * pr : 1.0 + hu.arms[1].rotation.z * 0.15;
-      }
+      const pr = swinging ? Math.max(0, Math.min(1, A.progress || 0)) : 0;
+      const charging = swinging && A.kind === 'heavy' && pr < (A.hit || 0.575);
+      if (staffOn) hu.arms[1].rotation.z = swinging ? 2.4 - 2.2 * pr : 1.0 + hu.arms[1].rotation.z * 0.15;
+      if (swordOn) {
+        if (pstate === 'block') { hu.arms[1].rotation.z = 2.2; heroSword.rotation.z = 0; hu.arms[0].rotation.z = 1.4; }
+        else if (swinging && A.kind === 'shove') { hu.arms[1].rotation.z = 1.6; hu.arms[0].rotation.z = 1.6; }
+        else if (swinging) hu.arms[1].rotation.z = charging ? 2.9 : 2.7 - 2.5 * pr; // heavy: held high first, then it comes down at the moment of impact
+        else hu.arms[1].rotation.z = 0.9 + hu.arms[1].rotation.z * 0.15;
+      } else if (swinging && A.kind === 'shove') { hu.arms[1].rotation.z = 1.6; hu.arms[0].rotation.z = 1.6; }
+      if (bowOn) hu.arms[1].rotation.z = pstate === 'aim' ? 1.55 : 0.8;
+      if (pstate === 'aim' && P) { // aim line along the way the arrow will go, and a bar along it that grows with the draw (full draw turns gold)
+        const aa = P.aimAngle || c.angle; const d = Math.max(0, Math.min(1, P.draw || 0));
+        aimLine.visible = true; aimBar.visible = d > 0.02;
+        aimLine.position.set(c.x + Math.cos(aa) * 130, 3, c.y + Math.sin(aa) * 130); aimLine.rotation.y = -aa;
+        aimBar.scale.x = Math.max(0.001, 160 * d); aimBar.position.set(c.x + Math.cos(aa) * (20 + 80 * d), 4, c.y + Math.sin(aa) * (20 + 80 * d)); aimBar.rotation.y = -aa; aimBar.material.color.setHex(d >= 0.999 ? 0xffc247 : 0xfff4de);
+      } else { aimLine.visible = false; aimBar.visible = false; }
+      if (pstate === 'block') { guardArc.visible = true; guardArc.position.set(c.x, 26, c.y); guardArc.rotation.z = -c.angle; } else guardArc.visible = false;
+      if (pstate === 'dodge') hero.scale.set(1.12, 0.62, 1.12); // a roll: low and wide
       if (swinging) {
+        const shove = A.kind === 'shove';
         swingArc.visible = true; swingArc.position.x = c.x; swingArc.position.z = c.y; swingArc.rotation.z = -(A.angle || 0);
-        swingArc.material.opacity = calm ? 0.55 : 0.75 * (1 - Math.max(0, Math.min(1, A.progress || 0)) * 0.8);
+        const k = Math.max(0.4, (A.range || 60) / 60); swingArc.scale.set(k, k, 1);
+        swingArc.material.color.setHex(shove ? 0xfff4de : 0xff9d1a);
+        swingArc.material.opacity = charging ? 0.3 : calm ? 0.55 : (shove ? 0.5 : 0.75) * (1 - pr * 0.8);
       } else swingArc.visible = false;
       const hurtFlash = P && pstate === 'hurt' ? Math.max(0, 1 - (P.stateT || 0) / 0.2) : 0;
       const flash = calm ? 0 : Math.max(frame.effects.flash, hurtFlash);

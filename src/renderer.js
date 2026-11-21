@@ -9,11 +9,14 @@
 // frame = {
 //   chariot: {x, y, angle, radius, invulnerable}, guards: [{x, y, angle, radius}],
 //   checkpoints: [{x, y, radius, state: 'done'|'next'|'later'}],
-//   player: {state, stateT, weapon, crouch}, enemies: [{id,x,y,angle,hpFrac,state}], pickups: [{id,x,y,kind,taken}],
-//   obstacles: [{x,y,w,d,kind}], events: [{type,x,y}], attack: {active,progress,angle}, blood: boolean
+//   player: {state, stateT, weapon, crouch, stamina 0..1, draw 0..1, arrows, invulnerable (dodge i-frames), blocking, aimAngle}
+//   enemies: [{id,x,y,angle,hpFrac,state, kind, windup 0..1 (progress of the telegraph, 0 outside 'windup')}], pickups: [{id,x,y,kind,taken}],
+//   targets: [{id,x,y,flash 0..1}], arrows: [{x,y,angle}] (in flight only),
+//   obstacles: [{x,y,w,d,kind: lowwall|beam|grass|ledge|pit}], events: [{type,x,y}], attack: {active,progress,angle,kind: staff|light|heavy|shove,range,hit (fraction of the swing at which the blow lands)}, blood: boolean
 //   (5th makeFrame arg `extra` or cam.blood carries the blood setting)
 //   effects: {shake: 0..1, flash: 0..1}, reducedMotion: boolean, time: seconds
 // }
+import { ATTACKS, COMBAT, dodgeInvulnerable } from './combat.js';
 export const RENDERER_METHODS = ['resize', 'setWorld', 'render'];
 
 export function assertRenderer(r) {
@@ -25,15 +28,22 @@ export function assertRenderer(r) {
 export function makeFrame(sim, effects, reducedMotion, cam = {}, extra = {}) {
   const c = sim.chariot;
   const p = sim.player;
-  const swing = p?.state === 'attack';
+  const spec = p && ATTACKS[p.atk];
+  const swing = (p?.state === 'attack' || p?.state === 'shove') && !!spec;
   const fx = sim.fx ? sim.fx.splice(0) : []; // one-shot feedback: each event is shown in exactly one frame
   return {
-    player: { state: p?.state ?? 'idle', stateT: p?.stateT ?? 0, weapon: p?.weapon ?? 'none', crouch: !!p?.crouching },
-    enemies: (sim.enemies || []).map((e) => ({ id: e.id, x: e.x, y: e.y, angle: e.angle, hpFrac: e.maxHp ? e.hp / e.maxHp : 0, state: e.state })),
+    player: {
+      state: p?.state ?? 'idle', stateT: p?.stateT ?? 0, weapon: p?.weapon ?? 'none', crouch: !!p?.crouching,
+      stamina: p ? p.stamina / COMBAT.stamina.max : 1, draw: p ? p.draw / COMBAT.bow.drawTime : 0, arrows: p?.arrows ?? 0,
+      invulnerable: !!p && dodgeInvulnerable(p), blocking: p?.state === 'block', aimAngle: p?.aimAngle ?? 0,
+    },
+    enemies: (sim.enemies || []).map((e) => ({ id: e.id, x: e.x, y: e.y, angle: e.angle, hpFrac: e.maxHp ? e.hp / e.maxHp : 0, state: e.state, kind: e.kind, windup: e.state === 'windup' ? Math.min(1, e.stateT / (COMBAT[e.kind]?.windup || 0.5)) : 0 })),
+    targets: (sim.targets || []).map((t) => ({ id: t.id, x: t.x, y: t.y, flash: Math.min(1, t.flash / 0.3) })),
+    arrows: (sim.arrows || []).filter((a) => a.active).map((a) => ({ x: a.x, y: a.y, angle: a.angle })),
     pickups: (sim.pickups || []).map((k) => ({ id: k.id, x: k.x, y: k.y, kind: k.kind, taken: k.taken })),
     obstacles: (sim.world.obstacles || []).map((o) => ({ x: o.x, y: o.y, w: o.w, d: o.d, kind: o.kind })),
     events: fx,
-    attack: { active: swing, progress: swing ? Math.min(1, p.stateT / 0.45) : 0, angle: swing ? p.attackAngle : 0 },
+    attack: { active: swing, progress: swing ? Math.min(1, p.stateT / spec.swing) : 0, angle: swing ? p.attackAngle : 0, kind: swing ? p.atk : 'none', range: swing ? spec.range : 0, hit: swing ? spec.hitAt / spec.swing : 0 },
     blood: (cam.blood ?? extra.blood) !== false,
     chariot: { x: c.x, y: c.y, angle: c.angle, radius: c.radius, speed: c.speed, invulnerable: sim.invuln > 0 },
     mode: sim.foot ? 'foot' : 'chariot',

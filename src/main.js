@@ -14,12 +14,32 @@ import { pickMissionId, missingFor } from './missions.js';
 import { loadProgress } from './progress.js';
 import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller, avatarSvg } from './characters.js';
 import { createPicker } from './picker.js';
+import { createChakra } from './chakra/view.js';
+import { createEventStore } from './chakra/data.js';
+import { createStaticReachProvider } from './chakra/reach.js';
 
 const MISSION_ID = pickMissionId(location.search);
+const PARAMS = new URLSearchParams(location.search);
+const CHAKRA_FIRST = !PARAMS.has('mission'); // the chakra is the first screen; a ?mission= link goes straight to that mission
+const SYNTH = Math.min(20000, Math.max(0, Number(PARAMS.get('synth')) || 0)); // dev switch: adds N in-memory test events to Kali Yuga
 const DEV = new URLSearchParams(location.search).get('dev') === '1'; // test switch: every ability is lent and nothing is saved
 const $ = (id) => document.getElementById(id);
 const screens = createScreens();
 screens.bindActions({ reload: () => location.reload() });
+
+// ---- chakra home screen ----
+let leaveChakra = () => {}; const chakraLeft = new Promise((r) => { leaveChakra = r; });
+let bootDone = () => {}; const ready = new Promise((r) => { bootDone = r; });
+let enterMission = () => screens.show('screen-start', 'start-btn'); // replaced in boot: traveller picker on a first visit, else the mission screen
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion');
+const chakra = createChakra({
+  store: createEventStore({ synth: SYNTH }), getProgress: loadProgress, reach: createStaticReachProvider(), reducedMotion,
+  async onPlay(ev) {
+    if (ev.mission !== MISSION_ID) { const q = new URLSearchParams(location.search); q.set('mission', ev.mission); location.search = q.toString(); return; }
+    leaveChakra(); await ready; chakra.close(); enterMission();
+  },
+});
+function showChakra() { screens.hide(); $('game').inert = true; $('game').setAttribute('aria-hidden', 'true'); chakra.open(); }
 
 async function boot() {
   if (location.protocol === 'file:') throw new Error('This page was opened from a file.');
@@ -121,9 +141,11 @@ async function boot() {
     restart: () => game.restart(),
     retry: () => game.restart(),
     pause: () => game.pause(),
-    menu: () => game.menu(),
-    settings: () => { backTo = screens.current; screens.show('screen-settings'); },
-    'settings-back': () => screens.show(backTo),
+    menu: () => { game.menu(); showChakra(); },
+    settings: () => { if (chakra.isOpen) { chakra.hideTemp(); backTo = 'chakra'; } else backTo = screens.current; screens.show('screen-settings'); },
+    'settings-back': () => { if (backTo === 'chakra') { screens.hide(); $('game').inert = true; $('game').setAttribute('aria-hidden', 'true'); chakra.showAgain(); } else screens.show(backTo); },
+    'chakra-open': () => showChakra(),
+    'chakra-skip': () => { leaveChakra(); ready.then(() => { chakra.close(); enterMission(); }); },
     'char-open': () => { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); },
     'char-save': () => picker.save(),
   });
@@ -134,6 +156,7 @@ async function boot() {
 
   game.applySettings();
   resize();
+  if (CHAKRA_FIRST) await chakraLeft; // keep the first screen light: the 3D view loads once the player leaves the chakra
   await applyGraphics();
   // A level opens only after the lessons it needs are finished. The note names what to finish first.
   const missing = DEV ? [] : missingFor(mission, loadProgress().abilities);
@@ -142,8 +165,12 @@ async function boot() {
   lock.textContent = missing.length ? `Locked: finish ${missing.join(' and ')} first.` : '';
   $('start-btn').disabled = missing.length > 0;
   $('start-btn').setAttribute('aria-disabled', String(missing.length > 0));
-  if (saved) screens.show('screen-start', 'start-btn');
-  else { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); } // first visit: choose a traveller
+  enterMission = () => {
+    if (loadTraveller()) screens.show('screen-start', 'start-btn');
+    else { picker.open(traveller); screens.show('screen-character', 'body-' + appearance(traveller).body); } // first visit: choose a traveller
+  };
+  bootDone();
+  if (!CHAKRA_FIRST) enterMission();
 }
 
 function webglAvailable() {
@@ -157,8 +184,9 @@ function webglAvailable() {
 
 function clock(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
-screens.show('screen-start');
+if (CHAKRA_FIRST) showChakra(); else screens.show('screen-start');
 boot().catch((err) => {
   console.error(err);
+  chakra.close(); bootDone();
   screens.showError(`${err.message}`);
 });

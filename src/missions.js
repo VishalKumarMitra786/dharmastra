@@ -6,13 +6,20 @@ export const MISSIONS = [
   { id: 'sangam-staff', label: 'The Pepper Road', grants: ['staff'], requires: ['vault', 'crouch'] },
 ];
 
+// Playable by link (?mission=gupta-forge) but not yet on the chakra: the chakra data has no event for it, and data/ has its own owner.
+// When that event exists, move the entry into MISSIONS (the chakra test then checks it).
+export const UNLISTED_MISSIONS = [
+  { id: 'gupta-forge', label: 'The Forge Road', grants: ['dodge', 'push', 'climb', 'sword', 'bow'], requires: ['vault', 'crouch', 'staff'] },
+];
+const ALL = () => [...MISSIONS, ...UNLISTED_MISSIONS];
+
 export function pickMissionId(search) {
   const id = new URLSearchParams(search).get('mission');
-  return MISSIONS.some((m) => m.id === id) ? id : MISSIONS[0].id;
+  return ALL().some((m) => m.id === id) ? id : MISSIONS[0].id;
 }
 
 // Which missions the player must still finish for the abilities this mission needs. Empty means it is open.
 export function missingFor(mission, abilities) {
   return (mission.requires || []).filter((a) => !abilities.includes(a))
-    .map((a) => MISSIONS.find((m) => m.grants.includes(a))?.label).filter((l, i, all) => l && all.indexOf(l) === i);
+    .map((a) => ALL().find((m) => m.grants.includes(a))?.label).filter((l, i, all) => l && all.indexOf(l) === i);
 }

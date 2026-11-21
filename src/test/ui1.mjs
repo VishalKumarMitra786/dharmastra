@@ -5,6 +5,7 @@ import { loadSettings } from '../settings.js';
 import { createHud, objectiveLine } from '../hud.js';
 
 export function registerUi1(test) {
+  const four = ({ attack, jump, crouch, interact }) => ({ attack, jump, crouch, interact });
   const clock = () => { let t = 1000; const f = () => t; f.add = (ms) => { t += ms; }; return f; };
 
   test('ui1 action buffer: edge, delivered once, expires after 150 ms', () => {
@@ -12,7 +13,7 @@ export function registerUi1(test) {
     b.press('attack'); assert.equal(b.take().attack, true); assert.equal(b.take().attack, false, 'consumed');
     b.press('jump'); now.add(BUFFER_MS - 1); assert.equal(b.take().jump, true, 'still fresh');
     b.press('interact'); now.add(BUFFER_MS + 1); assert.equal(b.take().interact, false, 'expired');
-    b.press('bogus'); assert.deepEqual(Object.keys(b.take()), ['attack', 'jump', 'crouch', 'interact']);
+    b.press('bogus'); assert.deepEqual(Object.keys(b.take()).slice(0, 4), ['attack', 'jump', 'crouch', 'interact']); // phase 2 appended dodge, push, heavy, swap, w1..w3
   });
 
   test('ui1 input.read: Space/J/C/F give actions, ignored when disabled, existing fields kept', () => {
@@ -26,9 +27,9 @@ export function registerUi1(test) {
       input.state.enabled = true;
       key('KeyJ'); key('Space'); key('KeyC'); key('KeyF');
       let r = input.read();
-      assert.deepEqual(r.action, { attack: true, jump: true, crouch: true, interact: true });
+      assert.deepEqual(four(r.action), { attack: true, jump: true, crouch: true, interact: true });
       for (const f of ['steer', 'throttle', 'mx', 'my', 'run', 'look']) assert.ok(f in r, f);
-      assert.deepEqual(input.read().action, { attack: false, jump: false, crouch: false, interact: false }, 'edge, not held');
+      assert.deepEqual(four(input.read().action), { attack: false, jump: false, crouch: false, interact: false }, 'edge, not held');
       key('KeyJ', { repeat: true }); assert.equal(input.read().action.attack, false, 'key repeat is not a new press');
       key('Space', { target: { tagName: 'BUTTON' } }); assert.equal(input.read().action.jump, false, 'a focused button keeps its own Space');
       key('KeyJ'); now.add(200); assert.equal(input.read().action.attack, false, 'stale press dropped');
@@ -44,7 +45,7 @@ export function registerUi1(test) {
       const input = createInput({ stage: sink, buttons: [attack, doBtn, crouch], onPause() {}, now: clock() });
       input.state.enabled = true;
       const tap = (b) => b.h.pointerdown.forEach((f) => f({ preventDefault() {}, pointerId: 1 }));
-      tap(doBtn); assert.deepEqual(input.read().action, { attack: false, jump: true, crouch: false, interact: true });
+      tap(doBtn); assert.deepEqual(four(input.read().action), { attack: false, jump: true, crouch: false, interact: true });
       tap(attack); tap(crouch); const a = input.read().action; assert.ok(a.attack && a.crouch && !a.jump);
     } finally { globalThis.window = prev; }
   });

@@ -14,6 +14,10 @@ jobs:
           node-version: 22
       - name: Unit tests
         run: node src/test/run.mjs
+      - name: Events data
+        run: node tools/check-events.mjs
+      - name: Server tests
+        run: node --test server/test/*.test.mjs
       - name: Size and licence budget
         run: node tools/check-budget.mjs
       - name: Browser smoke test (phone and desktop, a11y basics, fallbacks)

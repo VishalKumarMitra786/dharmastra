@@ -1,5 +1,5 @@
 // Saved progress: validated load, best-effort save. Never throws.
-import { ABILITY_IDS, START_ABILITIES, WEAPONS } from './abilities.js';
+import { ABILITY_IDS, START_ABILITIES, WEAPONS, closeAbilities } from './abilities.js';
 
 export const PROGRESS_KEY = 'dharmastra.progress.v1';
 const MAX_MISSIONS = 64;
@@ -16,7 +16,8 @@ export function validateProgress(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.v !== 1) return d;
   const set = new Set(START_ABILITIES);
   if (Array.isArray(raw.abilities)) for (const a of raw.abilities.slice(0, 64)) if (typeof a === 'string' && ABILITY_IDS.includes(a)) set.add(a);
-  d.abilities = ABILITY_IDS.filter((a) => set.has(a));
+  d.abilities = closeAbilities([...set]); // a saved sword without the staff (or bow without the sword) is dropped: abilities are earned in order
+  set.clear(); d.abilities.forEach((a) => set.add(a));
   d.weapon = WEAPONS.includes(raw.weapon) && (raw.weapon === 'none' || set.has(raw.weapon)) ? raw.weapon : 'none';
   if (raw.completed && typeof raw.completed === 'object' && !Array.isArray(raw.completed)) {
     for (const id of Object.keys(raw.completed).slice(0, MAX_MISSIONS)) {

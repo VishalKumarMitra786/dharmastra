@@ -5,6 +5,7 @@ import { makeFrame } from './renderer.js';
 import { createLoop } from './loop.js';
 import { createMinimap } from './minimap.js';
 import { loadProgress, saveProgress, recordCompletion } from './progress.js';
+import { bestWeapon } from './abilities.js';
 import { createOrbit, updateOrbit, relativeMove, FORWARD_UP } from './camera.js';
 
 const hashSeed = (id) => [...String(id)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
@@ -22,6 +23,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   let attempt = 0;
   let progress = loadProgress();
   let lastKit = '';
+  let lastVitals = '';
   let lastObj = '';
   const orbit = createOrbit();
   const usesOrbit = () => !!(renderer && renderer.orbit && world.mode === 'foot'); // third-person only with the 3D renderer on foot
@@ -34,6 +36,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
 
   const minimap = createMinimap(typeof document !== 'undefined' ? document.getElementById('minimap') : null, world);
   const loop = createLoop({ update, render });
+  if (dev && typeof globalThis !== 'undefined') globalThis.__dharmastra = { get sim() { return sim; } }; // ?dev=1 only: lets tools/cdp.mjs read and move the sim during a real-browser playtest
 
   function newRun() {
     attempt += 1;
@@ -41,9 +44,9 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const kit = dev ? ['crouch', 'vault', 'staff'] : progress.abilities; // ?dev=1 lends every ability for testing
     const lent = Array.isArray(mission.lends) ? mission.lends : [];
     const abilities = [...kit, ...lent];
-    const weapon = abilities.includes('staff') ? 'staff' : progress.weapon;
+    const weapon = abilities.includes(progress.weapon) ? progress.weapon : bestWeapon(abilities); // the weapon you last held, else the best you own
     sim = createSim(world, { timerMode: settings.timer, abilities, weapon, seed: hashSeed(mission.id) + attempt });
-    lastKit = ''; lastObj = '';
+    lastKit = ''; lastObj = ''; lastVitals = '';
     effects = { shake: 0, flash: 0 };
     lastSay = {};
     hud.clearCaption();
@@ -76,11 +79,14 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   function syncRules() {
     if (!sim?.rules2 || !sim.objectives) return;
     // Checkpoint objectives are already shown as the current objective and the pips, so the list holds the extra ones (collect, evade).
-    const list = sim.objectives.items.filter((o) => o.type !== 'reach').map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: o.type === 'collect' ? { n: o.progress, total: o.goal } : null }));
+    const list = sim.objectives.items.filter((o) => o.type !== 'reach' && (o.unlock || 0) <= sim.checkpoint).map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: o.type === 'collect' ? { n: o.progress, total: o.goal } : null }));
     const okey = JSON.stringify(list);
     if (okey !== lastObj) { lastObj = okey; hud.setObjectives(list); }
     const key = `${sim.abilities.join()}|${sim.player.weapon}|${sim.player.crouching}`;
     if (key !== lastKit) { lastKit = key; hud.setAbilities({ abilities: sim.abilities, weapon: sim.player.weapon, crouch: sim.player.crouching }); }
+    const P = sim.player; const drawing = P.state === 'aim';
+    const vk = `${Math.round(P.stamina / 5)}|${P.arrows}|${drawing ? Math.round(P.draw * 10) : -1}`; // redrawn only when the rounded numbers change
+    if (vk !== lastVitals) { lastVitals = vk; hud.setVitals({ stamina: P.stamina / 100, arrows: P.arrows, draw: P.draw / 0.9, drawing }); }
   }
 
   function update(dt) {
@@ -128,7 +134,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     hud.clearCaption();
     if (won) {
       const grants = mission.rewards?.grants || [];
-      if (!dev) { progress = recordCompletion(loadProgress(), mission.id, sim.elapsed, grants, grants.includes('staff') ? 'staff' : 'none'); saveProgress(progress); }
+      if (!dev) { progress = recordCompletion(loadProgress(), mission.id, sim.elapsed, grants, bestWeapon(grants)); saveProgress(progress); }
       for (const a of grants) hud.announce(`New ability learned: ${a}.`);
       audio.play('win');
       screens.showWin({ time: fmt(sim.elapsed), health: sim.health }, mission.events, lastSay.win);

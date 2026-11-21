@@ -250,7 +250,8 @@ export function registerPhase1(test) {
     const f = makeFrame(legacy, { shake: 0, flash: 0 }, false);
     assert.deepEqual([f.enemies, f.pickups, f.obstacles, f.events], [[], [], [], []]);
     assert.equal(f.player.state, 'idle'); assert.equal(f.player.crouch, false); assert.equal(f.blood, true);
-    assert.deepEqual(f.attack, { active: false, progress: 0, angle: 0 });
+    assert.deepEqual(f.attack, { active: false, progress: 0, angle: 0, kind: 'none', range: 0, hit: 0 }); // kind and range were added with the sword (phase 2)
+    assert.deepEqual([f.targets, f.arrows], [[], []]);
     assert.equal(makeFrame(legacy, { shake: 0, flash: 0 }, false, {}, { blood: false }).blood, false);
     const sim = arena({ abilities: ['staff'] });
     run(sim, 0.1, {}, { attack: true });

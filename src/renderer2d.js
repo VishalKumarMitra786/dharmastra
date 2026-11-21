@@ -121,16 +121,57 @@ export function createRenderer2D(canvas) {
       ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
       ctx.fillStyle = C.outline; // posts at both ends
       ctx.fillRect(ax ? o.x : bx - 3, ax ? by - 3 : o.y, 16, 16); ctx.fillRect(ax ? o.x + o.w - 16 : bx - 3, ax ? by - 3 : o.y + o.d - 16, 16, 16);
+    } else if (k === 'ledge') { // a tall stone ledge marked for climbing: a gold rope line and upward chevrons (shape, not colour, says "climb here")
+      ctx.fillStyle = '#6f6a62'; ctx.fillRect(o.x + 1, o.y + 1, o.w - 2, o.d - 2);
+      ctx.strokeStyle = C.outline; ctx.lineWidth = 4; ctx.strokeRect(o.x + 1, o.y + 1, o.w - 2, o.d - 2);
+      ctx.strokeStyle = C.gold; ctx.lineWidth = 4; ctx.setLineDash([10, 6]); ctx.beginPath(); ctx.moveTo(o.x + 8, o.y + o.d / 2); ctx.lineTo(o.x + o.w - 8, o.y + o.d / 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = C.light; ctx.lineWidth = 4; ctx.beginPath();
+      for (let cx = o.x + 20; cx < o.x + o.w - 10; cx += 36) { ctx.moveTo(cx - 9, o.y + o.d * 0.3 + 8); ctx.lineTo(cx, o.y + o.d * 0.3 - 4); ctx.lineTo(cx + 9, o.y + o.d * 0.3 + 8); }
+      ctx.stroke();
+    } else if (k === 'pit') { // a ditch: dark, with a dashed edge and diagonal hatching so it reads as "do not step" without colour
+      ctx.fillStyle = '#0e0a14'; ctx.fillRect(o.x, o.y, o.w, o.d);
+      ctx.save(); ctx.beginPath(); ctx.rect(o.x, o.y, o.w, o.d); ctx.clip();
+      ctx.strokeStyle = 'rgba(255,244,222,0.35)'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let d = -o.d; d < o.w; d += 14) { ctx.moveTo(o.x + d, o.y + o.d); ctx.lineTo(o.x + d + o.d, o.y); }
+      ctx.stroke(); ctx.restore();
+      ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.strokeRect(o.x + 2, o.y + 2, o.w - 4, o.d - 4); ctx.setLineDash([]);
     }
   }
 
+  // A straw training post seen from above: rings you can count (shape), thicker when just hit.
+  function drawTarget(t, calm) {
+    ctx.save(); ctx.translate(t.x, t.y);
+    const f = calm ? 0 : t.flash || 0;
+    ctx.fillStyle = C.light; ctx.strokeStyle = C.outline; ctx.lineWidth = 3 + 3 * f;
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#9a3a2a'; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.light; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  function drawSwordShape(len) { ctx.strokeStyle = '#d8dde4'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(len, 0); ctx.stroke(); ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.stroke(); ctx.strokeStyle = C.gold; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(0, 8); ctx.stroke(); ctx.lineCap = 'butt'; }
+  function drawBowShape(draw) { ctx.strokeStyle = C.staff; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(-6, 0, 18, -1.15, 1.15); ctx.stroke(); const bx = -6 + Math.cos(1.15) * 18; const by = Math.sin(1.15) * 18; ctx.strokeStyle = C.light; ctx.lineWidth = 2; const pull = -6 - 14 * draw; ctx.beginPath(); ctx.moveTo(bx, -by); ctx.lineTo(pull, 0); ctx.lineTo(bx, by); ctx.stroke(); if (draw > 0) { ctx.strokeStyle = '#d8dde4'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(pull, 0); ctx.lineTo(24, 0); ctx.stroke(); } ctx.lineCap = 'butt'; }
   function drawStaffShape(len) { ctx.strokeStyle = C.staff; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke(); ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(len / 2, 0, 6, 0, Math.PI * 2); ctx.fill(); ctx.lineCap = 'butt'; }
 
   function drawPickup(p, t, calm) {
     ctx.save(); ctx.translate(p.x, p.y);
     ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(0, 0, 26 + (calm ? 0 : Math.sin(t * 3) * 2), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    ctx.rotate(-0.7); drawStaffShape(38);
+    glyph(p.kind);
     ctx.restore();
+    const name = LABEL[p.kind]; // a text label under each lesson token: the meaning never depends on the symbol or the colour alone
+    if (name) { ctx.save(); ctx.font = 'bold 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = C.outline; ctx.fillStyle = C.light; ctx.strokeText(name, p.x, p.y + 44); ctx.fillText(name, p.x, p.y + 44); ctx.restore(); }
+  }
+  const LABEL = { dodge: 'Dodge', push: 'Shove', climb: 'Climb', sword: 'Sword', bow: 'Bow', arrows: 'Arrows' };
+  // Small symbols for the lessons, drawn at the origin, about 40 units wide.
+  function glyph(kind) {
+    ctx.strokeStyle = C.gold; ctx.fillStyle = C.gold; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (kind === 'dodge') { ctx.beginPath(); ctx.arc(0, 0, 13, 0.5, Math.PI * 1.6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(10, -14); ctx.lineTo(16, -4); ctx.lineTo(4, -4); ctx.closePath(); ctx.fill(); }
+    else if (kind === 'push') { ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(10, 0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(6, -9); ctx.lineTo(16, 0); ctx.lineTo(6, 9); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-16, -9); ctx.lineTo(-16, 9); ctx.stroke(); }
+    else if (kind === 'climb') { ctx.beginPath(); ctx.moveTo(-8, 14); ctx.lineTo(-8, -14); ctx.moveTo(8, 14); ctx.lineTo(8, -14); ctx.moveTo(-8, -6); ctx.lineTo(8, -6); ctx.moveTo(-8, 4); ctx.lineTo(8, 4); ctx.stroke(); }
+    else if (kind === 'sword') { ctx.beginPath(); ctx.moveTo(-14, 14); ctx.lineTo(12, -12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-14, 2); ctx.lineTo(-2, 14); ctx.stroke(); }
+    else if (kind === 'bow') { ctx.beginPath(); ctx.arc(-6, 0, 16, -1.2, 1.2); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6 + Math.cos(-1.2) * 16, Math.sin(-1.2) * 16); ctx.lineTo(-6 + Math.cos(1.2) * 16, Math.sin(1.2) * 16); ctx.stroke(); }
+    else if (kind === 'arrows') { ctx.lineWidth = 3; ctx.beginPath(); for (let i = -1; i <= 1; i++) { ctx.moveTo(-12 + i * 5, 12); ctx.lineTo(10 + i * 5, -12); } ctx.stroke(); ctx.beginPath(); ctx.moveTo(10, -16); ctx.lineTo(16, -6); ctx.lineTo(6, -10); ctx.closePath(); ctx.fill(); }
+    else { ctx.rotate(-0.7); drawStaffShape(38); }
+    ctx.lineCap = 'butt';
   }
 
   function drawIcon(kind, x, y) {
@@ -145,6 +186,23 @@ export function createRenderer2D(canvas) {
   // A raider is a square-shouldered body with a club, so it differs from the round guard by shape as well as colour.
   function drawRaider(e, flash) {
     const st = e.state || 'patrol'; const r = 17;
+    if (st === 'windup') { // the telegraph: a wedge in front fills up as the blow gets closer, and is full when it lands (shape and fill level, not colour)
+      const u = Math.max(0, Math.min(1, e.windup || 0));
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0);
+      ctx.fillStyle = `rgba(255,154,42,${0.12 + 0.4 * u})`; ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 50, -0.7, 0.7); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 14 + 36 * u, -0.7, 0.7); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    if (e.kind === 'sparrer') { // the teacher's sparring partner: round, with a dashed ring and a thin practice stick
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0);
+      ctx.fillStyle = flash > 0 ? '#ffffff' : '#7a5a8a'; ctx.strokeStyle = C.light; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.arc(0, 0, r + 7, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.save(); ctx.rotate(st === 'windup' ? -1.9 : st === 'stagger' ? 1.6 : -0.6); ctx.strokeStyle = C.staff; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(32, 0); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = C.light; ctx.beginPath(); ctx.moveTo(r + 10, 0); ctx.lineTo(r, -7); ctx.lineTo(r, 7); ctx.closePath(); ctx.fill();
+      ctx.restore(); return;
+    }
     ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0);
     ctx.fillStyle = flash > 0 ? '#ffffff' : C.raider; ctx.strokeStyle = C.raiderEdge; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.rect(-r, -r, r * 2, r * 2); ctx.fill(); ctx.stroke();
@@ -213,6 +271,7 @@ export function createRenderer2D(canvas) {
       frame.checkpoints.forEach((p, i) => drawCheckpoint(p, i, frame.time, calm));
       if (frame.pickups) for (let i = 0; i < frame.pickups.length; i++) if (!frame.pickups[i].taken) drawPickup(frame.pickups[i], frame.time, calm);
       frame.guards.forEach(drawGuard);
+      if (frame.targets) for (let i = 0; i < frame.targets.length; i++) drawTarget(frame.targets[i], calm);
       processEvents(frame, calm);
       if (frame.enemies) {
         for (let i = 0; i < frame.enemies.length; i++) {
@@ -222,23 +281,45 @@ export function createRenderer2D(canvas) {
         }
       }
       const P = frame.player; const A = frame.attack; const pc = frame.chariot;
-      if (A && A.active) { // swing arc: a 120 degree wedge, fading as the swing ends
+      if (A && A.active) { // swing arc: a wedge whose size is the weapon's reach, fading as the swing ends. A heavy cut shows an outline first (its wind-up), then fills at the moment of impact.
+        const kind = A.kind || 'staff'; const half = kind === 'staff' ? Math.PI / 3 : kind === 'shove' ? 0.9 : 0.95; const reach = A.range || 60;
+        const charging = kind === 'heavy' && (A.progress || 0) < (A.hit || 0.575);
         ctx.save(); ctx.translate(pc.x, pc.y); ctx.rotate(A.angle || 0);
-        ctx.globalAlpha = calm ? 0.55 : 0.75 * (1 - Math.min(1, A.progress || 0) * 0.8);
-        ctx.fillStyle = '#ff9d1a'; ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 60, -Math.PI / 3, Math.PI / 3); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+        ctx.globalAlpha = charging ? 0.9 : calm ? 0.55 : 0.75 * (1 - Math.min(1, A.progress || 0) * 0.8);
+        ctx.fillStyle = kind === 'shove' ? 'rgba(255,244,222,0.3)' : '#ff9d1a'; ctx.strokeStyle = kind === 'shove' ? C.light : C.outline; ctx.lineWidth = 3;
+        if (kind === 'shove' || charging) ctx.setLineDash([6, 5]);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, -half, half); ctx.closePath(); if (!charging) ctx.fill(); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
       }
       if (frame.mode === 'foot') {
         const crouch = !!P && (P.crouch || P.state === 'crouch'); const vaulting = !!P && P.state === 'vault';
         ctx.save();
         if (vaulting) { const h = vaultHop(P.stateT, calm); ctx.fillStyle = 'rgba(20,11,7,0.3)'; ctx.beginPath(); ctx.ellipse(pc.x, pc.y + 4, pc.radius, pc.radius * 0.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.translate(pc.x, pc.y - h * 0.5); ctx.scale(1 + h / 80, 1 + h / 80); ctx.translate(-pc.x, -pc.y); }
         else if (crouch) { ctx.translate(pc.x, pc.y); ctx.scale(0.72, 0.72); ctx.translate(-pc.x, -pc.y); }
+        const rolling = !!P && P.state === 'dodge';
+        if (rolling) { // a roll: the figure squashes and leaves fading afterimages behind (no afterimages with reduced motion)
+          if (!calm) for (let k = 3; k >= 1; k--) { ctx.globalAlpha = 0.12 * (4 - k); ctx.fillStyle = C.light; ctx.beginPath(); ctx.arc(pc.x - Math.cos(pc.angle || 0) * k * 14, pc.y - Math.sin(pc.angle || 0) * k * 14, pc.radius * 0.8, 0, Math.PI * 2); ctx.fill(); }
+          ctx.globalAlpha = 1; ctx.translate(pc.x, pc.y); ctx.rotate(pc.angle || 0); ctx.scale(1.15, 0.7); ctx.rotate(-(pc.angle || 0)); ctx.translate(-pc.x, -pc.y);
+        }
         drawPerson(pc);
-        if (P && P.weapon === 'staff') { ctx.translate(pc.x, pc.y); ctx.rotate((pc.angle || 0) + (A && A.active ? -1 + 2 * (A.progress || 0) : 0.5)); ctx.translate(pc.radius * 0.6, 0); drawStaffShape(48); }
+        const wa = (pc.angle || 0);
+        if (P && P.weapon === 'staff') { ctx.translate(pc.x, pc.y); ctx.rotate(wa + (A && A.active ? -1 + 2 * (A.progress || 0) : 0.5)); ctx.translate(pc.radius * 0.6, 0); drawStaffShape(48); }
+        else if (P && P.weapon === 'sword') {
+          ctx.translate(pc.x, pc.y);
+          const swing = A && A.active && A.kind !== 'shove';
+          const raise = A && A.kind === 'heavy' && (A.progress || 0) < (A.hit || 0.575) ? -1.6 : -1 + 2 * (A ? A.progress || 0 : 0);
+          ctx.rotate(wa + (P.state === 'block' ? Math.PI / 2 : swing ? raise : 0.5)); ctx.translate(pc.radius * 0.6, 0); drawSwordShape(P.state === 'block' ? 30 : 40);
+        } else if (P && P.weapon === 'bow') { ctx.translate(pc.x, pc.y); ctx.rotate(P.state === 'aim' ? P.aimAngle || wa : wa + 0.4); ctx.translate(pc.radius * 0.7, 0); drawBowShape(P.state === 'aim' ? P.draw || 0 : 0); }
         ctx.restore();
+        if (P && P.state === 'block') { ctx.save(); ctx.translate(pc.x, pc.y); ctx.rotate(wa); ctx.strokeStyle = C.outline; ctx.lineWidth = 11; ctx.beginPath(); ctx.arc(0, 0, pc.radius + 14, -1.0, 1.0); ctx.stroke(); ctx.strokeStyle = C.light; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, pc.radius + 14, -1.0, 1.0); ctx.stroke(); ctx.restore(); } // a guard arc in front
+        if (P && P.state === 'aim') { // aim line (dashed) and a draw ring that closes as the bow comes to full draw
+          const aa = P.aimAngle || wa; const d = Math.max(0, Math.min(1, P.draw || 0));
+          ctx.save(); ctx.translate(pc.x, pc.y); ctx.strokeStyle = C.light; ctx.lineWidth = 2.5; ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(Math.cos(aa) * 28, Math.sin(aa) * 28); ctx.lineTo(Math.cos(aa) * 220, Math.sin(aa) * 220); ctx.stroke(); ctx.setLineDash([]);
+          ctx.lineWidth = 5; ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.arc(0, 0, pc.radius + 10, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * d); ctx.stroke(); ctx.strokeStyle = d >= 0.999 ? C.gold : C.light; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+        }
         if (crouch) { ctx.save(); ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(pc.x, pc.y, pc.radius * 1.4, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } // dotted ring: a second cue that you are crouched
       } else drawChariot(pc);
       if (frame.enemies) for (let i = 0; i < frame.enemies.length; i++) { const e = frame.enemies[i]; const k = enemyIcon(e.state); if (k) drawIcon(k, e.x, e.y); }
+      if (frame.arrows) for (let i = 0; i < frame.arrows.length; i++) { const a = frame.arrows[i]; ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.angle || 0); ctx.strokeStyle = C.outline; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(8, 0); ctx.stroke(); ctx.strokeStyle = C.light; ctx.lineWidth = 2.5; ctx.stroke(); ctx.fillStyle = C.light; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(6, -4); ctx.lineTo(6, 4); ctx.closePath(); ctx.fill(); ctx.restore(); }
       drawParticles(dt);
       ctx.restore();
       drawArrow(frame, scale);

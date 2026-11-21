@@ -115,6 +115,7 @@ export function vaultHop(stateT, reduced) { const u = Math.max(0, Math.min(1, (s
 const BURSTS = {
   'hit-enemy': { n: 8, violent: true }, 'enemy-down': { n: 10, violent: true }, hurt: { n: 8, violent: true },
   pickup: { n: 6, violent: false }, vault: { n: 4, violent: false },
+  'shove-hit': { n: 6, violent: false }, parry: { n: 8, violent: false }, blocked: { n: 6, violent: false }, 'target-hit': { n: 6, violent: false }, 'enemy-fell': { n: 8, violent: false }, climb: { n: 4, violent: false }, dodge: { n: 3, violent: false }, // neutral dust and sparks: never red
 };
 const CALM = {};
 for (const k of Object.keys(BURSTS)) CALM[k] = { n: Math.min(BURSTS[k].n, 5), violent: BURSTS[k].violent };

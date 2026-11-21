@@ -1,6 +1,7 @@
 // Mission data loading, validation, and the runner that turns sim events into objectives and dialogue.
+import { ABILITY_IDS } from './abilities.js';
 const LABELS = ['History', 'Tradition', 'Invented'];
-const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen'];
+const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'checkpoint-4', 'checkpoint-5', 'checkpoint-6', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen', 'ability', 'parry'];
 const HIT_GAP = 5; // seconds between "hit" lines so captions do not spam
 
 export function validateMission(m) {
@@ -20,7 +21,7 @@ export function validateMission(m) {
     if (!str(e?.name) || !str(e?.year)) errors.push(`events[${i}] needs name and year`);
     if (!LABELS.includes(e?.label)) errors.push(`events[${i}] label must be one of ${LABELS.join(', ')}`);
   });
-  const ABIL = ['crouch', 'vault', 'staff'];
+  const ABIL = ABILITY_IDS.filter((a) => a !== 'walk' && a !== 'run');
   for (const k of ['requires', 'lends']) if (m[k] != null && (!Array.isArray(m[k]) || m[k].some((a) => !ABIL.includes(a)))) errors.push(`"${k}" must be a list of ${ABIL.join(', ')}`);
   if (m.rewards != null && (typeof m.rewards !== 'object' || (m.rewards.grants != null && (!Array.isArray(m.rewards.grants) || m.rewards.grants.some((a) => !ABIL.includes(a)))))) errors.push('"rewards.grants" must be a list of abilities');
   return errors;
@@ -69,7 +70,9 @@ export function createRunner(data, handlers = {}) {
       } else if (event.type === 'wall' || event.type === 'guard') {
         if (now - lastHit >= HIT_GAP) { lastHit = now; say('hit'); }
       } else if (event.type === 'pickup') say('pickup');
-      else if (event.type === 'enemy-down') say('enemy-down');
+      else if (event.type === 'enemy-down' || event.type === 'enemy-fell') say('enemy-down');
+      else if (event.type === 'ability') say('ability');
+      else if (event.type === 'parry') say('parry');
       else if (event.type === 'seen') { if (now - lastSeen >= HIT_GAP) { lastSeen = now; say('seen'); } }
       else if (event.type === 'win') say('win');
       else if (event.type === 'fail') say('fail');

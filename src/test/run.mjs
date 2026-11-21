@@ -11,6 +11,7 @@ import { MISSIONS, pickMissionId } from '../missions.js';
 import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../camera.js';
 import { loadSettings } from '../settings.js';
 import './render1.mjs';
+import './hero-spike.mjs';
 
 const results = [];
 const queue = [];
@@ -410,6 +411,9 @@ test('third-person camera: stick is relative to the camera, boom stops at walls,
 import { registerUi1 } from './ui1.mjs'; registerUi1(test);
 import { registerPhase1 } from './phase1.mjs'; registerPhase1(test);
 import { registerSangam } from './sangam.mjs'; registerSangam(test);
+import { registerPhase2 } from './phase2.mjs'; await registerPhase2(test);
+import { registerChakra } from './chakra.mjs'; registerChakra(test);
+import { registerMonetize } from './monetize.mjs'; registerMonetize(test);
 for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

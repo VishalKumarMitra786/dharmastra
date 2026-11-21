@@ -5,8 +5,10 @@ const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-wes
 
 const ANNOUNCE_GAP = 1.2; // seconds between announcements of the same kind, so a flurry of hits does not flood a screen reader
 const CUE_MS = 2200;
-const ABILITY_NAMES = { walk: 'walk', run: 'run', crouch: 'crouch', vault: 'vault', staff: 'staff' };
-const WEAPON_NAMES = { none: 'Bare hands', staff: 'Staff' };
+const ABILITY_NAMES = { walk: 'walk', run: 'run', crouch: 'crouch', vault: 'vault', staff: 'staff', dodge: 'dodge roll', push: 'shove', climb: 'climb', sword: 'sword', bow: 'bow' };
+const WEAPON_NAMES = { none: 'Bare hands', staff: 'Staff', sword: 'Sword', bow: 'Bow' };
+const ATTACK_LABEL = { staff: ['Attack', 'Attack with staff (J)'], sword: ['Cut', 'Light cut with sword (J)'] };
+const VIA_CUE = { staff: '[Staff strike]', sword: '[Sword cut]', arrow: '[Arrow hits]' };
 const nm = (id) => ABILITY_NAMES[id] || String(id);
 
 // Objective -> one line of text. Accepts {text, state|done|failed, optional, progress:{n,total}} (also count/need or have/target).
@@ -23,6 +25,7 @@ export function createHud(doc = document, { now = () => Date.now() / 1000 } = {}
   const el = {
     objective: $('objective'), hint: $('hint'), healthText: $('health-text'), healthFill: $('health-fill'),
     cpText: $('cp-text'), timerItem: $('stat-timer'), timerText: $('timer-text'), caption: $('caption'), announcer: $('announcer'),
+    stamina: $('stamina-text'), staminaItem: $('stat-stamina'), staminaFill: $('stamina-fill'), arrows: $('arrows-text'), arrowsItem: $('stat-arrows'),
     pips: $('cp-pips'), objList: $('objectives'), kit: $('kit-text'), kitItem: $('stat-kit'), cue: $('cue'), crouchBtn: doc.querySelector?.('[data-control="crouch"]'), fx: $('fx'), chapter: $('chapter'), chapterEra: $('chapter-era'), chapterTitle: $('chapter-title'),
   };
   let captionTimer = 0;
@@ -47,7 +50,12 @@ export function createHud(doc = document, { now = () => Date.now() / 1000 } = {}
       objectives = Array.isArray(list) ? list : [];
       if (!el.objList) return;
       el.objList.hidden = objectives.length === 0;
-      el.objList.replaceChildren(...objectives.map((o) => {
+      // A long list (a teaching mission) shows what is still to do plus a count of what is done, so the list never covers the playfield on a phone.
+      const stateOf = (o) => o.state || (o.failed ? 'failed' : o.done ? 'done' : 'active');
+      const shown = objectives.length > 4 ? objectives.filter((o) => stateOf(o) !== 'done') : objectives;
+      const doneN = objectives.length - shown.length;
+      const summary = doneN > 0 ? (() => { const li = doc.createElement('li'); li.dataset.state = 'done'; const mark = doc.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true'); mark.textContent = '\u2713'; li.append(mark, `${doneN} done`); return li; })() : null;
+      el.objList.replaceChildren(...(summary ? [summary] : []), ...shown.map((o) => {
         const li = doc.createElement('li'); const state = o.state || (o.failed ? 'failed' : o.done ? 'done' : 'active');
         li.dataset.state = state;
         const mark = doc.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true');
@@ -61,13 +69,30 @@ export function createHud(doc = document, { now = () => Date.now() / 1000 } = {}
       const changed = kit && (kit.crouch !== crouch);
       kit = { abilities, weapon, crouch };
       if (el.kitItem) el.kitItem.hidden = false;
-      const can = abilities.filter((a) => a !== 'walk' && a !== 'run' && a !== 'staff').map(nm);
+      const can = abilities.filter((a) => a !== 'walk' && a !== 'run' && !['staff', 'sword', 'bow'].includes(a)).map(nm);
       if (el.kit) el.kit.textContent = `${WEAPON_NAMES[weapon] || weapon}${crouch ? ', crouching' : ''}${can.length ? `. Can ${can.join(', ')}` : ''}`;
       if (el.crouchBtn) { el.crouchBtn.setAttribute('aria-pressed', String(crouch)); el.crouchBtn.classList.toggle('on', crouch); }
       if (el.crouchBtn) el.crouchBtn.hidden = !abilities.includes('crouch');
-      for (const b of doc.querySelectorAll?.('[data-control="attack"]') || []) b.hidden = weapon === 'none';
-      for (const b of doc.querySelectorAll?.('[data-control="do"]') || []) b.hidden = false;
+      const show = (control, on) => { for (const b of doc.querySelectorAll?.(`[data-control="${control}"]`) || []) b.hidden = !on; };
+      show('attack', weapon === 'staff' || weapon === 'sword');
+      show('heavy', weapon === 'sword'); show('block', weapon === 'sword'); show('aim', weapon === 'bow');
+      show('dodge', abilities.includes('dodge')); show('push', abilities.includes('push'));
+      show('swap', ['staff', 'sword', 'bow'].filter((w) => abilities.includes(w)).length >= 2);
+      show('do', true);
+      const game = doc.getElementById?.('game'); // the action pad is taller with a sword or bow: the captions sit above it (see styles.css)
+      if (game?.dataset) game.dataset.pad = ['attack', 'heavy', 'block', 'aim', 'dodge', 'push', 'swap'].filter((c) => (doc.querySelectorAll?.(`[data-control="${c}"]`) || []).length && !(doc.querySelector?.(`[data-control="${c}"]`)?.hidden)).length > 3 ? 'tall' : 'short';
+      const al = ATTACK_LABEL[weapon];
+      for (const b of doc.querySelectorAll?.('[data-control="attack"]') || []) if (al) { b.setAttribute('aria-label', al[1]); const t = b.querySelector?.('.t'); if (t) t.textContent = al[0]; }
+      if (el.staminaItem) el.staminaItem.hidden = !['dodge', 'push', 'sword'].some((a) => abilities.includes(a));
+      if (el.arrowsItem) el.arrowsItem.hidden = !abilities.includes('bow');
       if (changed) { cue(crouch ? 'You crouch' : 'You stand'); if (gate('crouch', 0.5)) say(crouch ? 'Crouching' : 'Standing'); }
+    },
+    // Stamina (0..1), arrows and the bow draw (0..1) as text and a bar. Called when the rounded numbers change, not every frame.
+    setVitals({ stamina = 1, arrows = 0, draw = 0, drawing = false } = {}) {
+      const pct = Math.round(stamina * 100);
+      if (el.stamina) el.stamina.textContent = `${pct}%${pct < 25 ? ' (tired)' : ''}`;
+      if (el.staminaFill) el.staminaFill.style.width = `${pct}%`;
+      if (el.arrows) el.arrows.textContent = `${arrows}${drawing ? `, draw ${Math.round(draw * 100)}%${draw >= 0.999 ? ' (full)' : ''}` : ''}`;
     },
     // Feed it the sim's events. Announces and captions the ones a player must not miss; same kind at most once per ANNOUNCE_GAP seconds.
     handleEvents(events) {
@@ -77,8 +102,25 @@ export function createHud(doc = document, { now = () => Date.now() / 1000 } = {}
         switch (e.type) {
           case 'vault': line = 'You vault over the wall.'; c = '[You vault]'; break;
           case 'pickup': line = `You pick up ${e.kind || e.id || 'an item'}.`; c = `[Picked up ${e.kind || e.id || 'item'}]`; break;
-          case 'hit-enemy': line = 'You hit the raider.'; c = '[Staff strike]'; break;
+          case 'hit-enemy': line = 'You hit the raider.'; c = VIA_CUE[e.via] || VIA_CUE.staff; break;
           case 'enemy-down': line = 'A raider is driven off.'; c = '[Raider driven off]'; gap = 0; break;
+          case 'enemy-fell': line = 'A raider tumbles into the ditch and is out of the fight.'; c = '[Raider falls into the ditch]'; gap = 0; break;
+          case 'shove-hit': line = 'You shove the raider back.'; c = '[Shove]'; break;
+          case 'stagger': line = 'The raider staggers. Now is your chance.'; c = '[Raider staggers]'; gap = 0.8; break;
+          case 'dodge': line = 'You roll.'; c = '[You roll]'; gap = 0.4; break;
+          case 'tired': line = `Too tired to ${e.what === 'dodge' ? 'roll' : e.what === 'shove' ? 'shove' : 'swing'}. Wait for your breath.`; c = '[Out of breath]'; gap = 1.5; break;
+          case 'climb': line = 'You climb the ledge.'; c = '[You climb]'; break;
+          case 'blocked': if (e.parry) continue; line = 'You block the blow.'; c = '[Clang: blocked]'; gap = 0.5; break;
+          case 'parry': line = 'Parry. The raider is stunned.'; c = '[Clang: parry]'; gap = 0; break;
+          case 'guard-break': line = 'Your guard breaks: too tired to hold it.'; c = '[Guard broken]'; gap = 1; break;
+          case 'tap': line = 'The practice stick taps you. No harm done.'; c = '[Stick taps]'; gap = 1; break;
+          case 'whiff': line = 'The blow misses you.'; c = '[Whoosh: missed]'; gap = 1; break;
+          case 'shot': line = `You loose an arrow. ${e.arrows} left.`; c = '[Arrow loosed]'; gap = 0.3; break;
+          case 'drawn': line = 'Bow fully drawn.'; c = '[Bow creaks: fully drawn]'; gap = 0.5; break;
+          case 'no-arrows': line = 'No arrows left. Look for arrows on the ground.'; c = '[No arrows]'; gap = 1.5; break;
+          case 'target-hit': line = 'You hit the post.'; c = '[Thock: post hit]'; gap = 0.3; break;
+          case 'weapon': line = `Now holding: ${WEAPON_NAMES[e.weapon] || e.weapon}.`; c = `[${WEAPON_NAMES[e.weapon] || e.weapon}]`; gap = 0.3; break;
+          case 'refused': line = 'Not yet. Finish the earlier lesson first.'; c = '[Not yet]'; gap = 1.5; break;
           case 'seen': line = 'A raider has spotted you.'; c = '[Alert shout]'; break;
           case 'hurt': line = `You are hurt${e.amount ? `, ${e.amount} damage` : ''}.`; c = '[You are hit]'; gap = 2; break;
           case 'objective': { const t = objText(e.id); line = `${t ? `Objective ${t}` : 'Objective'}: ${e.state}.`; gap = 0; break; }
