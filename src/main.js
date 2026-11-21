@@ -10,8 +10,9 @@ import { createAudio } from './audio.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
 import { chooseGraphics } from './camera.js';
+import { pickMissionId } from './missions.js';
 
-const MISSION_ID = 'dvapara-escape';
+const MISSION_ID = pickMissionId(location.search);
 const $ = (id) => document.getElementById(id);
 const screens = createScreens();
 screens.bindActions({ reload: () => location.reload() });

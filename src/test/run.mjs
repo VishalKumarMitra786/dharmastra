@@ -7,11 +7,13 @@ import { validateMission, loadMission, createRunner } from '../mission.js';
 import { createLoop } from '../loop.js';
 import { assertRenderer, makeFrame } from '../renderer.js';
 import { layout } from '../../missions/dvapara-escape.js';
+import { MISSIONS, pickMissionId } from '../missions.js';
 import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../camera.js';
 import { loadSettings } from '../settings.js';
 
 const results = [];
-const test = (name, fn) => { try { fn(); results.push(['ok', name]); } catch (e) { results.push(['FAIL', name, e.message]); } };
+const queue = [];
+const test = (name, fn) => { queue.push(async () => { try { await fn(); results.push(['ok', name]); } catch (e) { results.push(['FAIL', name, e.message]); } }); };
 const none = { steer: 0, throttle: 0 };
 const missionPath = new URL('../../missions/dvapara-escape.json', import.meta.url);
 const mission = JSON.parse(await readFile(missionPath, 'utf8'));
@@ -166,15 +168,44 @@ function routeTiles(w, from, cps) {
   }
   return out.map(([c, r]) => ({ x: (c + 0.5) * ts, y: (r + 0.5) * ts }));
 }
-function drive(sim, path) {
+
+// Like routeTiles but keeps away from walls (tiles next to a wall cost more), the way a careful driver stays mid-street.
+function routeCentred(w, from, cps) {
+  const ts = w.tileSize; const open = (c, r) => w.solid[r]?.[c] === false;
+  const nearWall = (c, r) => [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dc, dr]) => !open(c + dc, r + dr));
+  let cur = [Math.floor(from.x / ts), Math.floor(from.y / ts)]; const out = [];
+  for (const cp of cps) {
+    const goal = [Math.floor(cp.x / ts), Math.floor(cp.y / ts)];
+    const dist = new Map([[cur.join(','), 0]]); const prev = new Map(); const pq = [[0, cur]];
+    while (pq.length) {
+      pq.sort((a, b) => a[0] - b[0]); const [d, [c, r]] = pq.shift();
+      if (c === goal[0] && r === goal[1]) break;
+      if (d > dist.get(`${c},${r}`)) continue;
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = [c + dc, r + dr]; if (!open(...n)) continue;
+        const nd = d + 1 + (nearWall(...n) ? 6 : 0);
+        if (nd < (dist.get(n.join(',')) ?? Infinity)) { dist.set(n.join(','), nd); prev.set(n.join(','), [c, r]); pq.push([nd, n]); }
+      }
+    }
+    const seg = []; let k = goal.join(',');
+    while (k && k !== cur.join(',')) { const [c, r] = k.split(',').map(Number); seg.push({ x: (c + 0.5) * ts, y: (r + 0.5) * ts }); const p = prev.get(k); k = p ? p.join(',') : null; }
+    seg.reverse(); seg[seg.length - 1] = { x: cp.x, y: cp.y, cp: true }; // aim at the checkpoint itself, not just its tile
+    out.push(...seg); cur = goal;
+  }
+  return out;
+}
+
+function drive(sim, path, tol = 70, careful = false) {
   let i = 0; let walls = 0; let guards = 0; let t = 0;
   while (sim.status === 'playing' && t < 400) {
     const c = sim.chariot;
-    while (i < path.length - 1 && Math.hypot(path[i].x - c.x, path[i].y - c.y) < 70) i++;
-    const target = path[Math.min(i + 1, path.length - 1)];
+    const near = (p) => Math.hypot(p.x - c.x, p.y - c.y) < tol;
+    while (i < path.length - 1 && (near(path[i]) || (!path[i].cp && near(path[i + 1])))) i++; // may skip a point whose successor is already reached, but never skips a checkpoint
+    const target = path[i].cp ? path[i] : path[Math.min(i + 1, path.length - 1)]; // look one point ahead, but head straight for a checkpoint
     let da = Math.atan2(target.y - c.y, target.x - c.x) - c.angle;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const throttle = Math.abs(da) > 0.6 ? (c.speed > 90 ? -0.3 : 0.3) : (c.speed > 150 ? 0 : 1);
+    let throttle = Math.abs(da) > 0.6 ? (c.speed > 90 ? -0.3 : 0.3) : (c.speed > 150 ? 0 : 1);
+    if (careful && Math.hypot(target.x - c.x, target.y - c.y) < 170) throttle = c.speed > 55 ? -0.5 : 0.5; // slow down near waypoints like a careful driver
     for (const e of step(sim, 1 / 60, { steer: Math.max(-1, Math.min(1, da * 3)), throttle })) { if (e.type === 'wall') walls++; if (e.type === 'guard') guards++; }
     t += 1 / 60;
   }
@@ -223,6 +254,54 @@ test('settings: graphics defaults to 3d and rejects bad saved values', () => {
   assert.equal(loadSettings(store('not json'), win).graphics, '3d');
 });
 
+
+test('mission picker: known ids pass, anything else falls back to the first mission', () => {
+  assert.equal(pickMissionId('?mission=mauryan-spy'), 'mauryan-spy');
+  assert.equal(pickMissionId(''), MISSIONS[0].id);
+  assert.equal(pickMissionId('?mission=../../etc/passwd'), MISSIONS[0].id);
+});
+
+for (const m of MISSIONS) {
+  test(`mission ${m.id}: JSON is valid, map matches objectives, route is drivable, guard paths avoid walls`, async () => {
+    const data = JSON.parse(await readFile(new URL(`../../missions/${m.id}.json`, import.meta.url), 'utf8'));
+    assert.deepEqual(validateMission(data), []);
+    assert.equal(data.id, m.id);
+    const { layout: lay } = await import(`../../missions/${m.id}.js`);
+    const w = parseLayout(lay);
+    assert.equal(w.checkpoints.length, data.objectives.length);
+    assert.equal(data.objectives.length, 3);
+    data.objectives.forEach((o, i) => assert.equal(o.id, `checkpoint-${i + 1}`));
+    const pts = [w.start, ...w.checkpoints];
+    for (let i = 0; i < pts.length - 1; i++) assert.ok(reachable(w, pts[i], pts[i + 1]) > 0, `leg ${i}`);
+    const open = (c, r) => w.solid[r]?.[c] === false;
+    for (const g of w.guards) {
+      for (let k = 0; k < g.path.length - 1; k++) {
+        const a = g.path[k], b = g.path[k + 1];
+        for (let t = 0; t <= 40; t++) {
+          const x = a.x + (b.x - a.x) * t / 40, y = a.y + (b.y - a.y) * t / 40;
+          for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
+            assert.ok(open(Math.floor((x + dx) / w.tileSize), Math.floor((y + dy) / w.tileSize)), `guard path touches a wall near ${Math.round(x)},${Math.round(y)}`);
+          }
+        }
+      }
+    }
+  });
+}
+
+
+test('mission 2: bot can drive S->1->2->3 with guards removed, and guards-on outcome is reported', async () => {
+  const { layout: lay } = await import('../../missions/mauryan-spy.js');
+  const w = parseLayout(lay); const sim = createSim(w, { timerMode: 'off' }); sim.guards = [];
+  const r = drive(sim, routeCentred(w, w.start, w.checkpoints), 58, true);
+  console.log(`   mission 2 bot (no guards, ${sim.status}): health ${sim.health}, checkpoints ${sim.checkpoint}, at ${Math.round(sim.chariot.x)},${Math.round(sim.chariot.y)}, t=${r.t.toFixed(0)}s`);
+  assert.equal(sim.status, 'won');
+  console.log(`   mission 2 bot (no guards): won in ${r.t.toFixed(1)}s, wall hits ${r.walls}`);
+  const sim2 = createSim(parseLayout(lay), { timerMode: 'off' });
+  const r2 = drive(sim2, routeCentred(parseLayout(lay), w.start, w.checkpoints), 58, true);
+  console.log(`   mission 2 bot (guards on, blind to guards): ${sim2.status} in ${r2.t.toFixed(1)}s, health ${sim2.health}, guard hits ${r2.guards}`);
+});
+
+for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} passed`);

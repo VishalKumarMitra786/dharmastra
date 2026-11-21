@@ -247,7 +247,7 @@ try{var raw=localStorage.getItem("dharmastra_custom");if(raw)custom=JSON.parse(r
 function save(){try{localStorage.setItem("dharmastra_custom",JSON.stringify(custom))}catch(x){}}
 
 var cur=14,curEv=-1,dotEls=[];
-var MISSIONS={4:"../../index.html"};
+var MISSIONS={4:{u:"../../index.html?mission=dvapara-escape",t:"Escape from Hastinapur"},8:{u:"../../index.html?mission=mauryan-spy",t:"The Night Report of Pataliputra"}};
 
 function events(i){return E[i][4].concat(custom[i]||[])}
 
@@ -328,7 +328,7 @@ $("eName").textContent=d[1];
 $("eSpan").textContent=d[2];
 $("eMission").textContent="Mission hook: "+d[3];
 $("jump").value=String(i);
-var pl=$("play");pl.hidden=!MISSIONS[i];if(MISSIONS[i]){pl.href=MISSIONS[i];pl.textContent="Play: Escape from Hastinapur"}
+var pl=$("play");pl.hidden=!MISSIONS[i];if(MISSIONS[i]){pl.href=MISSIONS[i].u;pl.textContent="Play: "+MISSIONS[i].t}
 $("playNote").textContent=MISSIONS[i]?"A playable mission is ready.":"No playable mission here yet.";
 $("live").textContent=d[1]+", "+d[2]+". "+events(i).length+" events.";
 renderDots();renderList();

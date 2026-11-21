@@ -1,0 +1,133 @@
+{
+  "id": "mauryan-spy",
+  "era": "Mauryan empire",
+  "title": "The Night Report of Pataliputra",
+  "logline": "On a monsoon night, a young cart driver must carry a ferry clerk's urgent report across timber-walled Pataliputra, dodging night patrols, before the river floods the moat.",
+  "objectives": [
+    {
+      "id": "checkpoint-1",
+      "text": "Reach the Ganga ferry wharf and take the sealed report from the ferry clerk."
+    },
+    {
+      "id": "checkpoint-2",
+      "text": "Pass the timber yard and the palisade lane without being stopped by the night watch."
+    },
+    {
+      "id": "checkpoint-3",
+      "text": "Deliver the report to Overseer Kshema at the moat sluice house."
+    }
+  ],
+  "dialogue": [
+    {
+      "id": "start-1",
+      "speaker": "Sudatta",
+      "text": "Rain on the river means trouble in the city. Keep the cart low and quiet, Ila.",
+      "trigger": "start"
+    },
+    {
+      "id": "start-2",
+      "speaker": "Ila",
+      "text": "Three stops. The wharf, the timber lane, the sluice house. I will be fast.",
+      "trigger": "start"
+    },
+    {
+      "id": "cp1-1",
+      "speaker": "Vasuka",
+      "text": "Take this to the overseer. Do not read it here, and do not stop for anyone.",
+      "trigger": "checkpoint-1"
+    },
+    {
+      "id": "cp1-2",
+      "speaker": "Ila",
+      "text": "A secret at night. Fine. The timber lane is next.",
+      "trigger": "checkpoint-1"
+    },
+    {
+      "id": "cp2-1",
+      "speaker": "Vasuka",
+      "text": "Hear the watch drums? They are searching the lanes tonight. Hold steady.",
+      "trigger": "checkpoint-2"
+    },
+    {
+      "id": "cp2-2",
+      "speaker": "Ila",
+      "text": "Past the palisade posts. The sluice house is near.",
+      "trigger": "checkpoint-2"
+    },
+    {
+      "id": "cp3-1",
+      "speaker": "Overseer Kshema",
+      "text": "A jammed sluice, not a plot. Thank you. Wake the timber crews at once.",
+      "trigger": "checkpoint-3"
+    },
+    {
+      "id": "cp3-2",
+      "speaker": "Ila",
+      "text": "That was the secret? Water. I was ready for worse.",
+      "trigger": "checkpoint-3"
+    },
+    {
+      "id": "hit-1",
+      "speaker": "Vasuka",
+      "text": "A lantern swept us. Back into the shadow of the posts!",
+      "trigger": "hit"
+    },
+    {
+      "id": "hit-2",
+      "speaker": "Ila",
+      "text": "Wheel hit a post. Steady now, nothing broken.",
+      "trigger": "hit"
+    },
+    {
+      "id": "fail-1",
+      "speaker": "Sudatta",
+      "text": "They stopped the cart. Come back to the yard and try another lane.",
+      "trigger": "fail"
+    },
+    {
+      "id": "fail-2",
+      "speaker": "Vasuka",
+      "text": "The watch changes at the drum. Wait for it, and we go again.",
+      "trigger": "fail"
+    },
+    {
+      "id": "win-1",
+      "speaker": "Overseer Kshema",
+      "text": "The crews have reached the weak stretch. The wall will stand tonight.",
+      "trigger": "win"
+    },
+    {
+      "id": "win-2",
+      "speaker": "Ila",
+      "text": "No glory in it. Just a wall that held and a city still asleep.",
+      "trigger": "win"
+    }
+  ],
+  "events": [
+    {
+      "name": "Megasthenes' account of Pataliputra's wooden wall and wide ditch (survives only through later writers)",
+      "year": "c. late 4th to early 3rd century BCE (as reported, not verified)",
+      "label": "History"
+    },
+    {
+      "name": "Waddell's excavations find remains of a timber palisade near Patna",
+      "year": "1892-1899 CE",
+      "label": "History"
+    },
+    {
+      "name": "Arthashastra, traditionally credited to Kautilya, with a chapter on spies; authorship and date contested",
+      "year": "Contested: oldest layers c. 150 BCE to 50 CE per one scholar",
+      "label": "Tradition"
+    },
+    {
+      "name": "Ashokan edict records wells dug and trees planted along roads",
+      "year": "c. 257 BCE (as reported)",
+      "label": "History"
+    },
+    {
+      "name": "Ila carries a ferry clerk's flood warning across the city",
+      "year": "Legend",
+      "label": "Invented"
+    }
+  ]
+}
