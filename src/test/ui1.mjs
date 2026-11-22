@@ -81,7 +81,7 @@ export function registerUi1(test) {
     hud.setObjectives([{ id: 'a', text: 'Find the staff', state: 'active', progress: { n: 0, total: 1 } }]);
     assert.equal(els.objectives.children.length, 1); assert.equal(els.objectives.hidden, false);
     hud.handleEvents([{ type: 'hit-enemy', id: 1 }]); await new Promise((r) => setTimeout(r, 60));
-    assert.equal(els.announcer.textContent, 'You hit the raider.'); assert.match(els.cue.textContent, /Staff strike/);
+    assert.equal(els.announcer.textContent, 'You hit the raider.'); assert.match(els.cue.textContent, /Fist strike/);
     hud.handleEvents([{ type: 'hit-enemy', id: 1 }]); await new Promise((r) => setTimeout(r, 60));
     now.add(100); // within the gap: second announcement is swallowed
     els.announcer.textContent = 'x'; hud.handleEvents([{ type: 'hit-enemy', id: 1 }]); await new Promise((r) => setTimeout(r, 60));
@@ -89,7 +89,7 @@ export function registerUi1(test) {
     now.add(2000); hud.handleEvents([{ type: 'objective', id: 'a', state: 'done' }, 'wall']); await new Promise((r) => setTimeout(r, 60));
     assert.equal(els.announcer.textContent, 'Objective Find the staff: done.');
     hud.setAbilities({ abilities: ['walk', 'run', 'crouch'], weapon: 'staff', crouch: true });
-    assert.equal(els['kit-text'].textContent, 'Staff, crouching. Can crouch');
+    assert.equal(els['kit-text'], undefined, 'no gear sentence in the HUD');
     hud.cue(''); // no throw on empty cue
   });
 }

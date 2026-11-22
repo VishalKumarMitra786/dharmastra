@@ -1,5 +1,5 @@
 // Game: ties sim, mission runner, renderer, input, HUD and screens together and owns the run state.
-import { createSim, step, setTimerMode } from './sim.js';
+import { createSim, step, setTimerMode, setReduceMotion } from './sim.js';
 import { createRunner } from './mission.js';
 import { makeFrame } from './renderer.js';
 import { createLoop } from './loop.js';
@@ -10,7 +10,11 @@ import { createOrbit, updateOrbit, relativeMove, FORWARD_UP } from './camera.js'
 
 const hashSeed = (id) => [...String(id)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
-const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', time: 'Time ran out.', seen: 'You were seen.' };
+const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', defeated: 'You are overcome. Next time: roll clear, block as the blow lands, and strike in the opening after it.', time: 'Time ran out.', seen: 'You were seen.' };
+// Events the HUD already captions itself (hud.handleEvents). Every other audible event gets its caption line from audio.captionFor, so no sound is caption-less.
+const HUD_CAPTIONED = new Set(['vault', 'pickup', 'hit-enemy', 'enemy-down', 'enemy-fell', 'shove-hit', 'stagger', 'dodge', 'tired', 'climb', 'blocked', 'parry', 'guard-break', 'tap', 'whiff', 'shot', 'drawn', 'no-arrows', 'target-hit', 'weapon', 'refused', 'seen', 'hurt', 'ability']);
+const CAPTION_GAP = { swing: 1, shove: 1, windup: 0.4, 'enemy-swing': 99, 'enemy-arrow': 0.6, 'arrow-hit': 0.6 }; // seconds between captions of one kind (99 = never: the wind-up caption already said it)
+const SHAKE = { hurt: 0.6, finisher: 0.5, phase: 0.8, parry: 0.3, 'shield-break': 0.3, 'captain-down': 0.8 }; // screenshake per event; none at all under reduced motion
 
 export function createGame({ mission, world, renderer: initialRenderer, input, hud, screens, audio, settings, onSettings, dev = false }) {
   let renderer = initialRenderer;
@@ -45,7 +49,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const lent = Array.isArray(mission.lends) ? mission.lends : [];
     const abilities = [...kit, ...lent];
     const weapon = abilities.includes(progress.weapon) ? progress.weapon : bestWeapon(abilities); // the weapon you last held, else the best you own
-    sim = createSim(world, { timerMode: settings.timer, abilities, weapon, seed: hashSeed(mission.id) + attempt });
+    sim = createSim(world, { timerMode: settings.timer, abilities, weapon, seed: hashSeed(mission.id) + attempt, reduceMotion: settings.reduceMotion });
     lastKit = ''; lastObj = ''; lastVitals = '';
     effects = { shake: 0, flash: 0 };
     lastSay = {};
@@ -65,6 +69,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     hud.setHint(1, 0, '');
     document.getElementById('pause-btn').focus();
     hud.chapter?.(mission.era, mission.title);
+    setTimeout(() => { if (!paused) { hud.tip?.('move'); if (usesOrbit()) hud.tip?.('look'); } }, 3400); // first-run tips, after the title card
     loop.start();
   }
 
@@ -79,7 +84,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   function syncRules() {
     if (!sim?.rules2 || !sim.objectives) return;
     // Checkpoint objectives are already shown as the current objective and the pips, so the list holds the extra ones (collect, evade).
-    const list = sim.objectives.items.filter((o) => o.type !== 'reach' && (o.unlock || 0) <= sim.checkpoint).map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: o.type === 'collect' ? { n: o.progress, total: o.goal } : null }));
+    const list = sim.objectives.items.filter((o) => o.type !== 'reach' && (o.unlock || 0) <= sim.checkpoint).map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: ['collect', 'do', 'defeat', 'waves'].includes(o.type) ? { n: o.progress, total: o.goal } : null }));
     const okey = JSON.stringify(list);
     if (okey !== lastObj) { lastObj = okey; hud.setObjectives(list); }
     const key = `${sim.abilities.join()}|${sim.player.weapon}|${sim.player.crouching}`;
@@ -111,20 +116,24 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
 
   function updateHint() {
     const next = world.checkpoints[sim.checkpoint];
+    hud.tipFor?.(sim); // a one-icon tip the first time a vault, duck or dodge is needed
     if (next) hud.setHint(next.x - sim.chariot.x, next.y - sim.chariot.y, `Checkpoint ${sim.checkpoint + 1}`, usesOrbit() ? orbit.yaw : undefined);
   }
 
+  const capAt = {}; const sayAt = {};
   function onEvent(e) {
     runner.handle(e, sim.elapsed);
-    if (e.type === 'wall' || e.type === 'guard') {
-      effects.shake = 1; effects.flash = 1;
-      hud.hitFlash?.();
-      audio.play('hit');
-      hud.announce(`${e.type === 'guard' ? 'Hit by a guard' : 'Hit a wall'}. Health ${e.health}.`);
-    } else if (e.type === 'checkpoint') {
-      audio.play('checkpoint');
-      hud.announce(`Checkpoint ${e.n} of ${world.checkpoints.length} reached.`);
-    } else if (e.type === 'win') endRun(true);
+    if (!settings.reduceMotion && SHAKE[e.type]) { effects.shake = Math.max(effects.shake, SHAKE[e.type]); if (e.type === 'hurt') { effects.flash = 1; hud.hitFlash?.(); } }
+    audio.playEvent(e);
+    if (sim.rules2) {
+      const c = audio.captionFor?.(e); const gap = CAPTION_GAP[e.type] ?? 0.5;
+      if (c && !HUD_CAPTIONED.has(e.type) && (capAt[e.type] == null || sim.elapsed - capAt[e.type] >= gap)) { capAt[e.type] = sim.elapsed; hud.cue?.(c); }
+      const line = audio.announceFor?.(e);
+      if (line && e.type !== 'hurt' && (sayAt[e.type] == null || sim.elapsed - sayAt[e.type] >= 0.8)) { sayAt[e.type] = sim.elapsed; hud.announce(line); } // 'hurt' is already announced by the HUD, with its damage
+    }
+    if (e.type === 'wall') hud.announce('You bump a wall. No harm done.');
+    else if (e.type === 'checkpoint') hud.announce(`Checkpoint ${e.n} of ${world.checkpoints.length} reached.`);
+    else if (e.type === 'win') endRun(true);
     else if (e.type === 'fail') endRun(false, e.reason);
   }
 
@@ -169,6 +178,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     applySettings() {
       input.state.autoDrive = settings.autoDrive;
       if (sim && sim.timerMode !== settings.timer) { setTimerMode(sim, settings.timer); refreshHud(); }
+      if (sim) setReduceMotion(sim, settings.reduceMotion); // hit-stop and slow motion stop at once under reduced motion
       onSettings?.();
     },
     menu() {

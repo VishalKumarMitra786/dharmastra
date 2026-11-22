@@ -11,7 +11,7 @@ import { MISSIONS, pickMissionId } from '../missions.js';
 import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../camera.js';
 import { loadSettings } from '../settings.js';
 import './render1.mjs';
-import './hero-spike.mjs';
+import './hero-assets.mjs';
 
 const results = [];
 const queue = [];
@@ -61,29 +61,26 @@ test('wall collision pushes the chariot out and never leaves it inside a wall', 
     assert.ok(Math.hypot(c.x - qx, c.y - qy) >= c.radius - 1e-6);
   }
 });
-test('driving into a wall costs health; sliding along it does not', () => {
+test('driving into a wall is a bump (an event), never a loss of health; sliding along it is silent', () => {
   const sim = fresh();
-  sim.guards = [];
   // start faces east along the top road; steer into the north outer wall
   let hit = 0;
-  for (let i = 0; i < 400; i++) for (const e of step(sim, 1 / 60, { steer: -1, throttle: 1 })) if (e.type === 'wall') hit++;
-  assert.ok(hit >= 1 && sim.health < 100, `hits ${hit}, health ${sim.health}`);
-  const s2 = fresh(); s2.guards = [];
+  for (let i = 0; i < 400; i++) for (const e of step(sim, 1 / 60, { steer: -1, throttle: 1 })) if (e.type === 'wall') { hit++; assert.equal(e.damage, 0); }
+  assert.ok(hit >= 1, `bumps ${hit}`); assert.equal(sim.health, 100, 'no contact damage from a wall');
+  const s2 = fresh();
   s2.chariot.angle = -0.05; // shallow angle: grazes the wall
   let dmg = 0;
   for (let i = 0; i < 60; i++) for (const e of step(s2, 1 / 60, { steer: 0, throttle: 1 })) if (e.type === 'wall') dmg++;
   assert.equal(dmg, 0);
 });
-test('guard hit costs 20 health, then brief invulnerability', () => {
-  const sim = fresh(); const g = sim.guards[0];
-  warp(sim, g);
-  const ev = step(sim, 1 / 60, none).filter((e) => e.type === 'guard');
-  assert.equal(ev.length, 1); assert.equal(sim.health, 80);
-  warp(sim, g);
-  assert.equal(step(sim, 1 / 60, none).filter((e) => e.type === 'guard').length, 0);
+test('legacy guards are gone: the old contact-damage guard list is always empty (they are armed enemies now)', () => {
+  const sim = fresh();
+  assert.equal(sim.guards.length, 0); assert.equal(sim.invuln, 0);
+  const sim2 = createSim(parseLayout(layout), { timerMode: 'off' });
+  assert.ok(sim2.enemies.length >= 5 && sim2.enemies.every((e) => e.kind !== 'target')); assert.equal(sim2.guards.length, 0);
 });
 test('checkpoints must be reached in order; reaching 3 wins', () => {
-  const sim = fresh(); sim.guards = []; const cps = sim.world.checkpoints;
+  const sim = fresh(); const cps = sim.world.checkpoints;
   warp(sim, cps[1]); step(sim, 1 / 60, none); assert.equal(sim.checkpoint, 0, 'cp2 first does nothing');
   const seen = [];
   for (const p of cps) { warp(sim, p); seen.push(...step(sim, 1 / 60, none).map((e) => e.type + (e.n || ''))); }
@@ -91,26 +88,26 @@ test('checkpoints must be reached in order; reaching 3 wins', () => {
   assert.equal(sim.status, 'won');
   assert.deepEqual(step(sim, 1 / 60, none), [], 'sim is inert after the end');
 });
-test('zero health fails with reason "wrecked"', () => {
-  const sim = fresh(); sim.guards = [];
-  sim.health = 8; sim.chariot.speed = 200; sim.chariot.angle = Math.PI; // east wall behind start? drive west into outer wall
-  let fail = null;
-  for (let i = 0; i < 120 && !fail; i++) fail = step(sim, 1 / 60, { steer: 0, throttle: 1 }).find((e) => e.type === 'fail');
+test('zero health fails: "wrecked" for the chariot, "defeated" on foot', () => {
+  const sim = fresh(); sim.health = 0;
+  const fail = step(sim, 1 / 60, none).find((e) => e.type === 'fail');
   assert.equal(fail?.reason, 'wrecked'); assert.equal(sim.status, 'failed');
+  const foot = createSim(parseLayout(layout), { timerMode: 'off' }); foot.health = 0;
+  assert.equal(step(foot, 1 / 60, { mx: 0, my: 0, action: {}, hold: {} }).find((e) => e.type === 'fail')?.reason, 'defeated');
 });
 test('timer: standard fails at the limit, off never fails, extended doubles, mid-run change works', () => {
-  const a = fresh({ timerMode: 'standard' }); a.guards = [];
-  assert.equal(a.timeLeft, 150);
+  const a = fresh({ timerMode: 'standard' });
+  assert.equal(a.timeLeft, layout.timeLimit);
   let fail = null;
-  for (let i = 0; i < 150 * 60 + 5 && !fail; i++) fail = step(a, 1 / 60, none).find((e) => e.type === 'fail');
+  for (let i = 0; i < layout.timeLimit * 60 + 5 && !fail; i++) fail = step(a, 1 / 60, none).find((e) => e.type === 'fail');
   assert.equal(fail?.reason, 'time');
-  const off = fresh({ timerMode: 'off' }); off.guards = [];
-  for (let i = 0; i < 200 * 60; i++) step(off, 1 / 60, none);
+  const off = fresh({ timerMode: 'off' });
+  for (let i = 0; i < 300 * 60; i++) step(off, 1 / 60, none);
   assert.equal(off.status, 'playing'); assert.equal(off.timeLeft, null);
-  assert.equal(fresh({ timerMode: 'extended' }).timeLeft, 300);
-  const m = fresh({ timerMode: 'standard' }); m.guards = [];
+  assert.equal(fresh({ timerMode: 'extended' }).timeLeft, layout.timeLimit * 2);
+  const m = fresh({ timerMode: 'standard' });
   for (let i = 0; i < 100 * 60; i++) step(m, 1 / 60, none);
-  setTimerMode(m, 'extended'); assert.ok(Math.abs(m.timeLeft - 200) < 1);
+  setTimerMode(m, 'extended'); assert.ok(Math.abs(m.timeLeft - (layout.timeLimit * 2 - 100)) < 1);
   setTimerMode(m, 'off'); assert.equal(m.timeLeft, null);
 });
 test('mission runner: objectives advance, triggers fire, hit lines are rate limited', () => {
@@ -135,10 +132,10 @@ test('renderer interface check and frame snapshot', () => {
   assert.throws(() => assertRenderer({}), /missing/);
   assertRenderer({ resize() {}, setWorld() {}, render() {} });
   const f = makeFrame(fresh(), { shake: 0, flash: 0 }, true);
-  assert.equal(f.checkpoints[0].state, 'next'); assert.equal(f.checkpoints[2].state, 'later'); assert.equal(f.guards.length, 6);
+  assert.equal(f.checkpoints[0].state, 'next'); assert.equal(f.checkpoints[2].state, 'later'); assert.equal(f.guards.length, 0, 'guards are enemies now');
 });
 test('bot can drive S->1->2->3 with guards removed (geometry is drivable)', () => {
-  const w = parseLayout(layout); const sim = createSim(w); sim.guards = [];
+  const w = parseLayout(layout); const sim = createSim(w); sim.enemies = [];
   const path = routeTiles(w, w.start, w.checkpoints);
   const r = drive(sim, path);
   assert.equal(sim.status, 'won', `status ${sim.status} after ${r.t.toFixed(1)}s health ${sim.health}`);
@@ -147,7 +144,7 @@ test('bot can drive S->1->2->3 with guards removed (geometry is drivable)', () =
 test('bot with guards active: report outcome (informational)', () => {
   const w = parseLayout(layout); const sim = createSim(w, { timerMode: 'off' });
   const r = drive(sim, routeTiles(w, w.start, w.checkpoints));
-  console.log(`   bot (guards on, blind to guards): ${sim.status} in ${r.t.toFixed(1)}s, health ${sim.health}, guard hits ${r.guards}`);
+  console.log(`   bot (guards on, blind to guards): ${sim.status} in ${r.t.toFixed(1)}s, health ${sim.health}`);
 });
 
 // --- helpers: BFS route through road-tile centres, then simple pure-pursuit driving ---
@@ -298,14 +295,14 @@ for (const m of MISSIONS) {
 
 test('mission 2: bot can drive S->1->2->3 with guards removed, and guards-on outcome is reported', async () => {
   const { layout: lay } = await import('../../missions/mauryan-spy.js');
-  const w = parseLayout(lay); const sim = createSim(w, { timerMode: 'off' }); sim.guards = [];
+  const w = parseLayout(lay); const sim = createSim(w, { timerMode: 'off' }); sim.enemies = [];
   const r = drive(sim, routeCentred(w, w.start, w.checkpoints), 58, true);
   console.log(`   mission 2 bot (no guards, ${sim.status}): health ${sim.health}, checkpoints ${sim.checkpoint}, at ${Math.round(sim.chariot.x)},${Math.round(sim.chariot.y)}, t=${r.t.toFixed(0)}s`);
   assert.equal(sim.status, 'won');
   console.log(`   mission 2 bot (no guards): won in ${r.t.toFixed(1)}s, wall hits ${r.walls}`);
   const sim2 = createSim(parseLayout(lay), { timerMode: 'off' });
   const r2 = drive(sim2, routeCentred(parseLayout(lay), w.start, w.checkpoints), 58, true);
-  console.log(`   mission 2 bot (guards on, blind to guards): ${sim2.status} in ${r2.t.toFixed(1)}s, health ${sim2.health}, guard hits ${r2.guards}`);
+  console.log(`   mission 2 bot (guards on, blind to guards): ${sim2.status} in ${r2.t.toFixed(1)}s, health ${sim2.health}`);
 });
 
 test('characters: roster has both bodies, valid colours, safe names; storage is sanitised', async () => {
@@ -356,9 +353,9 @@ test('renderer2d: setCharacter makes the hero use the traveller colours and hair
   delete globalThis.document;
 });
 
-test('start screen: avatar sits beside the Playing as note and is decorative', async () => {
+test('start screen: the traveller avatar is a decorative icon inside a named button', async () => {
   const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(html, /id="who-avatar"[\s\S]*id="who"/);
+  assert.match(html, /id="who-btn"[^>]*aria-label="Change traveller"[\s\S]*id="who-avatar"/);
   const C = await import('../characters.js');
   assert.match(C.avatarSvg(C.appearance({ look: 'meera' })), /aria-hidden="true"/);
   const main = await readFile(new URL('../main.js', import.meta.url), 'utf8');
@@ -412,8 +409,382 @@ import { registerUi1 } from './ui1.mjs'; registerUi1(test);
 import { registerPhase1 } from './phase1.mjs'; registerPhase1(test);
 import { registerSangam } from './sangam.mjs'; registerSangam(test);
 import { registerPhase2 } from './phase2.mjs'; await registerPhase2(test);
+import { registerCombat2 } from './combat2.mjs'; await registerCombat2(test);
 import { registerChakra } from './chakra.mjs'; registerChakra(test);
 import { registerMonetize } from './monetize.mjs'; registerMonetize(test);
+// ================= UI rework: controls, HUD, menus, chakra rings =================
+import { stickVector, createInput, STICK_DEAD } from '../input.js';
+import { chipText, splitCaption, needFor, tipText, TIPS, createHud } from '../hud.js';
+import { shortLine } from '../screens.js';
+import { ringLayout, easeInOut, clunkMain, clunkKnock, SETTLE, alignRot, segAt, thetaOf, visibleRange, clampPos, nearestSlot, slotAngle, slotAlpha, ringCap, hitTest, wrapLines, drawScene, coreRadius, TAU, norm } from '../chakra/scene.js';
+import { groupEras, compactYear, yugaProgress, statusOf as chStatusOf, spineMap as chSpineMap, YUGAS as CH_YUGAS } from '../chakra/model.js';
+import { dialSvg, dialLabel } from '../chakra/dial.js';
+import { createClick } from '../chakra/click.js';
+import { createChakra } from '../chakra/view.js';
+import { createEventStore } from '../chakra/data.js';
+import { loadSettings as loadSettings2 } from '../settings.js';
+
+const ROOT2 = new URL('../../', import.meta.url);
+const htmlText = await readFile(new URL('index.html', ROOT2), 'utf8');
+const cssText = await readFile(new URL('src/styles.css', ROOT2), 'utf8');
+const missionFiles = ['dvapara-escape', 'gupta-forge', 'mauryan-spy', 'sangam-staff'];
+const missionsJson = await Promise.all(missionFiles.map(async (f) => JSON.parse(await readFile(new URL(`missions/${f}.json`, ROOT2), 'utf8'))));
+const rule = (sel) => { const m = cssText.match(new RegExp(`(?:^|\\n|\\})\\s*${sel.replace(/[.[\]()*+?^$|\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`)); return m ? m[1] : ''; };
+
+// ---- A: controls ----
+test('controls: stick maths has a dead zone, grows smoothly, never exceeds 1 and keeps its direction', () => {
+  assert.deepEqual(stickVector(0, 0, 44), { x: 0, y: 0 });
+  assert.deepEqual(stickVector(2, 1, 44), { x: 0, y: 0 }, 'inside the dead zone');
+  assert.deepEqual(stickVector(5, 5, 0), { x: 0, y: 0 }, 'no radius, no push');
+  const full = stickVector(44, 0, 44); assert.ok(Math.abs(full.x - 1) < 1e-9 && full.y === 0);
+  const over = stickVector(0, -300, 44); assert.ok(Math.abs(over.y + 1) < 1e-9, 'far past the edge is still 1');
+  const diag = stickVector(100, 100, 44); assert.ok(Math.hypot(diag.x, diag.y) <= 1 + 1e-9 && diag.x > 0 && diag.y > 0, 'diagonals are not faster');
+  let prev = 0; for (let d = 0; d <= 44; d += 4) { const v = Math.hypot(stickVector(d, 0, 44).x, 0); assert.ok(v >= prev - 1e-9, 'monotone'); prev = v; }
+  assert.ok(Math.hypot(stickVector(44 * (STICK_DEAD + 0.01), 0, 44).x, 0) < 0.05, 'a push just past the dead zone is gentle');
+});
+
+const mkPointerEl = () => { const h = {}; return { h, style: {}, addEventListener: (t, f) => { (h[t] ||= []).push(f); }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 500, width: 100, height: 100 }), classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, dataset: {} }; };
+const fire = (el, type, ev) => (el.h[type] || []).forEach((f) => f({ preventDefault() {}, pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0, ...ev }));
+const withWindow = (fn) => { const wl = {}; const prev = globalThis.window; globalThis.window = { addEventListener: (t, f) => { (wl[t] ||= []).push(f); } }; try { return fn(wl); } finally { globalThis.window = prev; } };
+
+test('controls: the stick moves the walker, releasing stops it, and the knob follows the thumb', () => withWindow(() => {
+  const joy = mkPointerEl(); const knob = { style: {} }; const stage = mkPointerEl();
+  const input = createInput({ stage, buttons: [], onPause() {}, joystick: joy, knob });
+  input.state.enabled = true;
+  fire(joy, 'pointerdown', { clientX: 50 + 44, clientY: 550 }); // full push to the right of centre (50, 550)
+  let r = input.read(); assert.ok(r.mx > 0.99 && Math.abs(r.my) < 1e-9, `right: ${r.mx},${r.my}`);
+  assert.match(knob.style.transform, /translate\(44\.0px, 0\.0px\)/);
+  fire(joy, 'pointermove', { clientX: 50, clientY: 550 - 44 }); r = input.read(); assert.ok(r.my < -0.99, 'up is negative y');
+  fire(joy, 'pointerup', {}); r = input.read(); assert.equal(r.mx, 0); assert.equal(r.my, 0); assert.match(knob.style.transform, /translate\(0\.0px, 0\.0px\)/);
+  input.state.enabled = false; fire(joy, 'pointerdown', { clientX: 100, clientY: 550 }); input.state.enabled = true; assert.equal(input.read().mx, 0, 'a press while paused is ignored');
+}));
+
+test('controls: drag to look works on the free half only, the side setting flips it, and Button controls turns touch drags off (2.5.7)', () => withWindow(() => {
+  const mk = () => { const stage = mkPointerEl(); stage.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 800 }); const input = createInput({ stage, buttons: [], onPause() {} }); input.state.enabled = true; input.state.cameraLook = true; return { stage, input }; };
+  let { stage, input } = mk();
+  fire(stage, 'pointerdown', { clientX: 300, clientY: 400 }); fire(stage, 'pointermove', { clientX: 340, clientY: 410 });
+  let r = input.read(); assert.equal(r.look.dx, 40); assert.equal(r.look.dy, 10); fire(stage, 'pointerup', { clientX: 340, clientY: 410 });
+  ({ stage, input } = mk()); fire(stage, 'pointerdown', { clientX: 100, clientY: 400 }); fire(stage, 'pointermove', { clientX: 160, clientY: 400 });
+  assert.equal(input.read().look.dx, 0, 'a touch on the stick half does not look');
+  ({ stage, input } = mk()); input.state.side = 'left'; fire(stage, 'pointerdown', { clientX: 100, clientY: 400 }); fire(stage, 'pointermove', { clientX: 130, clientY: 400 });
+  assert.equal(input.read().look.dx, 30, 'with the buttons on the left, the left half looks');
+  ({ stage, input } = mk()); input.state.buttonMode = true; fire(stage, 'pointerdown', { clientX: 300, clientY: 400 }); fire(stage, 'pointermove', { clientX: 380, clientY: 400 });
+  assert.equal(input.read().look.dx, 0, 'Button controls: no touch drag');
+  fire(stage, 'pointerdown', { clientX: 300, clientY: 400, pointerType: 'mouse', pointerId: 2 }); fire(stage, 'pointermove', { clientX: 330, clientY: 400, pointerType: 'mouse', pointerId: 2 });
+  assert.equal(input.read().look.dx, 30, 'a mouse drag still looks');
+}));
+
+test('controls: the single-press arrow and look buttons and the keyboard give the same movement as the stick', () => withWindow((wl) => {
+  const mkBtn = (control) => { const b = mkPointerEl(); b.dataset = { control }; return b; };
+  const names = ['up', 'down', 'left', 'right', 'lookleft', 'lookright', 'runtoggle', 'attack', 'dodge', 'block', 'push', 'heavy', 'swap', 'do', 'crouch', 'aim'];
+  const btn = Object.fromEntries(names.map((n) => [n, mkBtn(n)]));
+  const input = createInput({ stage: mkPointerEl(), buttons: Object.values(btn), onPause() {} }); input.state.enabled = true;
+  fire(btn.up, 'pointerdown', {}); fire(btn.right, 'pointerdown', {}); let r = input.read(); assert.equal(r.my, -1); assert.equal(r.mx, 1);
+  fire(btn.up, 'pointerup', {}); fire(btn.right, 'pointerup', {}); r = input.read(); assert.equal(r.my, 0); assert.equal(r.mx, 0);
+  input.state.cameraLook = true; fire(btn.lookright, 'pointerdown', {}); assert.equal(input.read().look.key, 1); fire(btn.lookright, 'pointerup', {});
+  const key = (code) => wl.keydown.forEach((f) => f({ code, repeat: false, defaultPrevented: false, target: { tagName: 'BODY' }, preventDefault() {} }));
+  const keyUp = (code) => wl.keyup.forEach((f) => f({ code }));
+  key('KeyW'); key('KeyD'); r = input.read(); assert.equal(r.my, -1); assert.equal(r.mx, 1, 'W and D'); keyUp('KeyW'); keyUp('KeyD');
+  key('ArrowLeft'); r = input.read(); assert.equal(r.mx, -1, 'arrow keys'); keyUp('ArrowLeft');
+  key('KeyQ'); assert.equal(input.read().look.key, -1, 'Q turns the camera'); keyUp('KeyQ');
+  assert.equal(input.read().run, false); fire(btn.runtoggle, 'pointerdown', {}); assert.equal(input.read().run, true, 'run toggle on'); fire(btn.runtoggle, 'pointerdown', {}); assert.equal(input.read().run, false, 'and off');
+  // every action name the combat developer reads is reachable from a button: light, heavy, dodge, shove, swap, jump+interact, crouch, and held block and aim
+  for (const [c, a] of [['attack', 'attack'], ['heavy', 'heavy'], ['dodge', 'dodge'], ['push', 'push'], ['swap', 'swap'], ['crouch', 'crouch']]) { fire(btn[c], 'pointerdown', {}); assert.equal(input.read().action[a], true, c); }
+  fire(btn.do, 'pointerdown', {}); r = input.read(); assert.ok(r.action.jump && r.action.interact);
+  fire(btn.block, 'pointerdown', {}); assert.equal(input.read().hold.block, true); fire(btn.block, 'pointerup', {}); assert.equal(input.read().hold.block, false, 'block is held, not tapped');
+  fire(btn.aim, 'pointerdown', {}); assert.equal(input.read().hold.aim, true); fire(btn.aim, 'pointerup', {});
+}));
+
+test('controls: markup has the stick, the action cluster and the arrow buttons; every control is named; no old nine-button pad', () => {
+  assert.match(htmlText, /id="joy"[^>]*aria-label="[^"]{8,}"/); assert.match(htmlText, /id="joy-knob"/);
+  const controls = [...htmlText.matchAll(/<button[^>]*data-control="([a-z]+)"[^>]*>/g)];
+  const have = controls.map((m) => m[1]); for (const c of ['attack', 'aim', 'dodge', 'heavy', 'do', 'block', 'push', 'swap', 'crouch', 'runtoggle', 'up', 'down', 'left', 'right', 'lookleft', 'lookright']) assert.ok(have.includes(c), `button ${c}`);
+  for (const m of controls) assert.match(m[0], /aria-label="[^"]{3,}"/, `${m[1]} has a name`);
+  for (const old of ['>Forward<', '> Forward<', 'Forward</button>', 'Left</button>', 'Right</button>', 'Look</button>', 'Run</button>', 'class="pad run"']) assert.ok(!htmlText.includes(old), `old pad text ${old} is gone`);
+  for (const c of ['crouch', 'runtoggle']) assert.match(htmlText.match(new RegExp(`<button[^>]*data-control="${c}"[^>]*>`))[0], /aria-pressed="false"/, `${c} is a toggle with a state`);
+  for (const c of ['aim', 'swap', 'crouch', 'runtoggle']) assert.match(htmlText.match(new RegExp(`<button[^>]*data-control="${c}"[^>]*>`))[0], /\bhidden\b/, `${c} is hidden until earned`);
+  for (const c of ['attack', 'heavy', 'dodge', 'block', 'push', 'do']) assert.ok(!/\bhidden\b/.test(htmlText.match(new RegExp(`<button[^>]*data-control="${c}"[^>]*>`))[0]), `${c} is there from the start (fists)`);
+});
+
+test('controls: Settings has Button controls and Sound as validated booleans, off and on by default', () => {
+  assert.match(htmlText, /id="set-buttons"[\s\S]{0,120}Button controls/); assert.match(htmlText, /id="set-sound"/);
+  const win = { matchMedia: () => ({ matches: false }) }; const st = (v) => ({ getItem: () => v });
+  assert.equal(loadSettings2(st(null), win).buttonControls, false); assert.equal(loadSettings2(st('{"buttonControls":true}'), win).buttonControls, true); assert.equal(loadSettings2(st('{"buttonControls":"yes"}'), win).buttonControls, false);
+  assert.equal(loadSettings2(st(null), win).sound, true); assert.equal(loadSettings2(st('{"sound":false}'), win).sound, false);
+});
+
+test('controls: touch targets are at least 44 px and the clusters respect the safe-area insets', () => {
+  const px = (decl, prop) => { const m = decl.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*(\\d+)px`)); return m ? Number(m[1]) : null; };
+  for (const sel of ['.pad', '.pad.act.sm', '.pad.act.mid', '.pad.act.big', '.btn.round', '.btn.icon']) { const d = rule(sel); assert.ok(d, `${sel} exists`); const w = px(d, 'width'), h = px(d, 'height'); if (w != null) assert.ok(w >= 44, `${sel} width ${w}`); if (h != null) assert.ok(h >= 44, `${sel} height ${h}`); }
+  assert.ok(px(rule('.joy'), 'width') >= 44); assert.match(rule('.btn, select'), /min-height:\s*44px/); assert.match(rule('.btn, select'), /min-width:\s*44px/);
+  for (const sel of ['#hud', '#game[data-side="right"] .touch', '#game[data-side="left"] .touch', '#game[data-side="right"] .actions-pad', '#game[data-side="left"] .actions-pad', '.overlay']) assert.match(rule(sel), /safe-(t|r|l|b)/, `${sel} uses a safe-area inset`);
+  assert.match(rule('.touch, .actions-pad'), /safe-b/);
+  assert.match(htmlText, /viewport-fit=cover/);
+});
+
+// ---- B: HUD ----
+test('hud: the objective chip is at most six words for every mission objective, with the full text kept for screen readers', () => {
+  for (const m of missionsJson) for (const o of m.objectives) { const t = chipText(o.text); assert.ok(t.replace('…', '').split(/\s+/).length <= 6, `"${t}"`); assert.ok(t.length > 0); }
+  assert.equal(chipText('Reach the Lamp Bazaar and take on Suvrata and the sealed plea.'), 'Reach the Lamp Bazaar');
+  assert.equal(chipText('Go now'), 'Go now');
+  const els = {}; const mk = () => ({ hidden: false, textContent: '', dataset: {}, style: {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} } });
+  const hud = createHud({ getElementById: (id) => (els[id] ||= mk()), createElement: mk, querySelector: () => null, querySelectorAll: () => [] });
+  hud.setObjective('Reach the Lamp Bazaar and take on Suvrata and the sealed plea.'); assert.equal(els['obj-text'].textContent, 'Reach the Lamp Bazaar'); assert.match(els['obj-full'].textContent, /sealed plea/);
+});
+
+test('hud: dialogue captions are at most 80 characters, split at sentences, and lose no words', () => {
+  for (const m of missionsJson) for (const d of m.dialogue) { const parts = splitCaption(d.text, 80); assert.ok(parts.every((p) => p.length <= 80), `too long in ${m.id}: ${parts.find((p) => p.length > 80)}`); assert.equal(parts.join(' ').replace(/\s+/g, ' '), d.text.replace(/\s+/g, ' ')); }
+  assert.deepEqual(splitCaption('Short line.', 80), ['Short line.']);
+  assert.ok(splitCaption('x'.repeat(200), 80).every((p) => p.length <= 80), 'an unbroken word is still cut');
+});
+
+test('hud: one slim top bar with named meters, no stat pills, no checkpoint hint text, no gear sentence, no how-to wall', () => {
+  const hud = htmlText.slice(htmlText.indexOf('<header id="hud">'), htmlText.indexOf('</header>', htmlText.indexOf('<header id="hud">')));
+  assert.match(hud, /id="pause-btn"[^>]*aria-label="Pause"/); assert.match(hud, /id="stat-health"[^>]*role="meter"[^>]*aria-label="Health"/); assert.match(hud, /id="stat-stamina"[^>]*role="meter"[^>]*aria-label="Stamina"/); assert.match(hud, /id="minimap"/);
+  for (const gone of ['class="lbl"', 'Checkpoints', 'Gear', 'cp-pips', 'kit-text', 'stat-kit', 'stat-cp', 'health-text', 'stamina-text']) assert.ok(!hud.includes(gone), `${gone} is gone from the HUD`);
+  assert.match(hud, /id="hint" class="sr-only"/, 'the direction hint is for screen readers only');
+  assert.ok(!/How to play|<details class="how"|class="goal"/.test(htmlText), 'no rules wall');
+  assert.match(rule('.captions'), /top:/); assert.ok(!/bottom:/.test(rule('.captions')), 'captions sit at the top, not over the thumbs');
+});
+
+test('hud: a tip shows once ever per move, uses the words of the input in use, and is chosen from what is near', async () => {
+  const store = {}; const storage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+  const els = {}; const mk = () => ({ hidden: true, textContent: '', dataset: {}, style: {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} } });
+  const doc = { getElementById: (id) => (els[id] ||= mk()), createElement: mk, querySelector: () => null, querySelectorAll: () => [] };
+  let mode = 'touch'; const hud = createHud(doc, { mode: () => mode, storage });
+  assert.equal(hud.tip('do'), true); assert.equal(els.tip.hidden, false); assert.equal(els['tip-text'].textContent, 'Do: vault or climb');
+  assert.equal(hud.tip('do'), false, 'second time: no tip'); assert.match(store['dharmastra.tips.v1'], /"do"/);
+  const hud2 = createHud(doc, { mode: () => 'key', storage }); assert.equal(hud2.tip('do'), false, 'remembered across visits');
+  assert.equal(tipText('crouch', 'key'), 'C to crouch'); assert.equal(tipText('move', 'buttons'), 'Tap the arrows');
+  for (const [id, t] of Object.entries(TIPS)) for (const m of ['touch', 'buttons', 'key']) assert.ok(tipText(id, m).split(/\s+/).length <= 4, `${id}/${m}: ${tipText(id, m)}`);
+  const sim = (extra) => ({ chariot: { x: 100, y: 100 }, abilities: ['walk', 'run'], enemies: [], world: { obstacles: [] }, ...extra });
+  assert.equal(needFor(sim()), null);
+  assert.equal(needFor(sim({ abilities: ['vault'], world: { obstacles: [{ kind: 'lowwall', x: 130, y: 90, w: 40, d: 30 }] } })), 'do');
+  assert.equal(needFor(sim({ abilities: ['walk'], world: { obstacles: [{ kind: 'lowwall', x: 130, y: 90, w: 40, d: 30 }] } })), null, 'not before the vault is earned');
+  assert.equal(needFor(sim({ abilities: ['crouch'], world: { obstacles: [{ kind: 'beam', x: 140, y: 100, w: 40, d: 30 }] } })), 'crouch');
+  assert.equal(needFor(sim({ abilities: ['dodge'], enemies: [{ x: 160, y: 100, state: 'windup' }] })), 'dodge');
+  assert.equal(needFor(sim({ abilities: ['dodge', 'sword'], enemies: [{ x: 160, y: 100, state: 'windup' }] })), 'block');
+  assert.equal(needFor(sim({ abilities: ['vault'], world: { obstacles: [{ kind: 'lowwall', x: 900, y: 900, w: 40, d: 30 }] } })), null, 'far away');
+});
+
+// ---- C: menus ----
+test('menus: the start screen is yuga tag, title, one line, Play and three icon buttons; no paragraphs of rules', () => {
+  const start = htmlText.slice(htmlText.indexOf('id="screen-start"'), htmlText.indexOf('id="screen-pause"'));
+  assert.match(start, /id="era"/); assert.match(start, /<h1 id="start-title"/); assert.match(start, /id="logline"/); assert.match(start, /id="start-btn"[^>]*>Play</);
+  assert.equal((start.match(/<p[ >]/g) || []).length, 4, 'tag, line, lock note and graphics note only'); // eyebrow, logline, lock-note, gfx-note
+  assert.equal((start.match(/class="btn icon"/g) || []).length, 3, 'chakra, traveller, settings');
+  for (const b of start.match(/<button[^>]*class="btn icon"[^>]*>/g)) assert.match(b, /aria-label="[^"]{5,}"/);
+  for (const gone of ['Reach the three numbered', 'How to play', 'Keyboard:', 'Touch:', 'Change traveller</button>', 'Chakra of the yugas</button>']) assert.ok(!start.includes(gone), gone);
+  for (const m of missionsJson) { const l = shortLine(m.logline); assert.ok(l.length <= 66 && l.length > 10, `${m.id}: ${l}`); assert.ok(!l.includes('\n')); }
+  assert.equal(shortLine('A short one. And more.'), 'A short one.'); assert.equal(shortLine(''), '');
+});
+
+test('menus: settings and traveller picker use short labels and one type scale', () => {
+  const set = htmlText.slice(htmlText.indexOf('id="screen-settings"'), htmlText.indexOf('id="screen-win"'));
+  for (const lab of ['Button controls', 'Reduce motion', 'Sound', 'Always run', 'Blood spatter', 'Action buttons', 'Timer', 'Graphics']) assert.ok(set.includes(`>${lab}<`), lab);
+  assert.ok(!/\(.{25,}\)/.test(set.replace(/<[^>]+>/g, '')), 'no parenthetical sentences in settings');
+  const pick = htmlText.slice(htmlText.indexOf('id="screen-character"'), htmlText.indexOf('id="screen-start"'));
+  assert.ok(!pick.includes('class="goal"') && !pick.includes('You walk the chakra'), 'no story paragraph in the picker');
+  assert.match(cssText, /--xs:[^;]+;\s*--s:[^;]+;\s*--m:[^;]+;\s*--l:[^;]+;\s*--xl:/); assert.match(cssText, /--sp1: 4px;[^}]*--sp5: 24px/);
+  const fonts = [...cssText.matchAll(/font-size:\s*([^;}]+)/g)].map((m) => m[1].trim()); const off = fonts.filter((f) => !/^(var\(--(xs|s|m|l|xl)\)|clamp\(.*\)|inherit)$/.test(f)); assert.deepEqual(off, [], `font sizes outside the scale: ${off.join(', ')}`);
+});
+
+// ---- D: chakra rings ----
+const fakeCtx2 = () => { const log = { calls: 0, alphas: [] }; const grad = { addColorStop() { log.calls++; } }; const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? (s) => { log.calls++; return { width: String(s).length * 6 }; } : (() => { log.calls++; return grad; })), set: (t, k, v) => { if (k === 'globalAlpha') log.alphas.push(v); t[k] = v; return true; } }); return { ctx, log }; };
+const sceneFor = (L, over = {}) => ({ W: 360, H: 560, dpr: 1, L, layout: ringLayout(L), rot: [0, 0, 0, 0], alpha: [1, 1, 1], glow: [0, 0, 0], cap: 14, pos: 0, focus: 0, readout: ['A title', 'History · Legend'], motion: true,
+  rings: [{ n: 5, labels: ['Satya', 'Treta', 'Dvapara', 'Kali', 'Kalki'], sel: 2, chosen: L >= 1 ? 3 : -1, cur: 2, progress: [0, 0.5, 0, 0, 0] }, { n: L >= 1 ? 5 : 0, labels: ['a', 'b', 'c', 'd', 'e'], sel: 0, chosen: L >= 2 ? 1 : -1, cur: -1, progress: null }], list: { events: [], idx: [], status: () => ({ code: 'open' }) }, ...over });
+
+test('chakra rings: exactly one ring is thick at each level, rings never overlap, and the thick ring is the open one', () => {
+  for (let L = 0; L < 3; L++) {
+    const lay = ringLayout(L); const th = lay.map((r) => r.outer - r.inner); const thick = th.map((t, i) => [t, i]).sort((a, b) => b[0] - a[0]);
+    assert.equal(thick[0][1], L, `level ${L}`); assert.ok(thick[0][0] > 2.5 * thick[1][0], 'clearly thicker');
+    for (let i = 0; i < 3; i++) { assert.ok(lay[i].outer > lay[i].inner && lay[i].outer <= 1); if (i) assert.ok(lay[i].outer < lay[i - 1].inner, 'a gap between rings'); }
+    assert.ok(coreRadius(lay) > 0.2, 'room for the readout in the middle');
+  }
+  assert.equal(ringLayout(0)[0].outer, 1);
+});
+
+test('chakra rings: the vault turn eases, clunks into alignment exactly, and settles with a small knock', () => {
+  assert.equal(easeInOut(0), 0); assert.equal(easeInOut(1), 1); assert.ok(easeInOut(0.25) < 0.25 && easeInOut(0.75) > 0.75);
+  assert.equal(clunkMain(0), 0); assert.ok(Math.abs(clunkMain(SETTLE) - 1) < 1e-12); assert.equal(clunkMain(1), 1);
+  let prev = -1; for (let u = 0; u <= 1; u += 0.02) { const v = clunkMain(u); assert.ok(v >= prev - 1e-12, 'never turns back before the lock'); prev = v; }
+  assert.equal(clunkKnock(0.5), 0); assert.ok(Math.abs(clunkKnock(1)) < 1e-9); let peak = 0; for (let u = SETTLE; u <= 1; u += 0.01) peak = Math.max(peak, Math.abs(clunkKnock(u))); assert.ok(peak > 0.005 && peak < 0.05, `knock ${peak}`);
+  for (const n of [1, 2, 5, 6]) for (let i = 0; i < n; i++) assert.equal(segAt(0, n, alignRot(i, n)), i, `segment ${i} of ${n} lines up at the top`);
+  assert.ok(Math.abs(norm(7 * Math.PI) - Math.PI) < 1e-9 || Math.abs(norm(7 * Math.PI) + Math.PI) < 1e-9);
+  assert.ok(Math.abs(thetaOf(0, -10)) < 1e-9 && Math.abs(thetaOf(10, 0) - Math.PI / 2) < 1e-9, 'angles run clockwise from the top');
+});
+
+test('chakra rings: an event ring pages through any number of events with a bounded window and fades at the bottom', () => {
+  const cap = 14; assert.ok(ringCap(170, ringLayout(2)[2]) >= 10 && ringCap(170, ringLayout(2)[2]) <= 16, 'about 14 slots on a phone'); assert.ok(ringCap(1000, ringLayout(2)[2]) <= 24);
+  for (const n of [1, 5, 14, 15, 2000]) for (const pos of [0, 3.5, n - 1]) { const p = clampPos(n, cap, pos); const [a, b] = visibleRange(n, cap, p); assert.ok(b - a + 1 <= cap, `${n} events, window ${b - a + 1}`); assert.ok(a >= 0 && b <= n - 1); }
+  assert.equal(clampPos(5, cap, 99), 2, 'a short list stays still around the top'); assert.equal(clampPos(2000, cap, -5), 0); assert.equal(clampPos(2000, cap, 5000), 1999);
+  assert.deepEqual(visibleRange(2000, cap, 1000), [993, 1006]); assert.equal(nearestSlot(10.4, 2000), 10); assert.equal(nearestSlot(1e9, 2000), 1999);
+  assert.equal(slotAngle(10, 10, cap), 0); assert.ok(Math.abs(slotAngle(11, 10, cap) - TAU / cap) < 1e-12);
+  assert.equal(slotAlpha(10, 10, cap, 2000), 1); assert.ok(slotAlpha(16, 10, cap, 2000) === 1 && slotAlpha(17, 10, cap, 2000) < 0.01 + 0.5 && slotAlpha(10 + 7, 10, cap, 2000) === 0, 'edge nodes fade out'); assert.equal(slotAlpha(3, 0, cap, 5), 1);
+});
+
+test('chakra rings: eras cover every event once, in order, with short unique labels; an event may name its own era', async () => {
+  const read = async (y) => JSON.parse(await readFile(new URL(`data/events/${y}.json`, ROOT2), 'utf8')).events;
+  for (const y of ['satya', 'treta', 'dvapara', 'kali', 'kalki']) {
+    const ev = await read(y); const g = groupEras(ev);
+    assert.ok(g.length >= 1 && g.length <= 6, `${y}: ${g.length} eras`); assert.equal(g[0].from, 0); assert.equal(g.at(-1).to, ev.length);
+    for (let i = 1; i < g.length; i++) assert.equal(g[i].from, g[i - 1].to, 'contiguous'); assert.equal(g.reduce((a, e) => a + e.count, 0), ev.length);
+    for (const e of g) assert.ok(e.label.length > 0 && e.label.length <= 18, `label "${e.label}"`); assert.equal(new Set(g.map((e) => e.label)).size, g.length, 'labels are unique');
+  }
+  const named = [{ era: 'Maurya' }, { era: 'Maurya' }, { era: 'Gupta' }].map((e, i) => ({ ...e, year: 'Legend', label: 'x' + i })); assert.deepEqual(groupEras(named).map((e) => [e.label, e.count]), [['Maurya', 2], ['Gupta', 1]]);
+  assert.deepEqual(groupEras([]), []); assert.equal(groupEras(makeSyn(2000)).length, 6, 'thousands of events still give at most six eras');
+  assert.equal(compactYear('Legend'), 'Legend'); assert.equal(compactYear('c. 2600-1900 BCE'), '2600 BCE'); assert.equal(compactYear('c. 4th-5th century CE (debated)'), '4c CE'); assert.equal(compactYear('15 August 1947'), '1947 CE'); assert.equal(compactYear('3102 BCE'), '3102 BCE');
+  for (const y of ['Legend', 'c. 2600-1900 BCE', 'c. late 4th-early 3rd century BCE (as reported)', 'c. 5th century CE onward (as reported)']) assert.ok(compactYear(y).length <= 8, compactYear(y));
+});
+function makeSyn(n) { return Array.from({ length: n }, (_, i) => ({ id: `s${i}`, year: i % 3 ? `${100 + i} CE` : 'Legend', label: `E${i}` })); }
+
+test('chakra rings: drawing is cheap at any level with 2,000 events, shows only a window of nodes, dims locked and marks every status by shape', () => {
+  const events = Array.from({ length: 2000 }, (_, i) => ({ id: `e${i}`, label: `Event ${i}`, kind: ['History', 'Tradition', 'Invented'][i % 3], year: i % 2 ? '300 BCE' : 'Legend', level: i % 4 === 0 ? i + 1 : null }));
+  const idx = events.map((_, i) => i); let worst = 0, worstT = 0;
+  for (const L of [0, 1, 2]) {
+    const { ctx, log } = fakeCtx2(); const s = sceneFor(L, { list: { events, idx, status: () => ({ code: 'open' }) }, pos: 1000, focus: 1000 }); const t = performance.now(); const st = drawScene(ctx, s); worstT = Math.max(worstT, performance.now() - t);
+    worst = Math.max(worst, log.calls); assert.ok(st.nodes <= 14, `${st.nodes} nodes`); if (L < 2) assert.equal(st.nodes, 0, 'events appear only on the open event ring');
+  }
+  assert.ok(worst < 1500, `${worst} canvas calls`); assert.ok(worstT < 50, `${worstT.toFixed(1)} ms`);
+  const dimmed = (code) => { const { ctx, log } = fakeCtx2(); drawScene(ctx, sceneFor(2, { list: { events: events.slice(0, 5), idx: [0, 1, 2, 3, 4], status: () => ({ code }) }, pos: 2, focus: 2, cap: 14 })); return log.alphas; };
+  assert.ok(dimmed('locked').includes(0.5), 'locked nodes are dimmed'); assert.ok(!dimmed('open').includes(0.5), 'open nodes are not'); assert.ok(dimmed('planned').includes(0.7));
+  const calls = (code) => { const { ctx, log } = fakeCtx2(); drawScene(ctx, sceneFor(2, { list: { events: events.slice(0, 1), idx: [0], status: () => ({ code }) }, pos: 0, focus: 0 })); return log.calls; };
+  assert.equal(new Set(['open', 'done', 'locked', 'planned', 'info'].map(calls)).size >= 4, true, 'each status draws a different shape');
+  const lockSrc = (rule2) => rule2; void lockSrc;
+});
+
+test('chakra rings: tapping finds the segment, the node or the hub; rotation moves the segments with it', () => {
+  const s = sceneFor(0); const { ctx } = fakeCtx2(); drawScene(ctx, s); const R = s.R, cx = s.cx, cy = s.cy;
+  const at = (r, th) => [cx + Math.sin(th) * r * R, cy - Math.cos(th) * r * R];
+  const mid0 = (s.layout[0].outer + s.layout[0].inner) / 2;
+  let h = hitTest(s, ...at(mid0, TAU / 10)); assert.deepEqual([h.kind, h.ring, h.index], ['segment', 0, 0], 'first yuga is just right of the top');
+  h = hitTest(s, ...at(mid0, TAU * 0.9)); assert.deepEqual([h.kind, h.ring, h.index], ['segment', 0, 4]);
+  s.rot[0] = alignRot(2, 5); h = hitTest(s, ...at(mid0, 0)); assert.equal(h.index, 2, 'after the ring turns, the aligned segment is at the top');
+  assert.equal(hitTest(s, cx, cy).kind, 'hub'); assert.equal(hitTest(s, 1, 1).kind, 'none');
+  const s1 = sceneFor(1); drawScene(fakeCtx2().ctx, s1); const midEra = (s1.layout[1].outer + s1.layout[1].inner) / 2; h = hitTest(s1, s1.cx + Math.sin(0.3) * midEra * s1.R, s1.cy - Math.cos(0.3) * midEra * s1.R); assert.deepEqual([h.kind, h.ring], ['segment', 1]);
+  const midY = (s1.layout[0].outer + s1.layout[0].inner) / 2; h = hitTest(s1, s1.cx, s1.cy - midY * s1.R); assert.deepEqual([h.kind, h.ring], ['segment', 0], 'a closed outer ring can still be tapped to change yuga');
+  const evs = [{ id: 'a', label: 'A', kind: 'History', year: 'Legend', level: 1 }, { id: 'b', label: 'B', kind: 'History', year: 'Legend', level: 2 }];
+  const s2 = sceneFor(2, { list: { events: evs, idx: [0, 1], status: () => ({ code: 'open' }) }, pos: 0.5, focus: 0, cap: 14 }); drawScene(fakeCtx2().ctx, s2);
+  assert.equal(s2.nodes.length, 2); h = hitTest(s2, s2.nodes[1].x + 5, s2.nodes[1].y - 5); assert.deepEqual([h.kind, h.index], ['node', 1]);
+  assert.deepEqual(wrapLines('The Churning of the Ocean of Milk and more', 16, 2).length, 2); assert.ok(wrapLines('The Churning of the Ocean of Milk and more', 16, 2)[1].endsWith('…')); assert.deepEqual(wrapLines('Short', 16, 2), ['Short']);
+});
+
+test('chakra dial: five yuga arcs, the current one lit with a progress arc, two inner rings that turn (CSS) and stop with reduced motion', () => {
+  const svg = dialSvg({ cur: 2, fracs: [0, 0, 0.5, 0, 0] });
+  assert.equal((svg.match(/class="dial-seg/g) || []).length, 5); assert.equal((svg.match(/dial-seg on/g) || []).length, 1); assert.equal((svg.match(/class="dial-prog"/g) || []).length, 1);
+  assert.match(svg, /dial-r1/); assert.match(svg, /dial-r2/); assert.match(svg, /aria-hidden="true"/); assert.equal((dialSvg({}).match(/dial-seg on/g) || []).length, 0);
+  assert.match(dialLabel({ cur: 2, fracs: [0, 0, 0.5, 0, 0], levels: [4, 4, 4, 4, 4] }), /Dvapara Yuga, 2 of 4 levels done/); assert.equal(dialLabel({}), 'Chakra of the yugas');
+  assert.match(cssText, /\.dial-r1 \{ animation: dial-cw[^}]*\}/); assert.match(cssText, /\.reduce-motion \*[^}]*animation: none/); assert.match(cssText, /prefers-reduced-motion: reduce\) \{ \* \{[^}]*animation: none/);
+  const dials = htmlText.match(/<[^>]*data-dial[^>]*>/g); assert.ok(dials.length >= 8, 'a dial on the chakra, start, picker, pause, settings, win, fail and error screens');
+  for (const screen of ['screen-chakra', 'screen-character', 'screen-start', 'screen-pause', 'screen-settings', 'screen-win', 'screen-fail', 'screen-error']) { const a = htmlText.indexOf(`id="${screen}"`); const b = htmlText.indexOf('\n  <div id="screen-', a + 10); assert.ok(htmlText.slice(a, b < 0 ? undefined : b).includes('data-dial'), `${screen} has the dial`); }
+});
+
+test('chakra click: a synthesized tick, only when sound is on, never throws without audio', () => {
+  const made = []; const node = (k) => ({ connect() {}, start() { made.push(k + ' start'); }, stop() {}, frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } });
+  const ac = { currentTime: 0, state: 'running', destination: {}, createOscillator: () => node('osc'), createGain: () => node('gain') };
+  let on = true; const c = createClick({ enabled: () => on, ctxFactory: () => ac });
+  assert.equal(c.play(), true); assert.ok(made.includes('osc start')); on = false; made.length = 0; assert.equal(c.play(), false); assert.equal(made.length, 0, 'sound off: nothing plays');
+  assert.equal(createClick({ ctxFactory: () => { throw new Error('no audio'); } }).play(), false);
+  const src = ['click.js', 'view.js'].map((f) => readFile(new URL(`src/chakra/${f}`, ROOT2), 'utf8')); return Promise.all(src).then(([a]) => assert.ok(!/fetch\(|new Audio|\.mp3|\.ogg|\.wav/.test(a), 'no audio files'));
+});
+
+// A fake page for the chakra screen: every element records its listeners, so tests press keys and taps the way a browser would.
+function fakePage({ reduced = true, synth = 0, click = null, sound = () => true, progressDone = [] } = {}) {
+  const els = {}; const rafq = [];
+  const mkEl = (id) => { const h = {}; const el = { id, h, hidden: false, inert: false, textContent: '', innerHTML: '', value: '', dataset: {}, style: {}, attrs: {}, children: [], scrollTop: 0, clientHeight: 300, width: 360, height: 560,
+    addEventListener: (t, f) => { (h[t] ||= []).push(f); }, setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, removeAttribute(k) { delete this.attrs[k]; },
+    classList: { add() {}, remove() {}, toggle() {} }, focus() { doc.activeElement = el; }, click() { (h.click || []).forEach((f) => f({ target: el, preventDefault() {} })); }, closest() { return null; }, querySelector: () => null, querySelectorAll: () => [], isConnected: true,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 360, height: 560 }), matches: () => false, getContext: () => fakeCtx2().ctx, setPointerCapture() {}, replaceChildren() {}, append() {} }; return el; };
+  const doc = { hidden: false, activeElement: null, getElementById: (id) => (els[id] ||= mkEl(id)), addEventListener() {}, createElement: () => mkEl('x') };
+  const press = (id, key) => (els[id].h.keydown || []).forEach((f) => f({ key, preventDefault() {}, target: els[id] }));
+  const prevRO = globalThis.ResizeObserver, prevRAF = globalThis.requestAnimationFrame; globalThis.ResizeObserver = class { observe() {} }; globalThis.requestAnimationFrame = (f) => { rafq.push(f); return rafq.length; };
+  const plays = { n: 0 }; const clicker = click || { play() { plays.n++; return true; } };
+  const read = async (p) => JSON.parse(await readFile(new URL(p, ROOT2), 'utf8'));
+  const store = createEventStore({ synth, fetchFn: async (url) => { try { const j = await read(url); return { ok: true, status: 200, json: async () => j }; } catch { return { ok: false, status: 404 }; } } });
+  const played = []; const chakra = createChakra({ doc, store, getProgress: () => ({ completed: Object.fromEntries(progressDone.map((m) => [m, { best: 1 }])) }), reach: { getReachCounts: async () => null }, reducedMotion: () => reduced, onPlay: (e) => played.push(e), click: clicker, soundOn: sound });
+  const frame = (ms) => { const cbs = rafq.splice(0); for (const f of cbs) f(performance.now() + ms); };
+  return { els, press, chakra, plays, played, frame, rafq, doc, restore() { globalThis.ResizeObserver = prevRO; globalThis.requestAnimationFrame = prevRAF; } };
+}
+
+test('chakra view: rings open and close like a vault (instant with reduced motion), Enter opens, Escape and Back close, and the hierarchy is a list too', async () => {
+  const p = fakePage({ reduced: true });
+  try {
+    await p.chakra.open(); let st = p.chakra._state(); assert.equal(st.level, 0); assert.equal(p.els['screen-chakra'].dataset.level, '0');
+    assert.match(p.els['ch-items'].innerHTML, /Satya[\s\S]*Treta[\s\S]*Dvapara[\s\S]*Kali[\s\S]*Kalki/, 'yugas as a plain list'); assert.match(p.els['ch-items'].innerHTML, /here/, 'the current yuga is marked in words');
+    p.press('ch-stage', 'ArrowRight'); assert.match(p.els['ch-live'].textContent, /Kali Yuga, 4 of 5/, 'arrow keys move between segments and announce'); // the current yuga is Dvapara (3 of 5)
+    p.press('ch-stage', 'Enter'); await new Promise((r) => setTimeout(r, 30)); st = p.chakra._state();
+    assert.equal(st.level, 1); assert.equal(st.yuga, 3); assert.equal(st.eras, 5); assert.equal(st.anim, false, 'reduced motion: no animation'); assert.equal(p.els['screen-chakra'].dataset.level, '1');
+    assert.match(p.els['ch-items'].innerHTML, /3102/, 'eras as a plain list'); assert.equal(p.els['ch-back'].hidden, false); assert.equal(p.els['ch-path'].textContent, 'Kali');
+    p.press('ch-stage', 'Enter'); st = p.chakra._state(); assert.equal(st.level, 2); assert.equal(st.ring, 5, 'first era of Kali has five events'); assert.match(p.els['ch-path'].textContent, /Kali .* 3102/);
+    p.press('ch-stage', 'ArrowRight'); assert.equal(p.chakra._state().focus, 1);
+    p.press('ch-stage', 'Enter'); assert.equal(p.els['ch-card'].hidden, false, 'Enter on an event opens its card'); assert.equal(p.els['ch-card-title'].textContent, 'The Buddha'); assert.match(p.els['ch-card-meta'].textContent, /^(History|Tradition|Invented) · /);
+    p.els['screen-chakra'].h.keydown.forEach((f) => f({ key: 'Escape', preventDefault() {} })); assert.equal(p.els['ch-card'].hidden, true, 'Escape closes the card first'); assert.equal(p.chakra._state().level, 2);
+    p.els['screen-chakra'].h.keydown.forEach((f) => f({ key: 'Escape', preventDefault() {} })); assert.equal(p.chakra._state().level, 1, 'Escape closes a ring');
+    p.els['ch-back'].click(); st = p.chakra._state(); assert.equal(st.level, 0, 'Back closes the next one'); p.els['screen-chakra'].h.keydown.forEach((f) => f({ key: 'Escape', preventDefault() {} })); assert.equal(p.chakra._state().level, 0, 'nothing below the top');
+    p.chakra._go.openYuga(2); await new Promise((r) => setTimeout(r, 30)); assert.equal(p.chakra._state().level, 1); assert.equal(p.chakra._state().yuga, 2);
+  } finally { p.restore(); }
+});
+
+test('chakra view: locked events are named locked, show a card with a disabled Play, and the reached line stays "Be among the first"', async () => {
+  const p = fakePage({ reduced: true });
+  try {
+    await p.chakra.open(); p.chakra._go.openYuga(3); await new Promise((r) => setTimeout(r, 30));
+    const era = p.chakra._state(); const kali = JSON.parse(await readFile(new URL('data/events/kali.json', ROOT2), 'utf8')).events.sort((a, b) => a.order - b.order);
+    const target = kali.findIndex((e) => e.id === 'kal-l14'); let eraIdx = 0; const eras = groupEras(kali); eras.forEach((g, i) => { if (target >= g.from && target < g.to) eraIdx = i; });
+    p.chakra._go.openEra(eraIdx); const local = target - eras[eraIdx].from; assert.equal(p.chakra._state().level, 2);
+    p.chakra._go.setFocus(local, { announce: false }); p.press('ch-stage', 'Enter'); await new Promise((r) => setTimeout(r, 20));
+    assert.equal(p.els['ch-card-title'].textContent, 'The Night Report of Pataliputra'); assert.match(p.els['ch-card-status'].innerHTML, /Locked: finish Escape from Hastinapur first/);
+    assert.equal(p.els['ch-play'].attrs['aria-disabled'], 'true'); p.els['ch-play'].click(); assert.equal(p.played.length, 0, 'a locked Play does nothing'); assert.match(p.els['ch-live'].textContent, /Locked/);
+    assert.equal(p.els['ch-card-reach'].textContent, 'Be among the first'); assert.ok(p.els['ch-card-intro'].textContent.length > 20); assert.match(p.els['ch-card-meta'].textContent, /^Tradition|^Invented|^History/);
+    assert.ok(/-webkit-line-clamp:\s*2/.test(rule('.ch-intro')), 'the card intro is cut at two lines');
+  } finally { p.restore(); }
+  const q = fakePage({ reduced: true, progressDone: ['dvapara-escape'] });
+  try { await q.chakra.open(); q.chakra._go.openYuga(3); await new Promise((r) => setTimeout(r, 30)); q.chakra._go.openEra(1); q.chakra._go.setFocus(0, { announce: false }); q.press('ch-stage', 'Enter'); const open = q.els['ch-play'].attrs['aria-disabled']; void open; } finally { q.restore(); }
+});
+
+test('chakra view: thousands of events page by rotation, with Prev and Next, Page keys, the list, and clamping at both ends', async () => {
+  const p = fakePage({ reduced: true, synth: 2000 });
+  try {
+    await p.chakra.open(); p.chakra._go.openYuga(3); await new Promise((r) => setTimeout(r, 40)); const eras = p.chakra._state().eras; assert.ok(eras <= 6);
+    p.chakra._go.openEra(0); let st = p.chakra._state(); assert.ok(st.ring > st.cap, `${st.ring} events on a ring of ${st.cap} slots`);
+    assert.ok(st.rows <= 16, `only the visible list rows exist (${st.rows})`);
+    p.els['ch-next'].click(); st = p.chakra._state(); assert.equal(st.focus, Math.floor(st.cap / 2), 'Next turns the ring by half a ring');
+    p.els['ch-prev'].click(); p.els['ch-prev'].click(); assert.equal(p.chakra._state().focus, 0, 'clamped at the start');
+    p.press('ch-stage', 'PageDown'); assert.equal(p.chakra._state().focus, Math.floor(st.cap / 2)); p.press('ch-stage', 'End'); st = p.chakra._state(); assert.equal(st.focus, st.ring - 1, 'End goes to the last event'); assert.ok(p.chakra._state().pos >= st.ring - 2);
+    p.press('ch-stage', 'ArrowRight'); assert.equal(p.chakra._state().focus, st.ring - 1, 'clamped at the end'); p.press('ch-stage', 'Home'); assert.equal(p.chakra._state().focus, 0);
+    assert.match(p.els['ch-count'].textContent, /\d+ events/); assert.ok(p.chakra._state().rows <= 16);
+  } finally { p.restore(); }
+});
+
+test('chakra view: with motion on, the vault turn animates, clunks once with a caption, and stops; idle turning pauses when the tab is hidden; sound off is silent', async () => {
+  const p = fakePage({ reduced: false });
+  try {
+    await p.chakra.open(); p.frame(0); const idle0 = p.chakra._state().idle.slice(); p.frame(500); p.frame(1000); const idle1 = p.chakra._state().idle;
+    assert.ok(idle1[0] !== idle0[0] && idle1[1] !== idle0[1], 'the rings turn slowly on their own'); assert.ok(Math.sign(idle1[0] - idle0[0]) !== Math.sign(idle1[1] - idle0[1]), 'in opposite directions');
+    p.chakra._go.openYuga(0); await new Promise((r) => setTimeout(r, 30)); assert.equal(p.chakra._state().anim, true, 'a turn is under way'); assert.equal(p.plays.n, 0, 'the clunk comes at the end, not the start');
+    p.frame(700); assert.equal(p.chakra._state().anim, true); p.frame(900); assert.equal(p.plays.n, 1, 'one clunk when the rings lock'); assert.equal(p.els['ch-cue'].textContent, '[Clunk]', 'and a caption for it');
+    p.frame(2000); assert.equal(p.chakra._state().anim, false); assert.equal(p.chakra._state().level, 1); assert.equal(p.plays.n, 1, 'never twice');
+    const before = p.rafq.length; p.doc.hidden = true; p.frame(100); p.frame(100); assert.equal(p.rafq.length, 0, 'no frames are scheduled while the tab is hidden'); void before;
+  } finally { p.restore(); }
+  const q = fakePage({ reduced: false, sound: () => false });
+  try { await q.chakra.open(); q.chakra._go.openYuga(1); await new Promise((r) => setTimeout(r, 30)); q.frame(1100); q.frame(1100); assert.equal(q.plays.n, 0, 'sound off: no click'); assert.ok(!q.els['ch-cue']?.textContent, 'and no caption for a sound that did not play'); } finally { q.restore(); }
+  const r = fakePage({ reduced: true });
+  try { await r.chakra.open(); r.frame(0); r.frame(2000); assert.deepEqual(r.chakra._state().idle, [0, 0, 0, 0], 'reduced motion: no idle turning at all'); } finally { r.restore(); }
+});
+
+test('chakra screen: no zoom, pan or pinch is left anywhere, controls are 44 px, and the page fills with the wheel', async () => {
+  const view = await readFile(new URL('src/chakra/view.js', ROOT2), 'utf8'); const scene = await readFile(new URL('src/chakra/scene.js', ROOT2), 'utf8');
+  for (const gone of ['zoomAt', 'ZOOM_STEP', 'cameraWhole', 'cameraYuga', 'ch-zoom', 'id="ch-in"', 'id="ch-out"', 'introT', "addEventListener('wheel'", 'pinch =', 'setTarget', 'clampCamera']) { assert.ok(!view.includes(gone) && !scene.includes(gone) && !htmlText.includes(gone), `${gone} is gone`); }
+  assert.ok(!/\bch-whole\b|Whole wheel|Zoom in|Zoom out/.test(htmlText), 'no zoom buttons or slider');
+  for (const id of ['ch-back', 'ch-prev', 'ch-next', 'ch-list-btn', 'ch-continue']) assert.match(htmlText, new RegExp(`id="${id}"`));
+  for (const id of ['ch-back', 'ch-prev', 'ch-next']) assert.match(htmlText.match(new RegExp(`<button id="${id}"[^>]*>`))[0], /aria-label="[^"]+"/);
+  assert.match(htmlText, /id="ch-list-btn"[^>]*aria-expanded="false"/); assert.match(htmlText, /role="group" aria-label="Chakra, ring 1 of 3, Yugas" aria-describedby="ch-help"/);
+  assert.match(rule('.ch-stage'), /position:\s*absolute;\s*inset:\s*0/); assert.match(rule('.ch-stage-wrap'), /position:\s*relative/);
+  assert.ok(/\.ch-stage canvas \{[^}]*width: 100%; height: 100%/.test(cssText));
+  assert.ok(!/animation/.test(cssText.slice(cssText.indexOf('/* ---------- Chakra home'))), 'no CSS animation in the chakra screen');
+  assert.ok(!view.includes('prompt(') && !/https?:\/\//.test(view), 'no network call to a third party');
+});
+
 for (const run of queue) await run(); // run in order, awaiting async tests
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? 'PASS' : 'FAIL'}  ${n}${m ? `\n      ${m}` : ''}`);
 const failed = results.filter((r) => r[0] === 'FAIL').length;

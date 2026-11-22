@@ -154,3 +154,41 @@ export function windowRange(scrollTop, viewH, rowH, n, buffer = 4) {
   const last = Math.min(n, Math.ceil((scrollTop + viewH) / rowH) + buffer);
   return [first, Math.max(first, last)];
 }
+
+// ---- rings: yugas -> eras -> events ----
+// Short year for a node: "Legend", "2600 BCE", "5c BCE". Never more than 8 characters, never a made-up year (the first year written is used).
+export function compactYear(text) {
+  if (typeof text !== 'string' || text === 'Legend' || !/\d/.test(text)) return 'Legend';
+  const dated = text.replace(/\b\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/i, '');
+  const m = dated.match(/(\d{1,4})(?:st|nd|rd|th)?(\s+century)?/i); if (!m) return 'Legend';
+  const v = yearValue(text); const era = v != null && v < 0 ? 'BCE' : 'CE';
+  const s = `${m[1]}${m[2] || /century/i.test(dated) && Number(m[1]) < 100 ? 'c' : ''} ${era}`;
+  return s.length > 8 ? s.replace(' ', '') : s;
+}
+
+// Splits a yuga's events (already in order) into eras for the middle ring. An event may carry its own `era` (a dynasty or age name): those are used as written.
+// Otherwise events are cut into runs of about five, named by the span of years they hold, or "Legend" when none is dated. Returns [{label, from, to, count}] where from..to-1 index into events.
+export function groupEras(events, { per = 5, max = 6 } = {}) {
+  const n = events.length; if (!n) return [];
+  const spans = [];
+  if (events.some((e) => typeof e.era === 'string' && e.era.trim())) {
+    for (let i = 0; i < n; i++) { const name = (events[i].era || '').trim() || 'Other'; const last = spans[spans.length - 1]; if (last && last.label === name) last.to = i + 1; else spans.push({ label: name, from: i, to: i + 1 }); }
+  } else {
+    const k = Math.max(1, Math.min(max, Math.round(n / per)));
+    for (let g = 0; g < k; g++) { const from = Math.floor((g * n) / k), to = Math.floor(((g + 1) * n) / k); if (to > from) spans.push({ from, to, label: '' }); }
+    for (const s of spans) {
+      const dated = events.slice(s.from, s.to).filter((e) => yearValue(e.year) != null).sort((x, y) => yearValue(x.year) - yearValue(y.year)).map((e) => compactYear(e.year));
+      if (!dated.length) { s.label = 'Legend'; continue; }
+      const f = dated[0], l = dated[dated.length - 1]; const era = (t) => t.split(' ').pop();
+      s.label = f === l ? f : era(f) === era(l) ? `${f.split(' ')[0]}\u2013${l}` : `${f}\u2013${l}`;
+    }
+    const seen = {}; for (const s of spans) seen[s.label] = (seen[s.label] || 0) + 1;
+    const idx = {}; for (const s of spans) if (seen[s.label] > 1) { idx[s.label] = (idx[s.label] || 0) + 1; s.label += ` ${idx[s.label]}`; }
+  }
+  return spans.map((s) => ({ ...s, count: s.to - s.from }));
+}
+
+// Progress of each yuga: levels in the spine, levels finished. Used by the wheel and the compact dial.
+export function yugaProgress(spine, ctx) {
+  return YUGAS.map((y) => { const lv = spine.filter((s) => s.yuga === y.id && s.level != null); return { id: y.id, levels: lv.length, done: lv.filter((s) => isDone(s, ctx)).length }; });
+}

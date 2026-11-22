@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { validateEvents, statusOf, effectivePrereq, currentYuga, spineMap, yearValue, filterEvents, windowRange, accessibleName, YUGA_IDS } from '../chakra/model.js';
 import { validateCounts, createStaticReachProvider, reachText } from '../chakra/reach.js';
-import { buildPositions, viewOf, cameraWhole, cameraYuga, clusterVisible, drawScene, maxZoom, levelOf, CELL } from '../chakra/scene.js';
 import { makeSynthetic } from '../chakra/synth.js';
 import { createEventStore } from '../chakra/data.js';
 import { MISSIONS } from '../missions.js';
@@ -14,13 +13,6 @@ const readJson = async (p) => JSON.parse(await readFile(ROOT + p, 'utf8'));
 const loadAll = async () => { const index = await readJson('data/events/index.json'); const shards = {}; for (const y of YUGA_IDS) shards[y] = (await readJson(`data/events/${y}.json`)).events; return { index, shards, all: YUGA_IDS.flatMap((y) => shards[y]) }; };
 const ctxFor = (index, completed = {}) => ({ spineById: spineMap(index.spine), completed });
 const good = () => ({ id: 'x-1', yuga: 'kali', year: 'c. 300 BCE', label: 'A test event', kind: 'History', level: null, order: 1, requires: null, source: 'test note', intro: 'This is a long enough introduction for the check.' });
-const fakeCtx = () => { // counts every canvas call so tests can bound the work done per frame
-  const log = { calls: 0 };
-  const fn = () => { log.calls++; return grad; }; const grad = { addColorStop() { log.calls++; } };
-  const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : fn), set: (t, k, v) => { t[k] = v; return true; } });
-  return { ctx, log };
-};
-
 export function registerChakra(test) {
   test('chakra data: shards and index load, 58 events, 22 levels, and tools/check-events.mjs passes', async () => {
     const { index, all } = await loadAll();
@@ -120,36 +112,6 @@ export function registerChakra(test) {
     assert.deepEqual(names({ kind: 'Invented', text: 'pepper' }), ['kal-l15']);
   });
 
-  test('scale: a synthetic 2,000-event yuga validates, filters, clusters and draws inside the budget, with bounded work per frame', () => {
-    const t0 = performance.now(); const before = process.memoryUsage().heapUsed;
-    const events = makeSynthetic(2000, 'kali', 1);
-    assert.deepEqual(validateEvents(events), []); const tValidate = performance.now() - t0;
-    assert.ok(tValidate < 800, `validate 2,000 took ${tValidate.toFixed(0)} ms`);
-    const pos = buildPositions(events.length, 3); const W = 360, H = 560;
-    const f0 = performance.now(); const n1 = filterEvents(events, { text: 'event 4', kind: 'History', from: -100, to: 1500 }); const tFilter = performance.now() - f0;
-    assert.ok(tFilter < 100, `filter took ${tFilter.toFixed(0)} ms`); assert.ok(n1.length > 0 && n1.length < events.length);
-    const k1 = cameraYuga(3, W, H).k; const cap = Math.ceil(W / CELL + 2) * Math.ceil(H / CELL + 2) * 1; // most items one screen can hold
-    let worstFrame = 0, worstCalls = 0, worstItems = 0;
-    for (const cam of [cameraWhole(W, H), cameraYuga(3, W, H), { ...cameraYuga(3, W, H), k: k1 * 4 }, { ...cameraYuga(3, W, H), k: maxZoom(k1, 2000) }]) {
-      const items = clusterVisible(pos, viewOf(cam, W, H), null, 17); worstItems = Math.max(worstItems, items.length);
-      const { ctx, log } = fakeCtx(); const hits = []; const t1 = performance.now();
-      const s = { W, H, dpr: 1, cam, rot: 0, alpha: 1, t: 1, motion: true, yugas: Array(5).fill({ count: 1, levels: 0, done: 0 }), sel: 3, cur: 3, pos, events, mask: null, selIdx: 17, status: () => ({ code: 'info' }), level: levelOf(cam.k, k1), hits };
-      drawScene(ctx, s); worstFrame = Math.max(worstFrame, performance.now() - t1); worstCalls = Math.max(worstCalls, log.calls);
-      assert.ok(hits.length <= cap, `${hits.length} hit targets, cap ${cap}`);
-    }
-    assert.ok(worstItems <= cap, `${worstItems} items on screen`);
-    assert.ok(worstCalls < 4000, `${worstCalls} canvas calls in one frame`); // independent of the 2,000 events
-    assert.ok(worstFrame < 60, `slowest frame ${worstFrame.toFixed(1)} ms`);
-    for (const top of [0, 1234, 2000 * 68 - 400]) { const [a, b] = windowRange(top, 400, 68, 2000, 3); assert.ok(b - a <= 16, `${b - a} rows`); } // list rows in the DOM stay a screenful
-    const heap = (process.memoryUsage().heapUsed - before) / 1048576; assert.ok(heap < 40, `heap grew ${heap.toFixed(1)} MB`);
-  });
-  test('scale: clusters expand as the camera zooms in, and a filter mask hides non-matches from clusters', () => {
-    const events = makeSynthetic(500, 'kali', 1); const pos = buildPositions(500, 3); const W = 360, H = 560; const k1 = cameraYuga(3, W, H).k;
-    const far = clusterVisible(pos, viewOf(cameraYuga(3, W, H), W, H)); const near = clusterVisible(pos, viewOf({ ...cameraYuga(3, W, H), k: maxZoom(k1, 500), cx: pos.xs[250], cy: pos.ys[250] }, W, H));
-    assert.ok(far.every((c) => c.n >= 1) && far.some((c) => c.n > 1)); assert.ok(near.filter((c) => c.n === 1).length > 3);
-    const mask = new Uint8Array(500); mask[10] = 1; const only = clusterVisible(pos, viewOf(cameraYuga(3, W, H), W, H), mask);
-    assert.equal(only.length, 1); assert.equal(only[0].n, 1);
-  });
   test('data store: a shard loads once, sorted, a failed load is not cached, and ?synth adds in-memory events only to Kali', async () => {
     const files = { 'events/index.json': await readJson('data/events/index.json') }; for (const y of YUGA_IDS) files[`events/${y}.json`] = await readJson(`data/events/${y}.json`);
     let calls = 0, fail = true;

@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { parseLayout } from '../world.js';
-import { createSim, step, stateHash } from '../sim.js';
-import { COMBAT, ATTACKS } from '../combat.js';
+import { createSim, step, stateHash, createRng } from '../sim.js';
+import { COMBAT, ATTACKS, MAX_ATTACKERS, WINDUP_GAP, spawnEnemy, forceAttack } from '../combat.js';
 import { closeAbilities, grantAbility, bestWeapon, PREREQ, ABILITY_IDS } from '../abilities.js';
 import { makeFrame } from '../renderer.js';
 import { createObjectives, updateObjectives, objectivesStatus, validateObjectiveDefs } from '../objectives.js';
@@ -29,8 +29,8 @@ function run(sim, secs, c = {}, first = {}) {
 const at = (sim, x, y, face = 0) => { sim.chariot.x = x; sim.chariot.y = y; sim.chariot.moveAngle = face; sim.chariot.angle = face; };
 const types = (ev) => ev.map((e) => e.type);
 function mkEnemy(kind = 'raider') {
-  const R = COMBAT[kind];
-  return { id: 'a1', kind, x: 0, y: 0, hp: 3, maxHp: 3, radius: R.radius, angle: Math.PI, homeAngle: Math.PI, homeX: 0, homeY: 0, patrol: [], target: 0, phase: 0, state: 'patrol', stateT: 0, aware: true, sightT: 0, lostT: 0, cd: 0, lastX: 0, lastY: 0, spin: 1, kx: 0, ky: 0, kbT: 0, stagDur: 0, fleeing: false, poise: 0, fell: false };
+  const e = spawnEnemy({ id: 'a1', kind, x: 0, y: 0, angle: Math.PI }, createRng(1));
+  e.aware = true; return e;
 }
 // One raider east of the player, close enough to reach.
 function duel({ weapon = 'sword', abilities = FULL, kind = 'raider', dist = 30 } = {}) {
@@ -39,7 +39,7 @@ function duel({ weapon = 'sword', abilities = FULL, kind = 'raider', dist = 30 }
   sim.enemies = [{ ...mkEnemy(kind), x: 200 + dist, y: 100 }];
   return sim;
 }
-const winding = (sim, t0) => { const e = sim.enemies[0]; e.state = 'windup'; e.stateT = t0; e.angle = Math.PI; return e; };
+const winding = (sim, t0) => forceAttack(sim, sim.enemies[0], { phase: 'windup', t: t0 }); // the enemy is t0 seconds into its wind-up, facing the player
 const PIT = ['##############', '#S...________#', '#............#', '#...........1#', '##############'];
 
 export async function registerPhase2(test) {
@@ -47,7 +47,7 @@ export async function registerPhase2(test) {
   test('phase2 progression: shunya -> staff -> sword -> bow. A weapon is never granted before the one it builds on', () => {
     assert.deepEqual(PREREQ, { sword: ['staff'], bow: ['sword'] });
     const sim = mk(OPEN, {}, { abilities: [] });
-    assert.deepEqual(sim.abilities, ['walk', 'run']); assert.equal(sim.player.weapon, 'none');
+    assert.deepEqual(sim.abilities, ['walk', 'run', 'dodge', 'push']); assert.equal(sim.player.weapon, 'none', 'you start with bare hands');
     assert.equal(grantAbility(sim, 'bow'), false); assert.equal(grantAbility(sim, 'sword'), false);
     assert.equal(grantAbility(sim, 'staff'), true); assert.equal(sim.player.weapon, 'staff');
     assert.equal(grantAbility(sim, 'bow'), false, 'bow still needs the sword');
@@ -71,9 +71,9 @@ export async function registerPhase2(test) {
   });
 
   // ---------- dodge ----------
-  test('phase2 dodge: needs the ability, costs 25 stamina, rolls ~110 units, 0.24 s of invulnerability inside a 0.36 s roll, cooldown', () => {
+  test('phase2 dodge: always available, costs 25 stamina, rolls ~110 units, 0.24 s of invulnerability inside a 0.36 s roll, cooldown', () => {
     const none = mk(OPEN, {}, { abilities: [] }); at(none, 100, 100);
-    assert.ok(!types(run(none, 0.1, {}, { dodge: true })).includes('dodge'), 'no ability, no roll');
+    assert.ok(types(run(none, 0.1, {}, { dodge: true })).includes('dodge'), 'the roll is there from the first level, no lesson needed');
     const sim = mk(); at(sim, 100, 100);
     const ev = run(sim, 0.02, { mx: 1 }, { dodge: true });
     assert.ok(types(ev).includes('dodge')); assert.equal(sim.player.state, 'dodge');
@@ -106,7 +106,7 @@ export async function registerPhase2(test) {
   test('phase2 dodge: a roll through a raider\'s strike avoids the damage; the same strike without a roll hurts', () => {
     const hit = duel(); winding(hit, 0.3); run(hit, 0.3); assert.equal(hit.health, 90, 'baseline: the blow lands for 10');
     const sim = duel(); winding(sim, 0.3);
-    const ev = run(sim, 0.3, { mx: 0, my: 1 }, { dodge: true });
+    const ev = run(sim, 0.5, { mx: 0, my: 1 }, { dodge: true });
     assert.equal(sim.health, 100); assert.ok(types(ev).includes('whiff'), 'the blow whiffs'); assert.ok(!types(ev).includes('hurt'));
   });
 
@@ -117,8 +117,7 @@ export async function registerPhase2(test) {
   });
 
   // ---------- shove ----------
-  test('phase2 shove: needs push, knocks a raider back ~80 units, staggers it, deals no damage, costs 15 stamina', () => {
-    const no = duel({ abilities: ['staff'] }); assert.ok(!types(run(no, 0.4, {}, { push: true })).includes('shove'));
+  test('phase2 shove: knocks a raider back ~80 units, staggers it, deals no damage, costs 15 stamina', () => {
     const sim = duel(); const e = sim.enemies[0]; const x0 = e.x; e.state = 'chase'; e.cd = 5;
     const ev = run(sim, 0.5, {}, { push: true });
     assert.ok(types(ev).includes('shove') && types(ev).includes('shove-hit'));
@@ -171,17 +170,17 @@ export async function registerPhase2(test) {
   });
 
   // ---------- sword ----------
-  test('phase2 sword: light cut 1 damage 10 stamina; heavy cut 2 damage 30 stamina with a 0.46 s visible wind-up; heavy needs stamina; the staff is free', () => {
+  test('phase2 sword: light cut 1 damage 8 stamina; heavy cut 3 damage 30 stamina with a 0.46 s visible wind-up; heavy needs stamina; the staff costs little', () => {
     const sim = duel(); const e = sim.enemies[0]; e.state = 'chase'; e.cd = 9;
     const ev = run(sim, 0.3, {}, { attack: true });
-    assert.ok(types(ev).includes('swing') && types(ev).includes('hit-enemy')); assert.equal(e.hp, 2); assert.equal(Math.round(sim.player.stamina), 90);
+    assert.ok(types(ev).includes('swing') && types(ev).includes('hit-enemy')); assert.equal(e.hp, 2); assert.equal(Math.round(sim.player.stamina), 92);
     const h = duel(); const he = h.enemies[0]; he.state = 'chase'; he.cd = 9;
     run(h, 0.3, {}, { heavy: true }); assert.equal(he.hp, 3, 'no damage during the wind-up'); assert.equal(h.player.state, 'attack');
     const f = makeFrame(h, { shake: 0, flash: 0 }, false); assert.equal(f.attack.kind, 'heavy'); assert.ok(f.attack.progress > 0.3 && f.attack.progress < 0.5);
-    run(h, 0.3); assert.equal(he.hp, 1, 'then 2 damage'); assert.equal(Math.round(h.player.stamina), 70);
+    run(h, 0.3); assert.equal(he.hp, 0, 'then 3 damage'); assert.equal(he.state, 'down'); assert.equal(Math.round(h.player.stamina), 70);
     const tired = duel(); tired.player.stamina = 20;
     assert.ok(types(run(tired, 0.2, {}, { heavy: true })).includes('tired')); assert.equal(tired.player.state, 'idle');
-    const staff = duel({ weapon: 'staff' }); run(staff, 0.3, {}, { attack: true }); assert.equal(staff.player.stamina, 100);
+    const staff = duel({ weapon: 'staff' }); run(staff, 0.3, {}, { attack: true }); assert.equal(Math.round(staff.player.stamina), 95);
   });
 
   test('phase2 sword: swap cycles staff -> sword -> bow -> hands; 1/2/3 pick directly; only earned weapons', () => {
@@ -192,20 +191,21 @@ export async function registerPhase2(test) {
     const half = mk(OPEN, {}, { abilities: ['staff'], weapon: 'staff' }); run(half, 0.05, {}, { w3: true }); assert.equal(half.player.weapon, 'staff');
   });
 
-  test('phase2 block: holding block stops the blow for 15 stamina and no damage; only in front; block needs the sword', () => {
+  test('phase2 block: holding block stops the blow for 15 stamina and no damage; only in front; any weapon (or none) can block', () => {
     const sim = duel(); run(sim, 0.4, { hold: { block: true } }); winding(sim, 0.3); // the guard is already up: a block, not a parry
     run(sim, 0.4, { hold: { block: true } });
     assert.equal(sim.health, 100); assert.equal(sim.player.state, 'block');
     assert.equal(Math.round(sim.player.stamina), 85);
     const back = duel(); at(back, 200, 100, Math.PI); run(back, 0.4, { hold: { block: true } }); winding(back, 0.3);
     run(back, 0.4, { hold: { block: true } }); assert.equal(back.health, 90, 'a blow from behind is not blocked');
-    const staff = duel({ weapon: 'staff' }); winding(staff, 0.3); run(staff, 0.4, { hold: { block: true } }); assert.equal(staff.health, 90, 'no sword, no block');
+    const staff = duel({ weapon: 'staff' }); run(staff, 0.4, { hold: { block: true } }); winding(staff, 0.3); run(staff, 0.4, { hold: { block: true } }); assert.equal(staff.health, 100, 'a staff blocks');
+    const bare = duel({ weapon: 'none' }); run(bare, 0.4, { hold: { block: true } }); winding(bare, 0.3); run(bare, 0.4, { hold: { block: true } }); assert.equal(bare.health, 100, 'so do bare hands');
   });
 
   test('phase2 parry: a block raised just before the blow lands (0.25 s window) staggers the raider 1.8 s; a late block only blocks', () => {
     const sim = duel(); const e = winding(sim, 0.4);
     const ev = run(sim, 0.2, { hold: { block: true } });
-    assert.ok(types(ev).includes('parry')); assert.equal(e.state, 'stagger'); assert.equal(e.stagDur, COMBAT.block.parryStagger); assert.equal(sim.health, 100);
+    assert.ok(types(ev).includes('parry')); assert.equal(e.state, 'stagger'); assert.equal(e.stagDur, COMBAT.block.parryStagger); assert.equal(sim.health, 100); assert.equal(e.open, true, 'a parry opens the enemy for a finisher');
     const late = duel(); run(late, 0.6, { hold: { block: true } });
     const e2 = winding(late, 0.4); const ev2 = run(late, 0.2, { hold: { block: true } });
     assert.ok(!types(ev2).includes('parry') && types(ev2).includes('blocked')); assert.notEqual(e2.state, 'stagger');
@@ -267,7 +267,7 @@ export async function registerPhase2(test) {
     let t0 = null; let hurtAt = null;
     for (let i = 0; i < 240 && hurtAt == null; i++) {
       const ev = step(sim, DT, { mx: 0, my: 0, action: A(), hold: {} });
-      if (e.state === 'windup' && t0 == null) t0 = sim.elapsed;
+      if (e.atk?.phase === 'windup' && t0 == null) t0 = sim.elapsed;
       if (ev.some((x) => x.type === 'hurt')) hurtAt = sim.elapsed;
     }
     assert.ok(t0 != null && hurtAt != null, 'the raider winds up then strikes');
@@ -277,20 +277,22 @@ export async function registerPhase2(test) {
     const f = makeFrame(w, { shake: 0, flash: 0 }, false); assert.ok(f.enemies[0].windup > 0.5 && f.enemies[0].windup < 1);
   });
 
-  test('phase2 AI: a hit raider staggers readably, recovers to alert, and cannot be stun-locked (0.6 s poise)', () => {
+  test('phase2 AI: a hit raider staggers readably, goes back to the fight, and cannot be stun-locked (0.6 s poise)', () => {
     const sim = duel(); const e = sim.enemies[0]; e.state = 'chase'; e.cd = 9;
-    run(sim, 0.2, {}, { attack: true }); assert.equal(e.state, 'stagger'); assert.equal(e.stagDur, ATTACKS.light.stagger);
-    run(sim, 0.9); assert.equal(e.state, 'alert'); assert.ok(e.poise > 0);
+    run(sim, 0.2, {}, { attack: true }); assert.equal(e.state, 'stagger'); assert.equal(e.stagDur, ATTACKS['sword.cut1'].stagger);
+    for (let i = 0; i < 90 && e.state === 'stagger'; i++) run(sim, DT); // (the hit-stop adds a few ticks)
+    assert.notEqual(e.state, 'stagger'); assert.ok(e.poise > 0, 'poise lockout after the stagger');
     at(sim, e.x - 30, e.y, 0); sim.player.cooldown = 0;
     run(sim, 0.2, {}, { attack: true }); assert.notEqual(e.state, 'stagger', 'right after recovering it cannot be staggered again'); assert.equal(e.hp, 1);
   });
 
-  test('phase2 AI: two raiders never wind up at the same time', () => {
+  test('phase2 AI: two raiders may attack together but never start a wind-up within 0.35 s of each other', () => {
     const sim = mk(OPEN, {}, { weapon: 'sword' }); at(sim, 200, 100, 0);
     sim.enemies = [{ ...mkEnemy(), id: 'a1', x: 228, y: 90, state: 'chase', cd: 0, lastX: 200, lastY: 100 }, { ...mkEnemy(), id: 'a2', x: 228, y: 115, state: 'chase', cd: 0, lastX: 200, lastY: 100 }];
-    let both = 0; let some = 0;
-    for (let i = 0; i < 400; i++) { step(sim, DT, { mx: 0, my: 0, action: A(), hold: {} }); sim.health = 100; const n = sim.enemies.filter((e) => e.state === 'windup').length; if (n > 1) both++; if (n === 1) some++; }
-    assert.equal(both, 0); assert.ok(some > 0);
+    const starts = []; let most = 0;
+    for (let i = 0; i < 600; i++) { for (const e of step(sim, DT, { mx: 0, my: 0, action: A(), hold: {} })) if (e.type === 'windup') starts.push(sim.clock); sim.health = 100; most = Math.max(most, sim.enemies.filter((e) => e.atk).length); }
+    assert.ok(starts.length >= 4, `they attack (${starts.length} wind-ups)`); assert.ok(most <= MAX_ATTACKERS);
+    for (let i = 1; i < starts.length; i++) assert.ok(starts[i] - starts[i - 1] >= WINDUP_GAP - 2 * DT, `wind-ups ${(starts[i] - starts[i - 1]).toFixed(2)} s apart`);
   });
 
   test('phase2 sparring partner: telegraphs 0.8 s, never hurts, cannot be driven off, and a block or parry works on it', () => {
@@ -390,7 +392,7 @@ export async function registerPhase2(test) {
   });
 
   test('phase2 hud: every new event has a spoken line and a bracketed caption; arrows and stamina are text', async () => {
-    const mkEl = () => ({ hidden: false, textContent: '', children: [], dataset: {}, classList: { toggle() {}, add() {}, remove() {} }, style: {}, setAttribute() {}, replaceChildren(...c) { this.children = c; }, append() {}, querySelector: () => null });
+    const mkEl = () => ({ hidden: false, textContent: '', children: [], dataset: {}, classList: { toggle() {}, add() {}, remove() {} }, style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, replaceChildren(...c) { this.children = c; }, append() {}, querySelector: () => null });
     const els = {}; const doc = { getElementById: (id) => (els[id] ||= mkEl()), createElement: mkEl, querySelector: () => null, querySelectorAll: () => [] };
     let now = 0; const hud = createHud(doc, { now: () => now });
     const spoken = {};
@@ -401,9 +403,10 @@ export async function registerPhase2(test) {
     }
     assert.match(spoken.shot[0], /4 left/); assert.match(spoken['hit-enemy'][1], /Sword/); assert.match(spoken.ability[0], /dodge roll/);
     hud.setVitals({ stamina: 0.2, arrows: 3, draw: 1, drawing: true });
-    assert.match(els['stamina-text'].textContent, /20%.*tired/); assert.match(els['arrows-text'].textContent, /3, draw 100% \(full\)/);
+    assert.match(els['stat-stamina'].attrs['aria-valuetext'], /20 percent, tired/); assert.equal(els['stat-stamina'].attrs['aria-valuenow'], '20'); assert.equal(els['arrows-text'].textContent, '3');
+    assert.match(els['stat-arrows'].attrs['aria-label'], /Arrows 3, draw 100 percent, full/);
     hud.setAbilities({ abilities: ['walk', 'run', 'dodge', 'push', 'climb', 'staff', 'sword'], weapon: 'sword' });
-    assert.match(els['kit-text'].textContent, /^Sword\. Can dodge roll, shove, climb/);
+    assert.equal(els['kit-text'], undefined, 'no gear sentence in the HUD');
   });
 
   test('phase2 hud: buttons show only for what is earned; every button in index.html has an accessible name', async () => {
@@ -412,12 +415,15 @@ export async function registerPhase2(test) {
     const mkEl = () => ({ hidden: false, textContent: '', children: [], dataset: {}, classList: { toggle() {}, add() {}, remove() {} }, style: {}, setAttribute() {}, replaceChildren() {}, append() {} });
     const els = {}; const doc = { getElementById: (id) => (els[id] ||= mkEl()), createElement: mkEl, querySelector: (q) => btns.find((b) => q.includes(`"${b.dataset.control}"`)) || null, querySelectorAll: (q) => btns.filter((b) => q.includes(`"${b.dataset.control}"`)) };
     const hud = createHud(doc); const vis = () => Object.fromEntries(btns.map((b) => [b.dataset.control, !b.hidden]));
+    const fists = { attack: true, heavy: true, block: true, aim: false, dodge: true, push: true, swap: false, do: true, crouch: false };
+    hud.setAbilities({ abilities: ['walk', 'run'], weapon: 'none' });
+    assert.deepEqual(vis(), fists, 'unarmed: fists, heavy, block, dodge and shove are all there on touch');
     hud.setAbilities({ abilities: ['walk', 'run', 'staff'], weapon: 'staff' });
-    assert.deepEqual(vis(), { attack: true, heavy: false, block: false, aim: false, dodge: false, push: false, swap: false, do: true, crouch: false });
+    assert.deepEqual(vis(), fists);
     hud.setAbilities({ abilities: FULL, weapon: 'sword' });
-    assert.deepEqual(vis(), { attack: true, heavy: true, block: true, aim: false, dodge: true, push: true, swap: true, do: true, crouch: true });
+    assert.deepEqual(vis(), { ...fists, swap: true, crouch: true });
     hud.setAbilities({ abilities: FULL, weapon: 'bow' });
-    assert.deepEqual(vis(), { attack: false, heavy: false, block: false, aim: true, dodge: true, push: true, swap: true, do: true, crouch: true });
+    assert.deepEqual(vis(), { ...fists, aim: true, swap: true, crouch: true });
     const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
     for (const c of ['attack', 'heavy', 'block', 'aim', 'dodge', 'push', 'swap', 'do']) assert.match(html, new RegExp(`data-control="${c}"[^>]*aria-label="[^"]{4,}"`), `${c} button has an accessible name`);
   });
@@ -454,7 +460,8 @@ export async function registerPhase2(test) {
     assert.equal(w.rules, 2); assert.equal(w.checkpoints.length, mission.objectives.length);
     assert.deepEqual(validateObjectiveDefs(forge.objectives, w.checkpoints.length), []);
     assert.deepEqual(w.pickups.map((k) => k.kind).sort(), ['arrows', 'bow', 'climb', 'dodge', 'push', 'sword']);
-    assert.equal(w.spawns.filter((s) => s.kind === 'target').length, 6); assert.equal(w.spawns.filter((s) => s.kind === 'sparrer').length, 1); assert.equal(w.spawns.filter((s) => s.kind === 'raider').length, 2);
+    assert.equal(w.spawns.filter((s) => s.kind === 'target').length, 6); assert.equal(w.spawns.filter((s) => s.kind === 'sparrer').length, 1); assert.equal(w.spawns.filter((s) => s.kind !== 'target' && s.kind !== 'sparrer').length, 0, 'the road soldiers come as arena waves, not as standing guards');
+    assert.deepEqual(forge.objectives.filter((o) => o.type === 'waves' || o.type === 'defeat-captain').map((o) => o.type), ['waves', 'defeat-captain']);
     assert.ok(w.obstacles.some((o) => o.kind === 'ledge') && w.obstacles.some((o) => o.kind === 'pit'));
     for (const d of mission.dialogue) assert.ok(d.text.length <= 140, `${d.id} is ${d.text.length} characters`);
     for (const e of mission.events) assert.ok(['History', 'Tradition', 'Invented'].includes(e.label) && e.year);
@@ -477,7 +484,7 @@ export async function registerPhase2(test) {
 
   const ts = 72; const w0 = parseLayout(forge);
   const pick = (sim, kind) => { const k = sim.pickups.find((p) => p.kind === kind && !p.taken); at(sim, k.x - 20, k.y, 0); return run(sim, 0.1, {}, { interact: true }); };
-  const cp = (sim, n) => { const c = w0.checkpoints[n - 1]; at(sim, c.x, c.y); return run(sim, 0.05); };
+  const cp = (sim, n) => { const c = w0.checkpoints[n - 1]; at(sim, c.x, c.y); const ev = []; for (let i = 0; i < 30 && sim.checkpoint < n; i++) ev.push(...run(sim, DT)); return ev; }; // (a hit-stop can hold the world for a few ticks)
   // Plays the whole yard with scripted controls (warping between yards). Returns the sim and every event.
   function playForge(seed = 11) {
     const sim = createSim(parseLayout(forge), { timerMode: 'off', abilities: ['crouch', 'vault', 'staff'], weapon: 'staff', seed });
@@ -493,12 +500,18 @@ export async function registerPhase2(test) {
     all.push(...pick(sim, 'bow')); all.push(...pick(sim, 'arrows'));
     for (const y of [5.5, 2.5]) { at(sim, 33.5 * ts, y * ts, 0); go(1.1, { hold: { aim: true } }); go(0.01); go(0.9); }
     all.push(...cp(sim, 3));
-    at(sim, 40 * ts, 3.5 * ts, 0); go(0.1, {}, { w2: true }); // the road: put the bow away, then a simple bot turns the raiders aside with light cuts
-    for (let i = 0; i < 60 * 40 && sim.status === 'playing' && sim.enemies.some((e) => e.kind === 'raider' && e.state !== 'down'); i++) {
-      const e = sim.enemies.filter((x) => x.kind === 'raider' && x.state !== 'down').sort((a, b) => Math.hypot(a.x - sim.chariot.x, a.y - sim.chariot.y) - Math.hypot(b.x - sim.chariot.x, b.y - sim.chariot.y))[0];
-      const dx = e.x - sim.chariot.x; const dy = e.y - sim.chariot.y; const d = Math.hypot(dx, dy); const near = d < 52;
-      all.push(...step(sim, DT, { mx: near ? (dx / d) * 0.1 : dx / d, my: near ? (dy / d) * 0.1 : dy / d, run: false, hold: {}, action: A(near && i % 12 === 0 ? { attack: true } : {}) }));
-      sim.health = Math.max(sim.health, 40); // this test is about the route and the objectives, not the health balance
+    at(sim, 40 * ts, 6.5 * ts, 0); go(0.1, {}, { w2: true }); // the road: put the bow away, then a simple bot fights the three waves with the sword
+    for (let i = 0; i < 60 * 150 && sim.status === 'playing' && sim.objectives.items.some((o) => (o.id === 'arena' || o.id === 'captain') && o.state !== 'done'); i++) {
+      const alive = sim.enemies.filter((x) => x.kind !== 'sparrer' && x.state !== 'down');
+      const e = alive.sort((a, b) => Math.hypot(a.x - sim.chariot.x, a.y - sim.chariot.y) - Math.hypot(b.x - sim.chariot.x, b.y - sim.chariot.y))[0];
+      let c = { mx: 0, my: 0, run: false, hold: {} }; let a = {};
+      if (e) {
+        const dx = e.x - sim.chariot.x; const dy = e.y - sim.chariot.y; const d = Math.hypot(dx, dy); const near = d < 56;
+        c = { mx: near ? (dx / d) * 0.1 : dx / d, my: near ? (dy / d) * 0.1 : dy / d, run: false, hold: {} };
+        if (near && i % 14 === 0) a = { attack: true };
+      } else { c = { mx: 0, my: 0, run: false, hold: {} }; }
+      all.push(...step(sim, DT, { ...c, action: A(a) }));
+      sim.health = Math.max(sim.health, 40); // this test is about the route and the objectives, not the health balance (the fairness tests cover that)
     }
     all.push(...cp(sim, 4));
     return { sim, all };
@@ -507,9 +520,10 @@ export async function registerPhase2(test) {
     const { sim, all } = playForge();
     assert.deepEqual(all.filter((e) => e.type === 'ability').map((e) => e.id), ['dodge', 'push', 'climb', 'sword', 'bow']);
     const st = Object.fromEntries(sim.objectives.items.map((o) => [o.id, o.state]));
-    for (const id of ['roll', 'shove', 'climb', 'light', 'heavy', 'block', 'posts', 'turn', 'cp1', 'cp2', 'cp3', 'cp4']) assert.equal(st[id], 'done', `${id}: ${JSON.stringify(st)}`);
+    for (const id of ['roll', 'shove', 'climb', 'light', 'heavy', 'block', 'posts', 'arena', 'captain', 'cp1', 'cp2', 'cp3', 'cp4']) assert.equal(st[id], 'done', `${id}: ${JSON.stringify(st)}`);
     assert.equal(sim.status, 'won');
-    assert.ok(sim.enemies.filter((e) => e.kind === 'raider').every((e) => e.state === 'down'));
+    assert.ok(sim.enemies.filter((e) => e.kind !== 'sparrer').every((e) => e.state === 'down'), 'every soldier of the road is down (yielded)');
+    assert.deepEqual(all.filter((e) => e.type === 'wave-start').map((e) => e.n), [1, 2, 3]); assert.ok(all.some((e) => e.type === 'captain-down'));
     assert.ok(all.some((e) => e.type === 'objective'));
   });
 
@@ -518,11 +532,11 @@ export async function registerPhase2(test) {
     assert.equal(stateHash(a.sim), stateHash(b.sim)); assert.deepEqual(a.all, b.all);
   });
 
-  test('phase2 mission: the lessons cannot be skipped (without the climb lesson the ledge holds); raiders stand only in the final yard', () => {
+  test('phase2 mission: the lessons cannot be skipped (without the climb lesson the ledge holds); no soldier stands in a lesson yard', () => {
     const sim = createSim(parseLayout(forge), { timerMode: 'off', abilities: ['crouch', 'vault', 'staff'], weapon: 'staff', seed: 3 });
     at(sim, 20.1 * ts, 5.5 * ts, 0); run(sim, 0.3, { mx: 1 }); run(sim, 0.1, { mx: 1 }, { jump: true, interact: true }); run(sim, 2, { mx: 1 });
     assert.ok(sim.chariot.x < 21 * ts, `the ledge holds (${sim.chariot.x})`);
-    assert.ok(sim.enemies.filter((e) => e.kind === 'raider').every((e) => e.x / ts > 39), 'raiders only in the final yard');
+    assert.ok(sim.enemies.every((e) => e.kind === 'sparrer'), 'the lesson yards hold only the sparring partner');
     assert.ok(sim.enemies.filter((e) => e.kind === 'sparrer').every((e) => e.x / ts > 22 && e.x / ts < 30));
   });
 

@@ -20,8 +20,14 @@ export function createMinimap(canvas, world) {
         ctx.fillRect(-r / 1.4, -r / 1.4, r * 1.4, r * 1.4); ctx.restore();
         if (p.state === 'next') { ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), X(p.x), Y(p.y) - 11); }
       });
-      ctx.fillStyle = '#ff5a48';
-      frame.guards.forEach((g) => { ctx.beginPath(); ctx.arc(X(g.x), Y(g.y), 4, 0, Math.PI * 2); ctx.fill(); });
+      // Enemies: a round dot that is calm, a square dot when it is hunting (shape as well as colour), a hollow ring once it is down.
+      for (const g of frame.enemies || []) {
+        const x = X(g.x), y = Y(g.y); const hunting = g.state === 'chase' || g.state === 'windup' || g.state === 'alert' || g.aware;
+        ctx.fillStyle = '#ff5a48'; ctx.strokeStyle = '#ff5a48'; ctx.lineWidth = 1.5;
+        if (g.state === 'down') { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.stroke(); }
+        else if (hunting) ctx.fillRect(x - 4, y - 4, 8, 8);
+        else { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
+      }
       const c = frame.chariot;
       ctx.save(); ctx.translate(X(c.x), Y(c.y)); ctx.rotate(c.angle);
       ctx.fillStyle = '#ffb42e'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;

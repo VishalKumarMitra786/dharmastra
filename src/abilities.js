@@ -1,6 +1,9 @@
 // Abilities and the foot-hurdle rules (vault, crouch). Pure: no DOM, no randomness.
 export const ABILITY_IDS = ['walk', 'run', 'crouch', 'vault', 'dodge', 'push', 'climb', 'staff', 'sword', 'bow'];
 export const START_ABILITIES = ['walk', 'run'];
+// Fighting exists from the first level: a fist combo, block and parry need no ability, and a rules-2 run always has the roll and the shove.
+// (They stay in the save list as lessons a teacher can still name, but a missing id can never leave the traveller unable to defend.)
+export const COMBAT_BASICS = ['dodge', 'push'];
 export const WEAPONS = ['none', 'staff', 'sword', 'bow'];
 export const WEAPON_ORDER = ['staff', 'sword', 'bow']; // the order they are earned and the order Swap cycles through
 // Earned in order: shunya (hands) -> staff -> sword -> bow. A weapon is never granted before the one it builds on.

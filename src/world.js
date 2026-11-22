@@ -16,7 +16,7 @@ export function parseLayout(layout) {
   if (!start) throw new Error('Layout has no start tile (S)');
   if (checkpoints.length === 0 || checkpoints.includes(undefined)) throw new Error('Checkpoints must be numbered 1..n without gaps');
   const guards = (layout.guards || []).map((g) => ({
-    speed: g.speed,
+    speed: g.speed, kind: typeof g.kind === 'string' ? g.kind : undefined, hp: Number.isFinite(g.hp) ? g.hp : undefined, // armed patrol: the sim turns it into an enemy of this kind
     path: g.path.map(([x, y]) => ({ x: x * ts, y: y * ts })),
   }));
   const extras = parseExtras(layout, rows, ts);
@@ -30,10 +30,10 @@ export function parseLayout(layout) {
 }
 
 // Rules-2 tiles: = low wall (vault), ~ low beam (crouch), , tall grass (cover), H marked ledge (climb), _ pit or ditch (a shoved raider falls in; nobody walks in),
-// k l m n p q pickup spots, a b c d raider and sparring-partner spawns, t u training posts.
+// k l m n p q pickup spots, a-h enemy spawns (kind in entities: raider, spearman, swordsman, shield, archer, captain, sparrer), t u training posts.
 // They are never merged into `walls`; the sim decides when an obstacle is solid. Details live in layout.entities keyed by the letter.
 const OBSTACLE_KINDS = { '=': 'lowwall', '~': 'beam', ',': 'grass', H: 'ledge', _: 'pit' };
-const PICKUP_CHARS = 'klmnpq'; const ENEMY_CHARS = 'abcd'; const TARGET_CHARS = 'tu';
+const PICKUP_CHARS = 'klmnpq'; const ENEMY_CHARS = 'abcdefgh'; const TARGET_CHARS = 'tu';
 const DEFAULT_ENTITIES = { k: { kind: 'staff' }, a: { kind: 'raider', hp: 3 } };
 const safeKind = (v, d) => (typeof v === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(v) ? v : d);
 
@@ -58,7 +58,7 @@ function parseExtras(layout, rows, ts) {
           const hp = Number.isFinite(def.hp) ? Math.max(1, Math.min(20, Math.floor(def.hp))) : 3;
           const patrol = Array.isArray(def.patrol) ? def.patrol.filter((q) => Array.isArray(q) && q.every(Number.isFinite)).map(([x, y]) => ({ x: x * ts, y: y * ts })) : [];
           const k = safeKind(def.kind, 'raider');
-          spawns.push({ ...pos, id: `a${++na}`, kind: k === 'sparrer' ? 'sparrer' : 'raider', hp, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
+          spawns.push({ ...pos, id: `a${++na}`, kind: k, hp: Number.isFinite(def.hp) ? hp : undefined, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
         }
       }
     }

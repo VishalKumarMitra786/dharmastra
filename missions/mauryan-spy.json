@@ -69,13 +69,13 @@
   {
    "id": "hit-1",
    "speaker": "Vasuka",
-   "text": "A lantern swept us. Back into the shadow of the posts!",
+   "text": "A watchman's blade. Back into the shadow of the posts!",
    "trigger": "hit"
   },
   {
    "id": "hit-2",
    "speaker": "{name}",
-   "text": "You hit a post. Steady now, nothing broken.",
+   "text": "Breathe. Roll out of reach, then answer.",
    "trigger": "hit"
   },
   {
@@ -101,6 +101,18 @@
    "speaker": "{name}",
    "text": "No glory in it. Just a wall that held and a city still asleep.",
    "trigger": "win"
+  },
+  {
+   "id": "seen-1",
+   "speaker": "Sudatta",
+   "text": "Seen. Break his line of sight, or fight only the one in front of you.",
+   "trigger": "seen"
+  },
+  {
+   "id": "down-1",
+   "speaker": "Sudatta",
+   "text": "He yields. Keep to the shadows and go on.",
+   "trigger": "enemy-down"
   }
  ],
  "events": [

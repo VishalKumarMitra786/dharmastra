@@ -186,14 +186,21 @@ export function createRenderer2D(canvas) {
   // A raider is a square-shouldered body with a club, so it differs from the round guard by shape as well as colour.
   function drawRaider(e, flash) {
     const st = e.state || 'patrol'; const r = 17;
-    if (st === 'windup') { // the telegraph: a wedge in front fills up as the blow gets closer, and is full when it lands (shape and fill level, not colour)
-      const u = Math.max(0, Math.min(1, e.windup || 0));
+    const att = e.attack;
+    if (e.aim) { // an archer's aim line: thin and dashed while aiming, thick and solid once locked
+      ctx.save(); ctx.strokeStyle = e.aim.locked ? '#ffc247' : C.light; ctx.lineWidth = e.aim.locked ? 5 : 2; ctx.setLineDash(e.aim.locked ? [] : [8, 6]); ctx.beginPath(); ctx.moveTo(e.aim.x0, e.aim.y0); ctx.lineTo(e.aim.x1, e.aim.y1); ctx.stroke(); ctx.restore();
+    }
+    if (st === 'windup' && !(att && att.ranged)) { // the telegraph: a wedge of the attack's reach and arc fills up as the blow gets closer, and is full when it lands. Unblockable = a full circle with double bars (shape, not colour)
+      const u = Math.max(0, Math.min(1, e.windup || 0)); const reach = att ? att.reach : 50; const half = att ? (att.unblockable ? Math.PI : att.halfArc) : 0.7;
       ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0);
-      ctx.fillStyle = `rgba(255,154,42,${0.12 + 0.4 * u})`; ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([6, 5]);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 50, -0.7, 0.7); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 14 + 36 * u, -0.7, 0.7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(255,154,42,${0.12 + 0.4 * u})`; ctx.strokeStyle = C.light; ctx.lineWidth = att && att.unblockable ? 5 : 3; ctx.setLineDash(att && att.unblockable ? [] : [6, 5]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, -half, half); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+      const rr = reach * (0.25 + 0.75 * u); ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rr, -half, half); ctx.closePath(); ctx.fill();
+      if (att && att.unblockable) { ctx.fillStyle = C.light; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillText('!!', 0, -reach - 6); }
       ctx.restore();
     }
+    if (e.guard) { ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0); ctx.strokeStyle = C.light; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, r + 8, -1, 1); ctx.stroke(); ctx.restore(); } // raised shield: an arc in front
+    if (e.open) { ctx.save(); ctx.translate(e.x, e.y - 44); ctx.fillStyle = '#ffc247'; ctx.strokeStyle = C.outline; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(18, 0); ctx.lineTo(0, 14); ctx.lineTo(-18, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = C.outline; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('OPEN', 0, 3); ctx.restore(); }
     if (e.kind === 'sparrer') { // the teacher's sparring partner: round, with a dashed ring and a thin practice stick
       ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle || 0);
       ctx.fillStyle = flash > 0 ? '#ffffff' : '#7a5a8a'; ctx.strokeStyle = C.light; ctx.lineWidth = 4;
@@ -207,7 +214,8 @@ export function createRenderer2D(canvas) {
     ctx.fillStyle = flash > 0 ? '#ffffff' : C.raider; ctx.strokeStyle = C.raiderEdge; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.rect(-r, -r, r * 2, r * 2); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = C.outline; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.moveTo(r, -r); ctx.lineTo(-r, r); ctx.stroke();
-    ctx.save(); ctx.rotate(st === 'windup' ? -1.9 : st === 'stagger' ? 1.6 : -0.6); ctx.strokeStyle = C.staff; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(34, 0); ctx.stroke(); ctx.restore(); // club
+    const long = e.weapon === 'spear'; const th = st === 'windup' ? (long ? -0.3 : -1.9 + 1.6 * (e.windup || 0) * 0) : st === 'active' ? (long ? 0 : 0.7) : st === 'stagger' ? 1.6 : -0.6; const ext = long ? (st === 'active' ? 78 : st === 'windup' ? 34 : 56) : e.weapon === 'bow' ? 22 : 34;
+    ctx.save(); ctx.rotate(th); ctx.strokeStyle = e.weapon === 'sword' || e.weapon === 'blade' ? '#dfe5ec' : C.staff; ctx.lineWidth = long || e.weapon === 'sword' ? 4 : 7; ctx.beginPath(); ctx.moveTo(e.weapon === 'bow' ? 4 : 6, 0); ctx.lineTo(ext, 0); ctx.stroke(); if (e.weapon === 'bow') { ctx.beginPath(); ctx.arc(14, 0, 14, -1.2, 1.2); ctx.stroke(); } ctx.restore(); // weapon
     ctx.fillStyle = C.light; ctx.beginPath(); ctx.moveTo(r + 10, 0); ctx.lineTo(r, -7); ctx.lineTo(r, 7); ctx.closePath(); ctx.fill();
     ctx.restore();
   }

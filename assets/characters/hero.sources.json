@@ -26,14 +26,5 @@
    "sha256": "0f3641d651ae3d00ad6b4ccee43142edb109d3bd909d27d9e4139ef1beed8625",
    "bytes": 897521
   }
- },
- "facePatch": {
-  "x0": -0.74,
-  "x1": 0.74,
-  "y0": 6.12,
-  "y1": 7.95,
-  "nx": 9,
-  "ny": 12,
-  "unitsMetres": false
  }
 }

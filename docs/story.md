@@ -30,6 +30,9 @@ On a monsoon night in timber-walled Pataliputra, the traveller takes a sealed re
 - Time as a repeating wheel of yugas, ending in the Kali Yuga. Tradition, Legend.
 - The traveller who walks it as a courier. Invented, Legend.
 
+## Level design v2
+The CEO asked for more exciting levels (fights, a rival, a clock). The proposal is in docs/design/levels-v2.md, with data in docs/design/levels-v2-data.json. It is not built yet.
+
 ## Open story threads
 - Between eras the traveller walks a hub (see prototypes/time-chakra/). No dialogue for it exists yet. It needs one short passage per transition.
 - Mauryan screenplay notes keep Vasuka a few paces behind the traveller, because the JSON hit lines say "we". If the design wants him fixed at the wharf, those two lines need changing in the JSON.

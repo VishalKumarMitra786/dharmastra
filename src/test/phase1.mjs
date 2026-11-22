@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseLayout } from '../world.js';
 import { createSim, step, stateHash, createRng } from '../sim.js';
 import { makeFrame } from '../renderer.js';
-import { sightRange } from '../combat.js';
+import { sightRange, ATTACKS } from '../combat.js';
 import { createObjectives, updateObjectives, objectivesStatus, validateObjectiveDefs } from '../objectives.js';
 import { PROGRESS_KEY, loadProgress, saveProgress, validateProgress, defaultProgress, recordCompletion } from '../progress.js';
 
@@ -99,27 +99,26 @@ export function registerPhase1(test) {
     return s;
   };
 
-  test('phase1 staff: needs the staff, hits in the arc, 1 damage, staggers 1.2 s, cooldown gates', () => {
+  test('phase1 fists and staff: you start unarmed and can fight (jab: 1 damage, short stagger); the staff sweeps further; the swing needs no ability', () => {
     const bare = arena();
-    assert.ok(!run(bare, 0.5, {}, { attack: true }).some((e) => e.type === 'hit-enemy'), 'no staff, no swing');
-    const sim = arena({ abilities: ['staff'] });
-    assert.equal(sim.player.weapon, 'staff');
-    const ev = run(sim, 0.3, {}, { attack: true });
-    assert.ok(ev.some((e) => e.type === 'hit-enemy' && e.id === 'a1'));
-    const e = sim.enemies[0];
-    assert.equal(e.hp, 2); assert.equal(e.state, 'stagger');
-    run(sim, 0.1, {}, { attack: true }); assert.equal(e.hp, 2, 'cooldown blocks an immediate second swing');
-    run(sim, 0.8); assert.equal(e.state, 'stagger');
-    run(sim, 0.4); assert.notEqual(e.state, 'stagger', 'stagger lasts about 1.2 s');
+    assert.equal(bare.player.weapon, 'none');
+    const ev = run(bare, 0.3, {}, { attack: true });
+    assert.ok(ev.some((e) => e.type === 'swing' && e.via === 'fists'));
+    assert.ok(ev.some((e) => e.type === 'hit-enemy' && e.id === 'a1' && e.via === 'fists'), 'bare hands hit');
+    const e0 = bare.enemies[0]; assert.equal(e0.hp, 2); assert.equal(e0.state, 'stagger'); assert.equal(e0.stagDur, ATTACKS['fists.jab'].stagger);
+    const far = arena({ abilities: ['staff'] }); far.enemies[0].x = 180; // 80 away: past a fist (44) but inside a staff sweep (66 plus the step in)
+    assert.ok(run(far, 0.3, {}, { attack: true }).some((e) => e.type === 'hit-enemy' && e.via === 'staff'));
+    const fist = arena(); fist.enemies[0].x = 180;
+    assert.ok(!run(fist, 0.3, {}, { attack: true }).some((e) => e.type === 'hit-enemy'), 'a fist does not reach 80 units');
   });
 
-  test('phase1 staff: misses outside range or behind, and 3 hits put the enemy down', () => {
-    const far = arena({ abilities: ['staff'] }); far.enemies[0].x = 200;
+  test('phase1 melee misses outside range or behind; three hits put an enemy down (driven off, never killed on screen)', () => {
+    const far = arena({ abilities: ['staff'] }); far.enemies[0].x = 220;
     assert.ok(!run(far, 0.4, {}, { attack: true }).some((e) => e.type === 'hit-enemy'), 'out of range');
     const behind = arena({ abilities: ['staff'] }); behind.enemies[0].x = 60;
     assert.ok(!run(behind, 0.4, {}, { attack: true }).some((e) => e.type === 'hit-enemy'), 'behind the player');
     const sim = arena({ abilities: ['staff'] }); const e = sim.enemies[0]; const evs = [];
-    for (let i = 0; i < 3; i++) { e.x = 150; e.y = 60; e.state = e.hp ? 'patrol' : e.state; evs.push(...run(sim, 0.7, {}, { attack: true })); }
+    for (let i = 0; i < 3; i++) { e.x = 150; e.y = 60; e.state = e.hp ? 'patrol' : e.state; e.poise = 0; sim.player.comboT = 0; evs.push(...run(sim, 0.7, {}, { attack: true })); }
     assert.equal(e.hp, 0); assert.equal(e.state, 'down');
     assert.ok(evs.some((x) => x.type === 'enemy-down' && x.id === 'a1'));
     const f = makeFrame(sim, { shake: 0, flash: 0 }, false);
@@ -133,12 +132,13 @@ export function registerPhase1(test) {
     for (let i = 0; i < 240; i++) {
       const ev = step(sim, DT, { mx: 0, my: 0, action: A() });
       ev.forEach((e) => { if (e.type === 'seen') seen.push(e); if (e.type === 'hurt') hurts.push(e); });
-      states.add(sim.enemies[0].state);
+      states.add(sim.enemies[0].atk ? sim.enemies[0].atk.phase : sim.enemies[0].state); // windup, active and recover are the phases of an attack
     }
     assert.equal(seen.length, 1, 'seen is emitted once per sighting');
     for (const s of ['alert', 'chase', 'windup']) assert.ok(states.has(s), `passes through ${s}`);
     assert.ok(hurts.length >= 1 && hurts[0].amount === 10);
     assert.ok(sim.health <= 90);
+    assert.ok(hurts[0].from === 'a1' && Number.isFinite(hurts[0].dir), 'the hurt event says who and from where');
   });
 
   test('phase1 raider hearing: walking near alerts, crouching halves the range', () => {
@@ -158,7 +158,7 @@ export function registerPhase1(test) {
   test('phase1 pickup grants ability: interact within reach, once, equips the staff, fires events', () => {
     const rows = ['##########', '#Sk....1.#', '#.......1#', '##########'];
     const sim = mk(rows);
-    assert.deepEqual(sim.abilities, ['walk', 'run']);
+    assert.deepEqual(sim.abilities, ['walk', 'run', 'dodge', 'push'], 'the roll and the shove are always there; weapons are earned');
     at(sim, 200, 60);
     assert.ok(!run(sim, 0.1, {}, { interact: true }).some((e) => e.type === 'pickup'), 'too far');
     at(sim, 70, 60);
@@ -250,7 +250,7 @@ export function registerPhase1(test) {
     const f = makeFrame(legacy, { shake: 0, flash: 0 }, false);
     assert.deepEqual([f.enemies, f.pickups, f.obstacles, f.events], [[], [], [], []]);
     assert.equal(f.player.state, 'idle'); assert.equal(f.player.crouch, false); assert.equal(f.blood, true);
-    assert.deepEqual(f.attack, { active: false, progress: 0, angle: 0, kind: 'none', range: 0, hit: 0 }); // kind and range were added with the sword (phase 2)
+    assert.deepEqual(f.attack, { active: false, progress: 0, angle: 0, kind: 'none', via: 'none', id: '', step: 0, range: 0, halfArc: 0, hit: 0 });
     assert.deepEqual([f.targets, f.arrows], [[], []]);
     assert.equal(makeFrame(legacy, { shake: 0, flash: 0 }, false, {}, { blood: false }).blood, false);
     const sim = arena({ abilities: ['staff'] });

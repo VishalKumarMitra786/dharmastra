@@ -7,6 +7,7 @@
 // Meaning is never colour alone: checkpoints change height and style and carry a number or a check mark,
 // guards have a spear, a helmet, a ground ring and a facing wedge, and the player shows a ring while protected.
 // The caller passes in the THREE namespace so the large library is only downloaded when 3D is used.
+import { createSky } from './gfx/sky.js';
 import { followCamera, createCameraState, createOrbit, thirdPersonView, enemyIcon, vaultHop, burstSpec, burstColor, MAX_PARTICLES } from './camera.js';
 
 const CP = {
@@ -74,12 +75,17 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   gl.outputColorSpace = THREE.SRGBColorSpace;
   gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.25;
   const shadowsOn = (navigator.hardwareConcurrency || 8) > 4;
-  if (shadowsOn) { gl.shadowMap.enabled = true; gl.shadowMap.type = THREE.PCFSoftShadowMap; }
+  if (shadowsOn) { gl.shadowMap.enabled = true; gl.shadowMap.type = THREE.PCFShadowMap; }
   const fine = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
   const fancy = shadowsOn && (fine || /[?&]fx=1/.test(location.search)) && !/[?&]fx=0/.test(location.search); // bloom: desktops by default, phones only on request
   let composer = null;
   const scene = new THREE.Scene();
-  { const pm = new THREE.PMREMGenerator(gl); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32; pm.dispose(); }
+  // Image-based light: the generated sky is baked once per era into a PMREM environment (no sky shader is drawn per frame; the backdrop is the cheap dome below).
+  const envCache = new Map();
+  function setEnvironment(key) {
+    if (!envCache.has(key)) { const s = createSky(THREE, gl, key); envCache.set(key, s.env); s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
+    scene.environment = envCache.get(key); scene.environmentIntensity = 0.28;
+  }
   const camera = new THREE.PerspectiveCamera(48, 1, 10, 4200);
   const camState = createCameraState();
   const orbit = createOrbit();
@@ -162,7 +168,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
 
   let world = null; let theme = THEMES.default;
   let built = null;
-  let hero = null; let heroTop = null; let protectRing = null; let heroLook = null;
+  let hero = null; let heroWeapon = 'none'; let lastWeapon = 'none'; let heroTop = null; let protectRing = null; let heroLook = null;
   const enemies = []; const pickups = []; let obstacleGroup = null; let obstacleSig = -1; let heroStaff = null; let heroSword = null; let heroBow = null; let lastEventsFrame = null; const targets3 = []; const arrows3 = [];
   const guards = []; const npcs = []; const cps = []; const lamps = []; const boats = [];
   let lastNow = 0; let lost = false; let spawnAcc = 0;
@@ -193,9 +199,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   }
 
   // ---- Anime-style look for people: cel shading, a dark outline, big eyes ----
-  const toonGradient = (() => { const d = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1, THREE.RedFormat); d.minFilter = d.magFilter = THREE.NearestFilter; d.needsUpdate = true; return d; })();
   const toonCache = new Map();
-  function toon(color) { if (!toonCache.has(color)) toonCache.set(color, new THREE.MeshToonMaterial({ color, gradientMap: toonGradient })); return toonCache.get(color); }
+  function toon(color) { if (!toonCache.has(color)) toonCache.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.85 })); return toonCache.get(color); }
   const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a0f1f, side: THREE.BackSide });
   const eyeTexCache = new Map();
   function eyeTex(iris) {
@@ -212,6 +217,17 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     }));
     return eyeTexCache.get(iris);
   }
+
+  // ---- Authored humans: assets/characters/hero.glb through src/gfx/human. Loaded lazily after the first frame. Until it arrives (or if it fails) the
+  // articulated-shape people below are drawn, so the game never waits on it. Each person is a Group (game position and heading) holding the skinned model.
+  let kit = null; let humanLib = null; let disposed = false;
+  const ENEMY_LOOK = {
+    raider: ['raider', {}], spearman: ['soldier', { right: 'spear', left: 'none' }], swordsman: ['soldier', { right: 'sword', left: 'none' }], shield: ['soldier', { right: 'sword', left: 'shield' }],
+    archer: ['raider', { right: 'bow', left: 'none', tunicColor: '#6a5a3a' }], captain: ['boss', {}], sparrer: ['sparrer', {}],
+  };
+  function wrapHuman(L, scale = 1) { const H = kit.spawn(L); const g = new THREE.Group(); H.root.rotation.y = Math.PI / 2; g.add(H.root); if (scale !== 1) g.scale.setScalar(scale); g.userData = { H, human: true }; return g; }
+  function enemyHuman(kind, slot) { const [role, ov] = ENEMY_LOOK[kind] || ENEMY_LOOK.raider; return wrapHuman(humanLib.makeLook(role, 300 + slot * 7 + kind.length, { override: ov }), kind === 'captain' ? 1.1 : 1); }
+  const flashMat = (H, f) => { H.atlas.mat.emissive.setRGB(f, f * 0.9, f * 0.8); };
 
   // ---- People ----------------------------------------------------------------------------------------------------------
   // Faces +x. About 62 units tall. Limbs hang from pivots so a walk cycle is just a few rotations.
@@ -524,8 +540,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     for (let k = 0; k < n; k++) {
       const s = segs[Math.floor(rand() * segs.length)];
       const kind = k % 5;
-      const p = makePerson({ eyes: ['#3a7bd8', '#8a5a2a', '#3aa86a', '#9a4ad8'][k % 4], skin: skins[k % 4], top: tops[Math.floor(rand() * tops.length)], bottom: bottoms[k % 4], skirt: true, legsBare: true, turban: kind === 0 || kind === 3 ? tops[(k + 3) % tops.length] : undefined, hair: 0x1b1210, bun: kind === 2, pot: kind === 2, bundle: kind === 4 ? 0xc9a050 : undefined, sleeves: kind === 1 });
-      npcs.push({ g: p, s, len: Math.hypot(s.bx - s.ax, s.by - s.ay), speed: 26 + rand() * 24, off: rand(), idle: k % 7 === 6 });
+      const useKit = !!kit; const kitSeed = (k % 10) + 1;
+      const p = useKit ? wrapHuman(humanLib.makeLook(k % 9 === 4 ? 'elder' : 'townsperson', kitSeed)) : makePerson({ eyes: ['#3a7bd8', '#8a5a2a', '#3aa86a', '#9a4ad8'][k % 4], skin: skins[k % 4], top: tops[Math.floor(rand() * tops.length)], bottom: bottoms[k % 4], skirt: true, legsBare: true, turban: kind === 0 || kind === 3 ? tops[(k + 3) % tops.length] : undefined, hair: 0x1b1210, bun: kind === 2, pot: kind === 2, bundle: kind === 4 ? 0xc9a050 : undefined, sleeves: kind === 1 });
+      npcs.push({ H: p.userData.H, g: p, s, len: Math.hypot(s.bx - s.ax, s.by - s.ay), speed: 26 + rand() * 24, off: rand(), idle: k % 7 === 6 });
       built.add(p);
     }
   }
@@ -534,9 +551,15 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   function buildHero() {
     const h = theme.hero; const L = heroLook;
     const hex = (c) => parseInt(String(c).slice(1), 16);
-    if (hero) built?.remove(hero);
+    if (hero) { built?.remove(hero); hero.userData.H?.dispose(); }
+    if (kit) {
+      heroWeapon = lastWeapon; const L2 = humanLib.heroLook(L ? { ...L } : { body: 'm', skin: '#c68a5a', hair: '#1b1210', hairStyle: 'short', eyes: '#3a7bd8', outfitColor: '#ff8a1f', accent: '#e8432e' }, heroWeapon);
+      hero = wrapHuman(L2); const ring = new THREE.Mesh(new THREE.RingGeometry(24, 28, 24), new THREE.MeshBasicMaterial({ color: 0xfff4de, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.8; ring.visible = false; hero.add(ring); hero.userData.ring = ring; heroTop = null; heroStaff = heroSword = heroBow = null;
+      shadowed(hero); built?.add(hero); protectRing = ring; return;
+    }
     const topColor = L ? hex(L.outfitColor) : h.top;
-    heroTop = new THREE.MeshToonMaterial({ color: topColor, gradientMap: toonGradient, emissive: 0x000000 });
+    heroTop = new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.85, emissive: 0x000000 });
     hero = makePerson({
       eyes: L ? L.eyes : '#2fbf8a', skin: L ? hex(L.skin) : h.skin, top: topColor, topMat: heroTop, bottom: h.bottom, skirt: true, legsBare: true,
       scarf: L ? hex(L.accent) : h.scarf, bag: 0x6a4630, hair: L ? hex(L.hair) : h.hair, hairStyle: L ? L.hairStyle : 'short', bun: L?.hairStyle === 'bun', female: L ? L.body === 'f' : false,
@@ -598,7 +621,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     root.visible = false; return { root, by, shown: null };
   }
   function makeEnemy() {
-    const top = new THREE.MeshToonMaterial({ color: 0x3f6a4a, gradientMap: toonGradient, emissive: 0x000000 });
+    if (kit) return makeEnemyKit();
+    const top = new THREE.MeshStandardMaterial({ color: 0x3f6a4a, roughness: 0.85, emissive: 0x000000 });
     const g = makePerson({ eyes: '#e0a030', skin: 0x8a5a3a, top: 0x3f6a4a, topMat: top, bottom: 0x2b2018, turban: 0xa8402a, sleeves: true, bag: 0x4a3020, sash: 0xd08a2a, ring: [24, 29], ringColor: 0xff9a2a, ringAlways: true, wedge: true });
     const club = cyl(3, 1.6, 34, 6, mat(0x5a3a1c)); club.position.y = -32; g.userData.arms[1].add(club);
     const knob = ball(4.2, mat(0x3a2412)); knob.position.y = -48; g.userData.arms[1].add(knob);
@@ -613,6 +637,23 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
     for (const m of [teleFull, tele, ring]) { m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; m.position.y = 2; built.add(m); }
     return { g, top, icons, id: null, x: 0, y: 0, flash: 0, tele, teleFull, ring, kind: null };
   }
+  function makeEnemyKit() {
+    const g = new THREE.Group(); built.add(g);
+    const ringE = new THREE.Mesh(geo('enemyring', () => new THREE.RingGeometry(24, 29, 20)), new THREE.MeshBasicMaterial({ color: 0xff9a2a, side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
+    ringE.rotation.x = -Math.PI / 2; ringE.position.y = 0.8; g.add(ringE);
+    const nose = new THREE.Mesh(geo('wedge', () => new THREE.ConeGeometry(9, 22, 3)), new THREE.MeshBasicMaterial({ color: 0xff5a48, transparent: true, opacity: 0.85 })); nose.rotation.set(Math.PI / 2, 0, -Math.PI / 2); nose.position.set(36, 1.5, 0); g.add(nose); // facing wedge: shape, not colour
+    const icons = makeIcons(); built.add(icons.root);
+    const teleFull = new THREE.Mesh(wedgeGeo(0.9), new THREE.MeshBasicMaterial({ color: 0xfff4de, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    const tele = new THREE.Mesh(wedgeGeo(0.9), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    const ring = new THREE.Mesh(geo('sparring', () => new THREE.RingGeometry(23, 27, 16)), new THREE.MeshBasicMaterial({ color: 0xfff4de, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    for (const m of [teleFull, tele, ring]) { m.rotation.x = -Math.PI / 2; m.visible = false; m.position.y = 2; built.add(m); }
+    const aim = flatBox(1, 2.5, 0xfff4de, 0.5); aim.visible = false; built.add(aim);
+    const open = new THREE.Sprite(new THREE.SpriteMaterial({ map: openTex(), transparent: true, depthWrite: false, fog: false })); open.scale.set(56, 28, 1); open.visible = false; built.add(open);
+    return { g, top: null, icons, id: null, x: 0, y: 0, flash: 0, tele, teleFull, ring, kind: null, hg: null, H: null, aim, open, ringE, nose, hurtT: 0, kbx: 0, kby: 0, downT: 0, lastState: '', animDt: 0 };
+  }
+  const wedgeCache = new Map();
+  function wedgeGeo(half) { const q = Math.round(Math.min(Math.PI, half) * 20) / 20; if (!wedgeCache.has(q)) wedgeCache.set(q, q >= Math.PI - 0.01 ? new THREE.CircleGeometry(1, 24) : new THREE.CircleGeometry(1, 14, -q, q * 2)); return wedgeCache.get(q); }
+  let openTexCache = null; const openTex = () => openTexCache || (openTexCache = canvasTex(THREE, 128, (g) => { g.fillStyle = '#ffc247'; g.beginPath(); g.moveTo(64, 20); g.lineTo(118, 64); g.lineTo(64, 108); g.lineTo(10, 64); g.closePath(); g.fill(); g.lineWidth = 7; g.strokeStyle = '#140b07'; g.stroke(); g.fillStyle = '#140b07'; g.font = 'bold 34px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('OPEN', 64, 66); }));
   // A straw training post: a stake and a target disc with three rings (the rings are shape; they do not depend on colour).
   function makeTarget() {
     const g = new THREE.Group();
@@ -724,21 +765,109 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
   const aimLine = flatBox(200, 2.5, 0xfff4de, 0.45); const aimBar = flatBox(1, 6, 0xfff4de, 0.9);
   const guardArc = (() => { const m = new THREE.Mesh(new THREE.RingGeometry(26, 33, 12, 1, -1, 2), new THREE.MeshBasicMaterial({ color: 0xfff4de, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, fog: false })); m.rotation.order = 'XYZ'; m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); return m; })();
 
+  // One enemy from the frame: the human's pose follows the attack phase, the ground wedge shows the reach and arc, the archer's aim line is drawn, the
+  // shield is raised while guarding, an OPEN marker shows after a parry, and a hit gives a flinch and a short shove away from the player.
+  let parryT = 0;
+  function drivePlayer(frame, c, P, A, swinging, pr, gdt, dt, calm, t, moving) {
+    const H = hero.userData.H; const pst = P ? P.state : 'idle'; const weapon = P ? P.weapon : 'none';
+    if (weapon !== heroWeapon) { lastWeapon = weapon; buildHero(); return; } // a different weapon in hand: respawn with that prop (geometry and textures are cached)
+    parryT = Math.max(0, parryT - dt);
+    const ctx = { speed: c.speed || 0, time: t, weapon, reduced: calm, moving, crouch: !!(P && P.crouch), draw: P ? P.draw : 0, snap: false };
+    let ps = 'idle';
+    if (pst === 'attack' || pst === 'shove') {
+      ps = pst; const kind = A && A.kind === 'shove' ? 'shove' : A && A.kind === 'heavy' ? 'heavy' : weapon === 'staff' ? 'staff' : 'light';
+      ctx.atk = { kind, progress: swinging ? pr : Math.min(1, (P.stateT || 0) / 0.45), hit: (A && A.hit) || 0.4 };
+    } else if (pst === 'finisher') { ps = 'attack'; ctx.atk = { kind: 'heavy', progress: Math.min(1, (P.stateT || 0) / 0.9), hit: 0.5 }; }
+    else if (pst === 'block') ps = parryT > 0 ? 'parry' : 'block';
+    else if (pst === 'aim' || pst === 'dodge' || pst === 'hurt' || pst === 'vault' || pst === 'climb' || pst === 'crouch') ps = pst;
+    if (['dodge', 'hurt', 'vault', 'climb', 'block', 'parry', 'aim', 'finisher', 'attack', 'shove'].includes(pst)) ctx.stateT = P.stateT;
+    ctx.state = ps;
+    if (gdt > 0 || !H.primed) { H.update(gdt > 0 ? gdt : 1 / 60, ctx); H.primed = true; }
+  }
+  const AIM_COL = [0xfff4de, 0xffc247];
+  function driveEnemy(en, i, e, gdt, dt, calm, t, frame) {
+    const hideAll = () => { en.g.visible = false; en.tele.visible = en.teleFull.visible = en.ring.visible = en.aim.visible = en.open.visible = false; };
+    if (!e) { hideAll(); return; }
+    if (en.id !== e.id) { en.id = e.id; en.x = e.x; en.y = e.y; en.downT = 0; en.kb = 0; }
+    if (e.state === 'down') { en.downT += dt; if (en.downT > 6) { hideAll(); return; } } else en.downT = 0;
+    if (!en.hg || en.kind !== e.kind) {
+      if (en.hg) { en.g.remove(en.hg); en.hg.userData.H.dispose(); }
+      en.kind = e.kind; en.hg = enemyHuman(e.kind, i); en.g.add(en.hg); en.H = en.hg.userData.H; shadowed(en.hg); en.ring.visible = false;
+    }
+    const H = en.H; const st = e.state || 'patrol'; const wind = st === 'windup'; const att = e.attack;
+    en.g.visible = true; en.ringE.visible = st !== 'down'; en.nose.visible = st !== 'down';
+    // knock-back: a short visual shove away from the player that fades quickly (none with reduced motion)
+    en.hurtT = Math.max(0, en.hurtT - dt);
+    const pl = frame.chariot; let kx = 0; let ky = 0;
+    if (!calm && en.kb > 0.001) { const d = Math.hypot(e.x - pl.x, e.y - pl.y) || 1; kx = (e.x - pl.x) / d * en.kb * 12; ky = (e.y - pl.y) / d * en.kb * 12; en.kb *= Math.exp(-dt * 9); }
+    en.g.position.set(e.x + kx, 0, e.y + ky); en.g.rotation.y = -e.angle;
+    const moved = Math.hypot(e.x - en.x, e.y - en.y); const speed = dt > 0 ? moved / dt : 0; en.x = e.x; en.y = e.y;
+    // telegraph wedge: outline = the full reach and arc, fill = how close the blow is. Unblockable attacks are a full circle (shape, not colour).
+    const showTele = wind && att && !att.ranged;
+    en.tele.visible = en.teleFull.visible = showTele;
+    if (showTele) {
+      const u = Math.max(0, Math.min(1, e.windup || 0)); const g2 = wedgeGeo(att.unblockable ? Math.PI : att.halfArc);
+      if (en.tele.geometry !== g2) { en.tele.geometry = g2; en.teleFull.geometry = g2; }
+      for (const m of [en.tele, en.teleFull]) { m.position.set(e.x, 2, e.y); m.rotation.z = att.unblockable ? 0 : -e.angle; }
+      en.teleFull.scale.set(att.reach, att.reach, 1); const k = att.reach * (0.25 + 0.75 * u); en.tele.scale.set(k, k, 1); en.tele.material.opacity = 0.25 + 0.5 * u;
+    }
+    // archer aim line: thicker and brighter once locked
+    const am = e.aim; en.aim.visible = !!am;
+    if (am) { const len = Math.hypot(am.x1 - am.x0, am.y1 - am.y0); en.aim.position.set((am.x0 + am.x1) / 2, 3, (am.y0 + am.y1) / 2); en.aim.rotation.y = -Math.atan2(am.y1 - am.y0, am.x1 - am.x0); en.aim.scale.set(Math.max(1, len), 1, am.locked ? 7 : 2.5); en.aim.material.color.setHex(AIM_COL[am.locked ? 1 : 0]); en.aim.material.opacity = am.locked ? 0.9 : 0.5; }
+    // the person
+    const ctx = { speed, time: t, weapon: H.look.right, reduced: calm, moving: speed > 8, guard: !!e.guard, snap: false };
+    let ps = 'idle';
+    if (st === 'down') ps = 'down';
+    else if (st === 'stagger') ps = 'stagger';
+    else if (wind) { ps = 'windup'; ctx.windup = e.windup || 0; }
+    else if (st === 'active') { ps = 'strike'; ctx.u = e.phaseT || 0; }
+    else if (st === 'recover') { ps = 'recover'; ctx.u = e.phaseT || 0; }
+    else if (e.calling) ps = 'call';
+    else if (en.hurtT > 0) ps = 'hurt';
+    else if (st === 'alert') ps = 'alert';
+    if (att && (wind || st === 'active' || st === 'recover')) { ctx.attackName = att.id; ctx.chain = att.idx; }
+    if (H.look.right === 'bow' && (wind || st === 'active')) { ps = 'aim'; ctx.draw = wind ? (e.windup || 0) : 0.15; } // an archer draws during the wind-up and looses at the active phase
+    ctx.state = ps; ctx.stateT = undefined;
+    if (gdt > 0 || !H.primed) { H.update(gdt > 0 ? gdt : 1 / 60, ctx); H.primed = true; }
+    en.flash = Math.max(0, en.flash - dt / 0.12); flashMat(H, calm ? 0 : en.flash * 0.5);
+    // OPEN marker after a parry: a diamond with the word OPEN
+    en.open.visible = !!e.open && st !== 'down'; if (en.open.visible) { en.open.position.set(e.x, 96 + (calm ? 0 : Math.sin(t * 6) * 3), e.y); }
+    en.ring.visible = e.kind === 'sparrer' && st !== 'down'; if (en.ring.visible) en.ring.position.set(e.x, 2, e.y);
+    if (H.lod !== 0) H.setLod(0);
+  }
+  
   function handleEvents(frame, calm) {
     if (frame === lastEventsFrame) return; // the same frame object drawn twice must not repeat its one-shot events
     lastEventsFrame = frame;
     const ev = frame.events; if (!ev || !ev.length) return;
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i]; if (!e) continue;
+      if (e.type === 'parry') parryT = 0.3;
       const spec = burstSpec(e.type, calm); if (!spec) continue;
       burst(spec, e.x || 0, e.y || 0, burstColor(spec, frame.blood), e.type === 'vault' ? 4 : 30);
       if (e.type === 'hit-enemy' || e.type === 'enemy-down') {
         let best = null; let bd = 60 * 60;
         for (let k = 0; k < enemies.length; k++) { const en = enemies[k]; const d = (en.x - e.x) ** 2 + (en.y - e.y) ** 2; if (d < bd) { bd = d; best = en; } }
-        if (best) best.flash = 1;
+        if (best) { best.flash = 1; if (kit) { best.hurtT = 0.3; best.kb = 1; } }
       }
     }
   }
+
+  function loadWorld(w) {
+      clearBuilt();
+      world = w; theme = THEMES[w.theme] || THEMES.default; setEnvironment(w.theme in THEMES ? w.theme : 'default');
+      blocked = (x, z) => { const col = Math.floor(x / w.tileSize); const row = Math.floor(z / w.tileSize); return !!(w.solid[row] && w.solid[row][col]); };
+      buildCity(w);
+      buildCrowd(w);
+      buildHero();
+      if (Array.isArray(w.obstacles) && w.obstacles.length) buildObstacles(w.obstacles);
+      w.checkpoints.forEach((p, i) => { const c = makeCheckpoint(p, i); cps.push(c); built.add(c.g); applyState(c, 'later', p); });
+      scene.add(built);
+  }
+  // Load the human kit after the first frame; when it arrives the world is rebuilt once with the authored people.
+  Promise.all([import('./gfx/human/index.js'), import('./gfx/human/looks.js')]).then(async ([m, lk]) => {
+    try { const k = await m.createHumanKit(THREE, { atlas: 512 }); if (disposed) { k.dispose(); return; } humanLib = lk; kit = k; if (world) loadWorld(world); } catch (err) { console.warn('human kit unavailable, drawing the simple people', err); }
+  });
 
   return {
     setCharacter(look) { heroLook = look; if (built) buildHero(); },
@@ -763,17 +892,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         composer.setPixelRatio(pr); composer.setSize(w, h);
       }
     },
-    setWorld(w) {
-      clearBuilt();
-      world = w; theme = THEMES[w.theme] || THEMES.default;
-      blocked = (x, z) => { const col = Math.floor(x / w.tileSize); const row = Math.floor(z / w.tileSize); return !!(w.solid[row] && w.solid[row][col]); };
-      buildCity(w);
-      buildCrowd(w);
-      buildHero();
-      if (Array.isArray(w.obstacles) && w.obstacles.length) buildObstacles(w.obstacles);
-      w.checkpoints.forEach((p, i) => { const c = makeCheckpoint(p, i); cps.push(c); built.add(c.g); applyState(c, 'later', p); });
-      scene.add(built);
-    },
+    setWorld(w) { loadWorld(w); },
     render(frame) {
       if (!world || lost) return;
       const now = performance.now() / 1000;
@@ -781,6 +900,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       lastNow = now;
       const calm = frame.reducedMotion;
       const t = frame.time;
+      const frozen = !!frame.hitstop; const gdt = frozen ? 0 : dt * (frame.timeScale || 1); // hit-stop freezes the people; slow motion slows them
 
       // Guards: soldiers on patrol. The walk cycle follows how far they moved since the last frame.
       const gcfg = theme.guard;
@@ -799,7 +919,8 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       // Raiders: club, bandana, orange ring. Pose by state; hit flash is a short white emissive pulse (skipped with reduced motion).
       const E = frame.enemies; const nE = E ? E.length : 0;
       while (enemies.length < nE) enemies.push(makeEnemy());
-      for (let i = 0; i < enemies.length; i++) {
+      for (let i = 0; kit && i < enemies.length; i++) driveEnemy(enemies[i], i, i < nE ? E[i] : null, gdt, dt, calm, t, frame);
+      for (let i = 0; !kit && i < enemies.length; i++) {
         const en = enemies[i];
         if (i >= nE || E[i].state === 'down') { en.g.visible = false; en.tele.visible = en.teleFull.visible = en.ring.visible = false; continue; }
         const e = E[i]; const st = e.state || 'patrol'; const eu = en.g.userData;
@@ -840,7 +961,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         const tg = targets3[i]; if (i >= nT) { tg.visible = false; continue; }
         tg.visible = true; tg.position.set(TG[i].x, 0, TG[i].y); tg.scale.setScalar(calm ? 1 : 1 + 0.18 * TG[i].flash);
       }
-      const AR = frame.arrows; const nA = AR ? AR.length : 0;
+      const AR = frame.projectiles || frame.arrows; const nA = AR ? AR.length : 0; // every arrow in flight, the enemies' as well as the player's
       while (arrows3.length < Math.min(16, nA)) arrows3.push(makeArrow());
       for (let i = 0; i < arrows3.length; i++) {
         const ar = arrows3[i]; if (i >= nA) { ar.visible = false; continue; }
@@ -856,29 +977,31 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       hero.rotation.y = -c.angle;
       const spd = Math.min(1, (c.speed || 0) / 215);
       const moving = (c.speed || 0) > 8;
-      animate(hero, (c.speed || 0) * Math.max(dt, 0.001), moving ? 0.35 + spd * 0.65 : 0, t);
-      hero.userData.upper.rotation.z = moving ? -0.06 - spd * 0.1 : 0; // lean into a run
+      const kitHero = !!hero.userData.H;
+      if (!kitHero) { animate(hero, (c.speed || 0) * Math.max(dt, 0.001), moving ? 0.35 + spd * 0.65 : 0, t); hero.userData.upper.rotation.z = moving ? -0.06 - spd * 0.1 : 0; } // lean into a run
       protectRing.visible = c.invulnerable;
       const P = frame.player; const pstate = P ? P.state : 'idle';
-      const hu = hero.userData;
+      const hu = hero.userData; hero.visible = true;
       // Crouch squashes the whole figure; vault hops and tucks; a staff is held in the right hand and swings while attack.active.
       const crouchT = P && (P.crouch || pstate === 'crouch') ? 1 : 0;
       crouchK = calm ? crouchT : crouchK + (crouchT - crouchK) * Math.min(1, dt * 14);
-      hero.scale.set(1 + 0.08 * crouchK, 1 - 0.38 * crouchK, 1 + 0.08 * crouchK);
-      if (pstate === 'vault') { hero.position.y = vaultHop(P.stateT, calm); hu.upper.rotation.z = -0.35; hu.legs[0].rotation.z = 0.9; hu.legs[1].rotation.z = 0.7; } else hero.position.y = 0;
-      const staffOn = !!P && P.weapon === 'staff'; heroStaff.visible = staffOn;
-      const swordOn = !!P && P.weapon === 'sword'; heroSword.visible = swordOn;
-      const bowOn = !!P && P.weapon === 'bow'; heroBow.visible = bowOn;
+      const staffOn = !kitHero && !!P && P.weapon === 'staff'; const swordOn = !kitHero && !!P && P.weapon === 'sword'; const bowOn = !kitHero && !!P && P.weapon === 'bow';
+      if (!kitHero) {
+        hero.scale.set(1 + 0.08 * crouchK, 1 - 0.38 * crouchK, 1 + 0.08 * crouchK);
+        if (pstate === 'vault') { hero.position.y = vaultHop(P.stateT, calm); hu.upper.rotation.z = -0.35; hu.legs[0].rotation.z = 0.9; hu.legs[1].rotation.z = 0.7; } else hero.position.y = 0;
+        heroStaff.visible = staffOn; heroSword.visible = swordOn; heroBow.visible = bowOn;
+      }
       const A = frame.attack; const swinging = !!(A && A.active);
       const pr = swinging ? Math.max(0, Math.min(1, A.progress || 0)) : 0;
       const charging = swinging && A.kind === 'heavy' && pr < (A.hit || 0.575);
-      if (staffOn) hu.arms[1].rotation.z = swinging ? 2.4 - 2.2 * pr : 1.0 + hu.arms[1].rotation.z * 0.15;
+      if (kitHero) drivePlayer(frame, c, P, A, swinging, pr, gdt, dt, calm, t, moving);
+      if (!kitHero) if (staffOn) hu.arms[1].rotation.z = swinging ? 2.4 - 2.2 * pr : 1.0 + hu.arms[1].rotation.z * 0.15;
       if (swordOn) {
         if (pstate === 'block') { hu.arms[1].rotation.z = 2.2; heroSword.rotation.z = 0; hu.arms[0].rotation.z = 1.4; }
         else if (swinging && A.kind === 'shove') { hu.arms[1].rotation.z = 1.6; hu.arms[0].rotation.z = 1.6; }
         else if (swinging) hu.arms[1].rotation.z = charging ? 2.9 : 2.7 - 2.5 * pr; // heavy: held high first, then it comes down at the moment of impact
         else hu.arms[1].rotation.z = 0.9 + hu.arms[1].rotation.z * 0.15;
-      } else if (swinging && A.kind === 'shove') { hu.arms[1].rotation.z = 1.6; hu.arms[0].rotation.z = 1.6; }
+      } else if (!kitHero && swinging && A.kind === 'shove') { hu.arms[1].rotation.z = 1.6; hu.arms[0].rotation.z = 1.6; }
       if (bowOn) hu.arms[1].rotation.z = pstate === 'aim' ? 1.55 : 0.8;
       if (pstate === 'aim' && P) { // aim line along the way the arrow will go, and a bar along it that grows with the draw (full draw turns gold)
         const aa = P.aimAngle || c.angle; const d = Math.max(0, Math.min(1, P.draw || 0));
@@ -887,7 +1010,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         aimBar.scale.x = Math.max(0.001, 160 * d); aimBar.position.set(c.x + Math.cos(aa) * (20 + 80 * d), 4, c.y + Math.sin(aa) * (20 + 80 * d)); aimBar.rotation.y = -aa; aimBar.material.color.setHex(d >= 0.999 ? 0xffc247 : 0xfff4de);
       } else { aimLine.visible = false; aimBar.visible = false; }
       if (pstate === 'block') { guardArc.visible = true; guardArc.position.set(c.x, 26, c.y); guardArc.rotation.z = -c.angle; } else guardArc.visible = false;
-      if (pstate === 'dodge') hero.scale.set(1.12, 0.62, 1.12); // a roll: low and wide
+      if (!kitHero && pstate === 'dodge') hero.scale.set(1.12, 0.62, 1.12); // a roll: low and wide
       if (swinging) {
         const shove = A.kind === 'shove';
         swingArc.visible = true; swingArc.position.x = c.x; swingArc.position.z = c.y; swingArc.rotation.z = -(A.angle || 0);
@@ -897,7 +1020,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       } else swingArc.visible = false;
       const hurtFlash = P && pstate === 'hurt' ? Math.max(0, 1 - (P.stateT || 0) / 0.2) : 0;
       const flash = calm ? 0 : Math.max(frame.effects.flash, hurtFlash);
-      heroTop.emissive.setRGB(flash * 0.9, flash * 0.1, flash * 0.1);
+      if (heroTop) heroTop.emissive.setRGB(flash * 0.9, flash * 0.1, flash * 0.1); else if (kitHero) flashMat(hero.userData.H, flash * 0.5);
       lantern.position.set(c.x + Math.cos(c.angle) * 18, 52, c.y + Math.sin(c.angle) * 18);
 
       // Townspeople walk their streets (they stand still with reduced motion) and step aside for you.
@@ -909,7 +1032,9 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
         const dx = x - c.x; const dy = y - c.y; const d = Math.hypot(dx, dy);
         if (d < 46 && d > 0.01) { x += (dx / d) * (46 - d) * 0.7; y += (dy / d) * (46 - d) * 0.7; }
         n.g.position.set(x, 0, y); n.g.rotation.y = -Math.atan2((s.by - s.ay) * dir, (s.bx - s.ax) * dir);
-        animate(n.g, calm || n.idle ? 0 : n.speed * dt, calm || n.idle ? 0 : 0.6, t);
+        if (n.H) { // townspeople far away are not animated; mid distance skips the cloth and hair springs
+          if ((d < 900 && gdt > 0) || !n.H.primed) { n.H.setLod(d > 450 ? 2 : d > 260 ? 1 : 0); n.H.update(gdt || 1 / 60, { state: n.idle ? 'talk' : 'idle', speed: calm || n.idle ? 0 : n.speed, time: t, reduced: calm, moving: !(calm || n.idle) }); n.H.primed = true; }
+        } else animate(n.g, calm || n.idle ? 0 : n.speed * dt, calm || n.idle ? 0 : 0.6, t);
       });
 
       frame.checkpoints.forEach((p, i) => {
@@ -967,6 +1092,7 @@ export function createRenderer3D(canvas, THREE, { onContextLost } = {}) {
       if (composer) composer.render(); else gl.render(scene, camera);
     },
     dispose() {
+      disposed = true; kit?.dispose(); envCache.forEach((tx) => tx.dispose());
       canvas.removeEventListener('webglcontextlost', onLost);
       clearBuilt();
       [glowTex, beamTex, mandalaTex].forEach((tx) => tx.dispose());

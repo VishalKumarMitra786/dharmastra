@@ -83,6 +83,12 @@
    "speaker": "Poonkodi",
    "text": "{name}, you walked the whole road and nobody was badly hurt. That is what the staff is for.",
    "trigger": "win"
+  },
+  {
+   "id": "down-2",
+   "speaker": "Poonkodi",
+   "text": "A shield bearer stops what comes from the front. Walk round him, or shove his guard open.",
+   "trigger": "parry"
   }
  ],
  "events": [

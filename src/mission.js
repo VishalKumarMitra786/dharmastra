@@ -1,7 +1,7 @@
 // Mission data loading, validation, and the runner that turns sim events into objectives and dialogue.
 import { ABILITY_IDS } from './abilities.js';
 const LABELS = ['History', 'Tradition', 'Invented'];
-const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'checkpoint-4', 'checkpoint-5', 'checkpoint-6', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen', 'ability', 'parry'];
+const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'checkpoint-4', 'checkpoint-5', 'checkpoint-6', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen', 'ability', 'parry', 'finisher', 'wave-clear', 'captain-down', 'phase'];
 const HIT_GAP = 5; // seconds between "hit" lines so captions do not spam
 
 export function validateMission(m) {
@@ -67,12 +67,16 @@ export function createRunner(data, handlers = {}) {
       if (event.type === 'checkpoint') {
         setObjective(event.n);
         say(`checkpoint-${event.n}`);
-      } else if (event.type === 'wall' || event.type === 'guard') {
+      } else if (event.type === 'wall' || event.type === 'guard' || event.type === 'hurt') { // 'hurt' is the only way the traveller is ever damaged now (an enemy's telegraphed blow)
         if (now - lastHit >= HIT_GAP) { lastHit = now; say('hit'); }
       } else if (event.type === 'pickup') say('pickup');
       else if (event.type === 'enemy-down' || event.type === 'enemy-fell') say('enemy-down');
       else if (event.type === 'ability') say('ability');
-      else if (event.type === 'parry') say('parry');
+      else if (event.type === 'parry' && !event.ranged) say('parry');
+      else if (event.type === 'finisher') say('finisher');
+      else if (event.type === 'wave-clear') say('wave-clear');
+      else if (event.type === 'captain-down') say('captain-down');
+      else if (event.type === 'phase') say('phase');
       else if (event.type === 'seen') { if (now - lastSeen >= HIT_GAP) { lastSeen = now; say('seen'); } }
       else if (event.type === 'win') say('win');
       else if (event.type === 'fail') say('fail');

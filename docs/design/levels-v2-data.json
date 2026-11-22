@@ -1,0 +1,394 @@
+{
+ "_meta": {
+  "doc": "docs/design/levels-v2.md",
+  "status": "PROPOSAL. Not wired into missions/. Developers implement from the doc.",
+  "rules": "Every dialogue text is 80 characters or fewer and uses the {name} token for the player. Every event has label History, Tradition or Invented, plus a year or Legend.",
+  "existingFields": ["id", "era", "title", "logline", "objectives[{id,text}]", "dialogue[{id,speaker,text,trigger}]", "events[{name,year,label}]", "requires", "rewards.grants"],
+  "proposedFields": "Every field that starts with x_ is NEW and PROPOSED. Existing fields keep their current shape. objectives[] gains x_type and x_optional. Checkpoints move out of objectives into x_respawns (respawn points only).",
+  "proposedTriggers": ["beat-N (story beat, replaces checkpoint-N lines)", "encounter-N", "setpiece", "boss-start", "boss-phase-2", "boss-phase-3", "boss-down", "optional-done", "rank-gold", "cliffhanger", "lamp"],
+  "proposedObjectiveTypes": ["chase", "steal-escape", "escort", "defend", "rescue", "sabotage", "duel", "defeat-captain", "survive-waves"],
+  "enemyTypes": ["spearman", "swordsman", "shield-bearer", "archer", "captain"],
+  "styleSources": {"parry": 2, "perfect-dodge": 1, "shove-into-hazard": 2, "unseen-zone": 3, "optional-objective": 3, "mercy": 3, "note": "Each source counts up to 6 points per level."},
+  "rankRule": "Bronze: finish. Silver: finish and meet two of three (time under silver, 3 hits or fewer, style at silver). Gold: all three at gold (time under gold, 0 hits, style at gold).",
+  "parNote": "All times, hit limits and style numbers are starting guesses. Tune them in playtest."
+ },
+ "missions": [
+  {
+   "id": "dvapara-escape",
+   "era": "Dvapara Yuga",
+   "title": "Escape from Hastinapur",
+   "logline": "Spears in the Lamp Bazaar. Carry the grain plea out of the city before dawn.",
+   "objectives": [
+    {"id": "escape", "text": "Get the plea out the east gate by dawn", "x_type": "chase"},
+    {"id": "bridge", "text": "Make Captain Kunjara yield at the canal bridge", "x_type": "defeat-captain"},
+    {"id": "lantern", "text": "Keep the child's lantern lit", "x_type": "escort", "x_optional": true},
+    {"id": "bell", "text": "Cut the bell rope before it rings", "x_type": "sabotage", "x_optional": true},
+    {"id": "canal", "text": "Shove three spearmen into the canal", "x_type": "duel", "x_optional": true}
+   ],
+   "dialogue": [
+    {"id": "d1-start-1", "speaker": "Suvrata", "text": "Take the plea, {name}. Run. The bridge bell rings soon.", "trigger": "start"},
+    {"id": "d1-start-2", "speaker": "{name}", "text": "Five roads, then home. This is the first.", "trigger": "start"},
+    {"id": "d1-start-3", "speaker": "Spearman", "text": "Courier! Stop there!", "trigger": "start"},
+    {"id": "d1-ab-1", "speaker": "Suvrata", "text": "Slip sideways from the spear. Then shove.", "trigger": "ability"},
+    {"id": "d1-ab-2", "speaker": "Suvrata", "text": "Stall roofs hold. Climb when the lane is full.", "trigger": "ability"},
+    {"id": "d1-e1", "speaker": "Suvrata", "text": "Grey cords on their wrists. That is not the city watch.", "trigger": "encounter-1"},
+    {"id": "d1-e2", "speaker": "{name}", "text": "Shields now. Shove, do not strike.", "trigger": "encounter-2"},
+    {"id": "d1-sp", "speaker": "Suvrata", "text": "The crowd is thick. Use it. Keep the plea flat!", "trigger": "setpiece"},
+    {"id": "d1-b1", "speaker": "Kunjara", "text": "The bridge is shut. Hand over the plea.", "trigger": "boss-start"},
+    {"id": "d1-b2", "speaker": "Kunjara", "text": "Bell! Bring every spear!", "trigger": "boss-phase-2"},
+    {"id": "d1-b2b", "speaker": "{name}", "text": "The rope! Climb the post and cut it!", "trigger": "boss-phase-2"},
+    {"id": "d1-b3", "speaker": "Kunjara", "text": "My shield is split. Still I stand.", "trigger": "boss-phase-3"},
+    {"id": "d1-b4", "speaker": "Kunjara", "text": "Enough. I yield. Go.", "trigger": "boss-down"},
+    {"id": "d1-hit", "speaker": "Suvrata", "text": "Up! Keep moving. The plea is safe.", "trigger": "hit"},
+    {"id": "d1-opt", "speaker": "{name}", "text": "The lantern still burns. Good.", "trigger": "optional-done"},
+    {"id": "d1-fail", "speaker": "Suvrata", "text": "Again, {name}. The plea can wait a breath.", "trigger": "fail"},
+    {"id": "d1-gate", "speaker": "Captain Dandaka", "text": "Open the gate. Those fields feed my kin too.", "trigger": "win"},
+    {"id": "d1-win", "speaker": "{name}", "text": "No glory in this. Just a road that stayed open.", "trigger": "win"},
+    {"id": "d1-lamp", "speaker": "Suvrata", "text": "Take this lamp. I will speak through it.", "trigger": "lamp"},
+    {"id": "d1-gold", "speaker": "Suvrata", "text": "Not one scratch. Lamp-Runner, indeed.", "trigger": "rank-gold"},
+    {"id": "d1-cliff", "speaker": "Suvrata", "text": "Someone hunts couriers, {name}. Keep walking.", "trigger": "cliffhanger"}
+   ],
+   "events": [
+    {"name": "Hastinapur Period II, Painted Grey Ware occupation (B. B. Lal)", "year": "c. 1100-800 BCE", "label": "History"},
+    {"name": "Hastinapur 2021-22 excavation reports an earlier Painted Grey Ware layer", "year": "c. 1500-1000 BCE (as reported)", "label": "History"},
+    {"name": "The eve of the great war; Dvapara placement of the story", "year": "Legend", "label": "Tradition"},
+    {"name": "{name} carries the villagers' grain plea out of the city", "year": "Legend", "label": "Invented"},
+    {"name": "Suvrata, Captain Kunjara, the Hunt and its grey cords", "year": "Legend", "label": "Invented"}
+   ],
+   "requires": [],
+   "rewards": {"grants": ["vault"]},
+   "x_ladder": 10,
+   "x_hook": "A spear hits the lamp post by your head. Run.",
+   "x_first10s": "Night. Suvrata presses the plea into your hands. A spear thuds into the stall beside you. Control is yours at once.",
+   "x_stake": "The plea feeds the farm villages. Suvrata trusts you with it. It is your first of five roads home.",
+   "x_pressure": "Dawn bar (lamps burn out). The canal bridge lifts at the bell.",
+   "x_signature": "Shove: push through crowds and shove spears and shields aside.",
+   "x_respawns": [
+    {"id": "r1", "after": "lamp rows", "note": "respawn only, not shown as a goal"},
+    {"id": "r2", "after": "canal lane", "note": "respawn only"}
+   ],
+   "x_encounters": [
+    {"order": 1, "name": "Bazaar mouth", "roster": [{"type": "spearman", "count": 1}], "teaches": "dodge, then shove"},
+    {"order": 2, "name": "Lamp rows", "roster": [{"type": "spearman", "count": 2}, {"type": "shield-bearer", "count": 1}], "teaches": "shove breaks a shield; climb a stall roof"},
+    {"order": 3, "name": "Canal lane (the chase)", "roster": [{"type": "spearman", "count": 3}], "teaches": "run, vault, do not fight"},
+    {"order": 4, "name": "Canal bridge", "roster": [{"type": "captain", "count": 1, "name": "Kunjara"}, {"type": "spearman", "count": 2}], "teaches": "boss"}
+   ],
+   "x_setPiece": {"type": "chase", "name": "The lantern chase", "beats": ["Three spearmen pour into the lane.", "Run through the crowd; shove a cart to block them.", "Vault stalls; the bell begins to toll.", "Reach the bridge before it lifts."]},
+   "x_boss": {
+    "name": "Captain Kunjara",
+    "kind": "captain",
+    "role": "Shield captain of the Hunt, a mini boss",
+    "phases": [
+     {"id": 1, "name": "Wall", "tell": "Shield forward, slow spear thrust", "counter": "Dodge to the side; shove while he recovers", "ends": "his poise bar halves"},
+     {"id": 2, "name": "Bell", "tell": "He swings for the alarm rope; two spearmen join", "counter": "Climb the post and cut the rope; dodge the spearmen", "ends": "rope cut or bell rings once"},
+     {"id": 3, "name": "Split shield", "tell": "Fast double thrusts, shield low", "counter": "Parry or dodge, then one clean shove into the canal shallows", "ends": "he yields and sits on the bridge step"}
+    ]
+   },
+   "x_ranks": {"goldSeconds": 240, "silverSeconds": 360, "silverMaxHits": 3, "goldMaxHits": 0, "silverStyle": 4, "goldStyle": 8},
+   "x_reward": {"weapon": null, "move": "vault (grants: vault)", "title": "Lamp-Runner", "goldBonus": "Title variant: Lamp-Runner, Gold"},
+   "x_cliffhanger": {"speaker": "Suvrata", "text": "Someone hunts couriers, {name}. Keep walking.", "beat": "A torch on the far bank goes out."}
+  },
+  {
+   "id": "mauryan-spy",
+   "era": "Mauryan empire",
+   "title": "The Night Report of Pataliputra",
+   "logline": "A thief takes the ferry clerk's report. Steal it back and beat the flood.",
+   "objectives": [
+    {"id": "steal", "text": "Take the report back from the thief", "x_type": "steal-escape"},
+    {"id": "deliver", "text": "Reach the sluice house and beat Night Captain Ghora", "x_type": "defeat-captain"},
+    {"id": "porter", "text": "Lead the porter out of the flooded lane", "x_type": "rescue", "x_optional": true},
+    {"id": "unseen", "text": "Cross the palisade lane unseen", "x_type": "steal-escape", "x_optional": true},
+    {"id": "post", "text": "Jam the watch drum so it cannot sound", "x_type": "sabotage", "x_optional": true}
+   ],
+   "dialogue": [
+    {"id": "d2-lamp", "speaker": "Suvrata (lamp)", "text": "Rain, {name}. Good cover. Good luck.", "trigger": "lamp"},
+    {"id": "d2-start-1", "speaker": "Vasuka", "text": "He took the report! Get it back, {name}!", "trigger": "start"},
+    {"id": "d2-start-2", "speaker": "{name}", "text": "Rain, dark, one thief. Easy.", "trigger": "start"},
+    {"id": "d2-ab-1", "speaker": "Revati", "text": "Crouch in shadow. The watch sees what moves.", "trigger": "ability"},
+    {"id": "d2-ab-2", "speaker": "Revati", "text": "Snatch from behind. Quiet hands win here.", "trigger": "ability"},
+    {"id": "d2-beat-1", "speaker": "{name}", "text": "Got it. Now the wall, before the water.", "trigger": "beat-1"},
+    {"id": "d2-e1", "speaker": "Revati", "text": "Lantern swings left. Go right.", "trigger": "encounter-2"},
+    {"id": "d2-e2", "speaker": "Revati", "text": "Two blades and a shield. Wait for the turn.", "trigger": "encounter-3"},
+    {"id": "d2-sp", "speaker": "Revati", "text": "The posts are going! Climb, {name}, climb!", "trigger": "setpiece"},
+    {"id": "d2-b1", "speaker": "Ghora", "text": "Courier. The report stays here.", "trigger": "boss-start"},
+    {"id": "d2-b2", "speaker": "Ghora", "text": "Quick hands. Now quick feet.", "trigger": "boss-phase-2"},
+    {"id": "d2-b3", "speaker": "Ghora", "text": "The water is up. Finish it.", "trigger": "boss-phase-3"},
+    {"id": "d2-b4", "speaker": "Ghora", "text": "I do not fight a flood. Go.", "trigger": "boss-down"},
+    {"id": "d2-seen", "speaker": "{name}", "text": "Seen! Break their line of sight.", "trigger": "seen"},
+    {"id": "d2-hit", "speaker": "Revati", "text": "Breathe. Back into the shadow.", "trigger": "hit"},
+    {"id": "d2-fail", "speaker": "Revati", "text": "The watch turns at the drum. We go again.", "trigger": "fail"},
+    {"id": "d2-win", "speaker": "Overseer Kshema", "text": "A jammed sluice, not a plot. Wake the timber crews!", "trigger": "win"},
+    {"id": "d2-gold", "speaker": "Revati", "text": "Never seen, never hit. Quiet Foot.", "trigger": "rank-gold"},
+    {"id": "d2-cliff-1", "speaker": "Overseer Kshema", "text": "A note in the pouch: 'Turn back, courier. U.'", "trigger": "cliffhanger"},
+    {"id": "d2-cliff-2", "speaker": "Suvrata (lamp)", "text": "Ulka. He knows your road. Keep walking.", "trigger": "cliffhanger"}
+   ],
+   "events": [
+    {"name": "Megasthenes' account of Pataliputra's wooden wall and wide ditch (survives only through later writers)", "year": "c. late 4th to early 3rd century BCE (as reported, not verified)", "label": "History"},
+    {"name": "Waddell's excavations find remains of a timber palisade near Patna", "year": "1892-1899 CE", "label": "History"},
+    {"name": "Arthashastra, traditionally credited to Kautilya, with a chapter on spies; authorship and date contested", "year": "Contested", "label": "Tradition"},
+    {"name": "{name} steals back a ferry clerk's flood warning", "year": "Legend", "label": "Invented"},
+    {"name": "Revati, Night Captain Ghora, Ulka's note", "year": "Legend", "label": "Invented"}
+   ],
+   "requires": ["dvapara-escape"],
+   "rewards": {"grants": ["crouch"]},
+   "x_ladder": 14,
+   "x_hook": "Vasuka falls. The report is gone. Take it back.",
+   "x_first10s": "Rain on the wharf. A swordsman snatches the pouch and runs. Chase him down the planks and grab it back.",
+   "x_stake": "A flood warning for the wall. Hundreds sleep behind it. Vasuka trusted you.",
+   "x_pressure": "River gauge rising at the sluice. Watch lanterns sweep the lane.",
+   "x_signature": "Crouch in shadow, then snatch from behind.",
+   "x_respawns": [
+    {"id": "r1", "after": "timber yard", "note": "respawn only"},
+    {"id": "r2", "after": "palisade lane", "note": "respawn only"}
+   ],
+   "x_encounters": [
+    {"order": 1, "name": "Wharf snatch", "roster": [{"type": "swordsman", "count": 1}], "teaches": "chase and snatch"},
+    {"order": 2, "name": "Timber yard", "roster": [{"type": "spearman", "count": 2}, {"type": "swordsman", "count": 1}], "teaches": "crouch past; snatch or dodge"},
+    {"order": 3, "name": "Palisade lane", "roster": [{"type": "swordsman", "count": 2}, {"type": "shield-bearer", "count": 1}], "teaches": "doubled watch; parry window on swordsmen"},
+    {"order": 4, "name": "Sluice walk", "roster": [{"type": "captain", "count": 1, "name": "Ghora"}], "teaches": "boss"}
+   ],
+   "x_setPiece": {"type": "collapse", "name": "The palisade gives way", "beats": ["The flood loosens a stretch of posts.", "Posts fall behind you in a rolling line.", "Climb the leaning timbers; do not stop.", "Leap the gap to the sluice walk."]},
+   "x_boss": {
+    "name": "Night Captain Ghora",
+    "kind": "captain",
+    "role": "Swordsman captain of the Hunt, a mini boss",
+    "phases": [
+     {"id": 1, "name": "Chain", "tell": "Three-slash chain, long pause on the third", "counter": "Dodge two, parry the third", "ends": "his guard breaks once"},
+     {"id": 2, "name": "Lamp throw", "tell": "He hurls an oil lamp; a small flame patch lights the planks", "counter": "Dodge the lamp; fight off the flame patch", "ends": "two parries land"},
+     {"id": 3, "name": "Rising water", "tell": "Water covers the walk; he fights faster", "counter": "Shove him against the rail at the right moment", "ends": "he drops his blade and clings to the rail"}
+    ]
+   },
+   "x_ranks": {"goldSeconds": 300, "silverSeconds": 420, "silverMaxHits": 3, "goldMaxHits": 0, "silverStyle": 4, "goldStyle": 8},
+   "x_reward": {"weapon": null, "move": "crouch (grants: crouch)", "title": "Quiet Foot", "goldBonus": "Title variant: Quiet Foot, Gold"},
+   "x_cliffhanger": {"speaker": "Overseer Kshema", "text": "A note in the pouch: 'Turn back, courier. U.'", "beat": "The lamp flame leans toward the hills."}
+  },
+  {
+   "id": "sangam-staff",
+   "era": "Sangam age, Tamilakam",
+   "title": "The Pepper Road",
+   "logline": "A rope bridge snaps. Guard the caravan and its pepper to the harbour before the tide.",
+   "objectives": [
+    {"id": "escort", "text": "Bring the caravan master and three sacks to the harbour", "x_type": "escort"},
+    {"id": "ledge", "text": "Win the duel on the ledge against Captain Karuman", "x_type": "duel"},
+    {"id": "sacks", "text": "Bring all three sacks undamaged", "x_type": "escort", "x_optional": true},
+    {"id": "mercy", "text": "Pull Karuman back up the ledge", "x_type": "rescue", "x_optional": true},
+    {"id": "cover", "text": "Reach the harbour without an arrow hit", "x_type": "survive-waves", "x_optional": true}
+   ],
+   "dialogue": [
+    {"id": "d3-lamp", "speaker": "Suvrata (lamp)", "text": "Hills, {name}. Mind the stream.", "trigger": "lamp"},
+    {"id": "d3-start-1", "speaker": "Caravan master", "text": "The bridge! Hold the line, {name}!", "trigger": "start"},
+    {"id": "d3-start-2", "speaker": "Poonkodi", "text": "Take my staff. It is a longer arm. Keep trouble at its length.", "trigger": "start"},
+    {"id": "d3-ab-1", "speaker": "Poonkodi", "text": "Sweep low to turn a spear. Plant it to steady a rope.", "trigger": "ability"},
+    {"id": "d3-e1", "speaker": "Poonkodi", "text": "Spears have reach. Your staff has more.", "trigger": "encounter-1"},
+    {"id": "d3-e2", "speaker": "Poonkodi", "text": "Archer on the rock! Dodge when he draws.", "trigger": "encounter-2"},
+    {"id": "d3-pick", "speaker": "{name}", "text": "One sack safe. Two to go.", "trigger": "pickup"},
+    {"id": "d3-e3", "speaker": "Caravan master", "text": "They want my pepper! Keep them off!", "trigger": "encounter-3"},
+    {"id": "d3-sp", "speaker": "Poonkodi", "text": "The ledge is narrow. Mind your feet first.", "trigger": "setpiece"},
+    {"id": "d3-b1", "speaker": "Karuman", "text": "Staff against spear. Brave, courier.", "trigger": "boss-start"},
+    {"id": "d3-b2", "speaker": "Karuman", "text": "I cut the rope! Fall, or fight!", "trigger": "boss-phase-2"},
+    {"id": "d3-b2b", "speaker": "{name}", "text": "Plant the staff. Hold the ledge steady!", "trigger": "boss-phase-2"},
+    {"id": "d3-b3", "speaker": "Karuman", "text": "My foot! The stone is gone!", "trigger": "boss-phase-3"},
+    {"id": "d3-b3b", "speaker": "{name}", "text": "Grab the staff! I have you!", "trigger": "boss-phase-3"},
+    {"id": "d3-b4", "speaker": "Karuman", "text": "You pulled me up. Why?", "trigger": "boss-down"},
+    {"id": "d3-b5", "speaker": "{name}", "text": "A road is for walking, not falling.", "trigger": "boss-down"},
+    {"id": "d3-hit", "speaker": "Poonkodi", "text": "Feet first, then the staff.", "trigger": "hit"},
+    {"id": "d3-fail", "speaker": "Poonkodi", "text": "The tide waits. We start the road again.", "trigger": "fail"},
+    {"id": "d3-win", "speaker": "Harbour clerk", "text": "Three sacks, sealed. Keep that staff. It is yours.", "trigger": "win"},
+    {"id": "d3-gold", "speaker": "Poonkodi", "text": "Not a sack lost, not a mark on you. Staff-Bearer.", "trigger": "rank-gold"},
+    {"id": "d3-cliff-1", "speaker": "Ulka", "text": "You pulled him up. Nobody pulled me up, {name}.", "trigger": "cliffhanger"},
+    {"id": "d3-cliff-2", "speaker": "Suvrata (lamp)", "text": "He is close now. The next road burns.", "trigger": "cliffhanger"}
+   ],
+   "events": [
+    {"name": "Sangam age poems and trade in Tamilakam", "year": "c. 300 BCE to 300 CE (dates debated)", "label": "History"},
+    {"name": "Bamboo staff practice named after the silambu bamboo of the hills (silambam)", "year": "Tradition, said to be at least 4th century BCE (as reported)", "label": "Tradition"},
+    {"name": "Pepper harbour on the coast, Muziris-style (not checked here)", "year": "c. 1st century CE (as reported)", "label": "History"},
+    {"name": "Poonkodi, the caravan, Captain Karuman and the ledge duel", "year": "Legend", "label": "Invented"},
+    {"name": "Ulka appears in person for the first time", "year": "Legend", "label": "Invented"}
+   ],
+   "requires": ["mauryan-spy"],
+   "lends": ["staff"],
+   "rewards": {"grants": ["staff"]},
+   "x_ladder": 15,
+   "x_hook": "A rope bridge snaps. Catch the master's hand.",
+   "x_first10s": "Hill stream. The caravan is mid-bridge when an arrow cuts the rope. Climb down and catch the master before he falls.",
+   "x_stake": "The pepper is a hill village's winter pay. Poonkodi lent you her staff and her trust.",
+   "x_pressure": "Evening tide at the harbour scales. A sack lost is pay lost.",
+   "x_signature": "Staff: sweep to keep distance, plant to steady a rope or a ledge.",
+   "x_respawns": [
+    {"id": "r1", "after": "stream bank", "note": "respawn only"},
+    {"id": "r2", "after": "pepper road", "note": "respawn only"}
+   ],
+   "x_encounters": [
+    {"order": 1, "name": "Stream bank", "roster": [{"type": "spearman", "count": 2}], "teaches": "staff reach beats spear reach"},
+    {"order": 2, "name": "Goat path", "roster": [{"type": "shield-bearer", "count": 1}, {"type": "archer", "count": 1}], "teaches": "archer tell; dodge, then close in"},
+    {"order": 3, "name": "Scattered sacks", "roster": [{"type": "swordsman", "count": 2}, {"type": "spearman", "count": 1}], "teaches": "guard the sacks while fighting"},
+    {"order": 4, "name": "The ledge", "roster": [{"type": "captain", "count": 1, "name": "Karuman"}], "teaches": "boss"}
+   ],
+   "x_setPiece": {"type": "duel-on-ledge", "name": "The ledge over the stream", "beats": ["The last stretch is a narrow rock ledge.", "Karuman blocks it with a long spear.", "Ulka watches from the far bank.", "The ledge crumbles under them."]},
+   "x_boss": {
+    "name": "Captain Karuman",
+    "kind": "captain",
+    "role": "Long-spear captain of the Hunt. The duel is the set piece.",
+    "phases": [
+     {"id": 1, "name": "Point", "tell": "Spear drawn back, then a long thrust", "counter": "Dodge, step inside the point, sweep his legs with the staff", "ends": "his poise bar halves"},
+     {"id": 2, "name": "Rope", "tell": "He cuts a rope; the ledge sways", "counter": "Plant the staff to steady yourself, then strike", "ends": "two staff hits land"},
+     {"id": 3, "name": "Slip", "tell": "A stone gives way; he slides toward the drop", "counter": "Hold out the staff and pull him up (mercy) or let him slide to the lower rock", "ends": "he yields; mercy scores style"}
+    ]
+   },
+   "x_ranks": {"goldSeconds": 330, "silverSeconds": 450, "silverMaxHits": 3, "goldMaxHits": 0, "silverStyle": 4, "goldStyle": 8},
+   "x_reward": {"weapon": "staff (grants: staff)", "move": "plant", "title": "Staff-Bearer", "goldBonus": "Title variant: Staff-Bearer, Gold"},
+   "x_cliffhanger": {"speaker": "Ulka", "text": "You pulled him up. Nobody pulled me up, {name}.", "beat": "Ulka on the far bank. His lamp matches yours."}
+  },
+  {
+   "id": "gupta-forge",
+   "era": "Gupta age, forge road",
+   "title": "The Forge Road",
+   "logline": "Fire at the forge gate. Hold it until dawn so the village bridge gets its nails.",
+   "objectives": [
+    {"id": "hold", "text": "Hold the gate until dawn", "x_type": "defend"},
+    {"id": "waves", "text": "Turn back all three waves", "x_type": "survive-waves"},
+    {"id": "captain", "text": "Make Captain Shaila yield", "x_type": "defeat-captain"},
+    {"id": "ram", "text": "Cut the ram rope", "x_type": "sabotage", "x_optional": true},
+    {"id": "bellows", "text": "Keep the bellows going", "x_type": "defend", "x_optional": true},
+    {"id": "parries", "text": "Land three parries", "x_type": "duel", "x_optional": true}
+   ],
+   "dialogue": [
+    {"id": "d4-lamp", "speaker": "Suvrata (lamp)", "text": "Smoke ahead, {name}. Sparks too.", "trigger": "lamp"},
+    {"id": "d4-start-1", "speaker": "Ayasa", "text": "Fire at the gate! Take this blade, {name}!", "trigger": "start"},
+    {"id": "d4-ab-1", "speaker": "Ayasa", "text": "Block, then answer. Parry as the blow lands.", "trigger": "ability"},
+    {"id": "d4-w1", "speaker": "Ayasa", "text": "Spears first. Step in past the point.", "trigger": "encounter-1"},
+    {"id": "d4-w2", "speaker": "Ayasa", "text": "Shields next. A parry breaks their guard.", "trigger": "encounter-2"},
+    {"id": "d4-w3", "speaker": "Ayasa", "text": "Archers on the shed. Climb and shove them into the hay.", "trigger": "encounter-3"},
+    {"id": "d4-sp", "speaker": "Ayasa", "text": "The bar is cracking! Hold the gate, {name}!", "trigger": "setpiece"},
+    {"id": "d4-pick", "speaker": "{name}", "text": "The bellows still breathe. Good.", "trigger": "optional-done"},
+    {"id": "d4-b1", "speaker": "Shaila", "text": "Break the gate! The courier is mine.", "trigger": "boss-start"},
+    {"id": "d4-b2", "speaker": "Shaila", "text": "Shields up! A wall of iron!", "trigger": "boss-phase-2"},
+    {"id": "d4-b3", "speaker": "Shaila", "text": "Dawn is near. One more blow!", "trigger": "boss-phase-3"},
+    {"id": "d4-b4", "speaker": "Shaila", "text": "I yield. Ulka said your road ends in a flood.", "trigger": "boss-down"},
+    {"id": "d4-hit", "speaker": "Ayasa", "text": "Breathe. Block first, always.", "trigger": "hit"},
+    {"id": "d4-fail", "speaker": "Ayasa", "text": "The forge is still warm. Again, {name}.", "trigger": "fail"},
+    {"id": "d4-win", "speaker": "Ayasa", "text": "A sword sheathed has done its best work. Sheathe it.", "trigger": "win"},
+    {"id": "d4-gold", "speaker": "Ayasa", "text": "No harm, no haste. Sheath-Keeper.", "trigger": "rank-gold"},
+    {"id": "d4-cliff-1", "speaker": "Shaila", "text": "Ask Ulka who he lost to the flood.", "trigger": "cliffhanger"},
+    {"id": "d4-cliff-2", "speaker": "Suvrata (lamp)", "text": "Do not ask him. Not yet. Walk.", "trigger": "cliffhanger"}
+   ],
+   "events": [
+    {"name": "Gupta empire", "year": "c. 320 to 550 CE", "label": "History"},
+    {"name": "Wrought-iron pillar at Delhi, date and original site debated", "year": "c. 4th to 5th century CE", "label": "History"},
+    {"name": "The Dhanurveda, the science of the bow, lists swords and bows among arms; its date and text versions are unclear", "year": "Tradition, date unclear", "label": "Tradition"},
+    {"name": "Ayasa the smith, Captain Shaila and the night at the forge gate", "year": "Legend", "label": "Invented"}
+   ],
+   "requires": ["sangam-staff"],
+   "rewards": {"grants": ["dodge", "push", "climb", "sword"]},
+   "x_ladder": 16,
+   "x_hook": "The forge gate is burning. Take the blade.",
+   "x_first10s": "Night at the forge. A ram thumps the gate. Ayasa throws you a blade and a spearman is already through the smoke.",
+   "x_stake": "The bridge nails must be finished by dawn or the village cannot cross the river. Ayasa risks the forge for you.",
+   "x_pressure": "Dawn bar; gate bar health; bellows heat that cools if left alone.",
+   "x_signature": "Sword parry: block just as the blow lands, and a spark of iron answers.",
+   "x_respawns": [
+    {"id": "r1", "after": "wave 1", "note": "respawn only"},
+    {"id": "r2", "after": "wave 2", "note": "respawn only"}
+   ],
+   "x_encounters": [
+    {"order": 1, "name": "Gate wave 1", "roster": [{"type": "spearman", "count": 3}], "teaches": "parry a thrust"},
+    {"order": 2, "name": "Gate wave 2", "roster": [{"type": "swordsman", "count": 2}, {"type": "shield-bearer", "count": 1}], "teaches": "parry breaks a shield"},
+    {"order": 3, "name": "Gate wave 3", "roster": [{"type": "archer", "count": 2}, {"type": "spearman", "count": 2}], "teaches": "climb the shed; shove archers off"},
+    {"order": 4, "name": "The ram", "roster": [{"type": "captain", "count": 1, "name": "Shaila"}, {"type": "shield-bearer", "count": 1}], "teaches": "boss"}
+   ],
+   "x_setPiece": {"type": "defend-gate", "name": "Hold the gate until dawn", "beats": ["The gate bar cracks under the ram.", "Waves arrive in three bursts.", "Pump the bellows between waves.", "The dawn bell rings; the Hunt falls back."]},
+   "x_boss": {
+    "name": "Captain Shaila",
+    "kind": "captain",
+    "role": "Heavy-shield captain of the Hunt, boss",
+    "phases": [
+     {"id": 1, "name": "Ram", "tell": "She orders the ram; the gate shudders", "counter": "Cut the ram rope with your sword", "ends": "ram rope cut"},
+     {"id": 2, "name": "Wall", "tell": "She and a shield bearer stand shoulder to shoulder", "counter": "Parry to break the guard, then strike the shield bearer first", "ends": "the shield bearer yields"},
+     {"id": 3, "name": "Last blows", "tell": "Fast overhead chops, long recovery", "counter": "Dodge, then parry the final chop", "ends": "she yields at the dawn bell"}
+    ]
+   },
+   "x_ranks": {"goldSeconds": 390, "silverSeconds": 540, "silverMaxHits": 3, "goldMaxHits": 0, "silverStyle": 4, "goldStyle": 8},
+   "x_reward": {"weapon": "sword (grants: sword)", "move": "parry", "title": "Sheath-Keeper", "goldBonus": "Title variant: Sheath-Keeper, Gold", "note": "Bow moves to level 5. The existing gupta-forge JSON grants bow; that grant should move."},
+   "x_cliffhanger": {"speaker": "Shaila", "text": "Ask Ulka who he lost to the flood.", "beat": "A grey cord lies on the road, tied to a lamp like yours."}
+  },
+  {
+   "id": "chola-tank",
+   "era": "Chola age, Kaveri delta",
+   "title": "The Tank and the Sluice",
+   "logline": "A flood night. The watch tower burns. Open the sluice and save the boat.",
+   "objectives": [
+    {"id": "boat", "text": "Shoot a line to the stranded boat and draw it ashore", "x_type": "rescue"},
+    {"id": "ulka", "text": "Stand against Ulka at the bund", "x_type": "duel"},
+    {"id": "escape", "text": "Leave the burning tower", "x_type": "chase"},
+    {"id": "jars", "text": "Cut the Hunt's oil-jar rope", "x_type": "sabotage", "x_optional": true},
+    {"id": "tamarai", "text": "Bring Tamarai down safe", "x_type": "rescue", "x_optional": true},
+    {"id": "arrows", "text": "Hit every target with one arrow", "x_type": "duel", "x_optional": true}
+   ],
+   "dialogue": [
+    {"id": "d5-lamp", "speaker": "Suvrata (lamp)", "text": "Water ahead, {name}. A lot of it.", "trigger": "lamp"},
+    {"id": "d5-start-1", "speaker": "Tamarai", "text": "Fire on the tower! Take the bow, {name}!", "trigger": "start"},
+    {"id": "d5-ab-1", "speaker": "Tamarai", "text": "Breathe out. Hold. Let go.", "trigger": "ability"},
+    {"id": "d5-ab-2", "speaker": "Tamarai", "text": "Aim at rope and flag, never at a person.", "trigger": "ability"},
+    {"id": "d5-e1", "speaker": "Tamarai", "text": "Archers on the steps. Keep low and move.", "trigger": "encounter-1"},
+    {"id": "d5-e2", "speaker": "Tamarai", "text": "Shield and blades on the bund. Parry, then shove.", "trigger": "encounter-2"},
+    {"id": "d5-sp", "speaker": "Tamarai", "text": "The sluice rope! Shoot it, then climb down!", "trigger": "setpiece"},
+    {"id": "d5-sp2", "speaker": "{name}", "text": "Rope cut. The water is running. Go go go!", "trigger": "setpiece"},
+    {"id": "d5-b1", "speaker": "Ulka", "text": "Five roads, courier. The fifth drowns.", "trigger": "boss-start"},
+    {"id": "d5-b2", "speaker": "Ulka", "text": "Run back. The water is not kind.", "trigger": "boss-phase-2"},
+    {"id": "d5-b3", "speaker": "Ulka", "text": "A boat. A child. Not again.", "trigger": "boss-phase-3"},
+    {"id": "d5-b4", "speaker": "Ulka", "text": "I carried five. The fifth drowned my village.", "trigger": "boss-down"},
+    {"id": "d5-hit", "speaker": "Tamarai", "text": "Steady. Breathe, then loose.", "trigger": "hit"},
+    {"id": "d5-fail", "speaker": "Tamarai", "text": "The tank will wait. Try again, {name}.", "trigger": "fail"},
+    {"id": "d5-win", "speaker": "Tamarai", "text": "The boat is ashore. All hands. Well shot.", "trigger": "win"},
+    {"id": "d5-turn-1", "speaker": "Suvrata", "text": "Ulka was my courier before you. I sent him.", "trigger": "beat-1"},
+    {"id": "d5-turn-2", "speaker": "Suvrata", "text": "Home waits for one who leaves. The roads need one who stays.", "trigger": "beat-1"},
+    {"id": "d5-turn-3", "speaker": "{name}", "text": "You said five roads, then home.", "trigger": "beat-1"},
+    {"id": "d5-turn-4", "speaker": "Suvrata", "text": "I did. Forgive me.", "trigger": "beat-1"},
+    {"id": "d5-gold", "speaker": "Tamarai", "text": "Every arrow true. Tank-Watcher.", "trigger": "rank-gold"},
+    {"id": "d5-close", "speaker": "{name}", "text": "No glory in this. Just a road that stayed open.", "trigger": "win"},
+    {"id": "d5-cliff", "speaker": "Suvrata", "text": "Your door is open. So is a road where a river rises.", "trigger": "cliffhanger"}
+   ],
+   "events": [
+    {"name": "Chola empire", "year": "c. 850-1279 CE", "label": "History"},
+    {"name": "Large temple-and-tank irrigation works of the Kaveri delta (specific tank not chosen, dates not checked)", "year": "Chola age (as reported)", "label": "History"},
+    {"name": "Gupta archer-type gold coins issued by several kings (the coin in the game is an original drawing)", "year": "4th to 6th century CE (as reported)", "label": "History"},
+    {"name": "The Dhanurveda, the science of the bow; date uncertain", "year": "Tradition, date unclear", "label": "Tradition"},
+    {"name": "Tamarai, the flood night, the Hunt and Ulka's story", "year": "Legend", "label": "Invented"},
+    {"name": "Suvrata's secret: the wheel needs a courier who stays", "year": "Legend", "label": "Invented"}
+   ],
+   "requires": ["gupta-forge"],
+   "rewards": {"grants": ["bow"]},
+   "x_ladder": 17,
+   "x_hook": "A fire arrow hits the tower. Shoot the rope.",
+   "x_first10s": "Flood night at the tank. A burning arrow thuds into the tower roof. Tamarai hands you a bow and a target rope appears.",
+   "x_stake": "A boat of strangers is stranded in the swollen channel. The bund may overtop. Ulka is here and he knows your road.",
+   "x_pressure": "Fire climbs the tower; the water gauge rises on the bund.",
+   "x_signature": "Bow: hold the draw, breathe, loose at rope and flag.",
+   "x_respawns": [
+    {"id": "r1", "after": "tank steps", "note": "respawn only"},
+    {"id": "r2", "after": "tower foot", "note": "respawn only"}
+   ],
+   "x_encounters": [
+    {"order": 1, "name": "Tank steps", "roster": [{"type": "archer", "count": 2}, {"type": "spearman", "count": 1}], "teaches": "bow duel at range; cover"},
+    {"order": 2, "name": "Bund path", "roster": [{"type": "shield-bearer", "count": 1}, {"type": "swordsman", "count": 2}], "teaches": "all moves together"},
+    {"order": 3, "name": "Burning tower", "roster": [{"type": "archer", "count": 3}], "teaches": "fire arrows; the set piece"},
+    {"order": 4, "name": "The bund", "roster": [{"type": "captain", "count": 1, "name": "Ulka"}], "teaches": "boss and rival"}
+   ],
+   "x_setPiece": {"type": "escape-fire", "name": "The burning tower", "beats": ["Archers set the watch tower alight.", "Climb up to the sluice-rope window as stairs burn.", "Shoot the rope to open the sluice; the flood douses the flames.", "Slide down the scaffold to the bund."]},
+   "x_boss": {
+    "name": "Ulka",
+    "kind": "captain",
+    "role": "The rival. Spear and torch. Final boss of this arc, and the turn.",
+    "phases": [
+     {"id": 1, "name": "Torch and spear", "tell": "Torch swing then a thrust; he feints", "counter": "Parry the thrust, dodge the torch", "ends": "his guard breaks twice"},
+     {"id": 2, "name": "Fire arrows", "tell": "He leaps to the bund and shoots flaming arrows", "counter": "Shoot his lamp rope; use cover; close in", "ends": "his lamp rope is cut"},
+     {"id": 3, "name": "The boat", "tell": "A child cries from the stranded boat; he hesitates", "counter": "Do not strike. Shoot a line to the boat; Ulka helps haul it", "ends": "the boat is ashore and Ulka lowers his spear"}
+    ]
+   },
+   "x_ranks": {"goldSeconds": 420, "silverSeconds": 600, "silverMaxHits": 3, "goldMaxHits": 0, "silverStyle": 4, "goldStyle": 8},
+   "x_reward": {"weapon": "bow (grants: bow)", "move": "held draw", "title": "Tank-Watcher", "goldBonus": "Title variant: Tank-Watcher, Gold"},
+   "x_cliffhanger": {"speaker": "Suvrata", "text": "Your door is open. So is a road where a river rises.", "beat": "Two lights: a door of home, and a lamp road by a dark river."},
+   "x_turn": "Ulka carried a fifth plea that ended in a flood and a lost village. Suvrata sent him, as she sent {name}. The way home opens at the fifth road, but only for one who leaves it shut."
+  }
+ ]
+}

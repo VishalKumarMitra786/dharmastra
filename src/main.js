@@ -5,7 +5,7 @@ import { createRenderer2D } from './renderer2d.js';
 import { assertRenderer } from './renderer.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
-import { createScreens } from './screens.js';
+import { createScreens, shortLine } from './screens.js';
 import { createAudio } from './audio.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { createGame } from './game.js';
@@ -15,6 +15,9 @@ import { loadProgress } from './progress.js';
 import { loadTraveller, saveTraveller, appearance, fill, defaultTraveller, avatarSvg } from './characters.js';
 import { createPicker } from './picker.js';
 import { createChakra } from './chakra/view.js';
+import { createClick } from './chakra/click.js';
+import { dialSvg, dialLabel } from './chakra/dial.js';
+import { YUGAS, yugaProgress, currentYuga, spineMap } from './chakra/model.js';
 import { createEventStore } from './chakra/data.js';
 import { createStaticReachProvider } from './chakra/reach.js';
 
@@ -32,13 +35,29 @@ let leaveChakra = () => {}; const chakraLeft = new Promise((r) => { leaveChakra 
 let bootDone = () => {}; const ready = new Promise((r) => { bootDone = r; });
 let enterMission = () => screens.show('screen-start', 'start-btn'); // replaced in boot: traveller picker on a first visit, else the mission screen
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion');
+const store = createEventStore({ synth: SYNTH });
+let settingsRef = null; // set in boot; the chakra reads the sound switch from it
 const chakra = createChakra({
-  store: createEventStore({ synth: SYNTH }), getProgress: loadProgress, reach: createStaticReachProvider(), reducedMotion,
+  store, getProgress: loadProgress, reach: createStaticReachProvider(), reducedMotion, click: createClick({ enabled: () => settingsRef?.sound !== false }), soundOn: () => settingsRef?.sound !== false,
   async onPlay(ev) {
     if (ev.mission !== MISSION_ID) { const q = new URLSearchParams(location.search); q.set('mission', ev.mission); location.search = q.toString(); return; }
     leaveChakra(); await ready; chakra.close(); enterMission();
   },
 });
+// The compact chakra dial on every screen that is not the game: current yuga lit, with progress. Repainted only when the progress changes.
+let dialData = { cur: -1, fracs: [], levels: [] }; let dialKey = '';
+async function paintDials() {
+  try {
+    const idx = await store.loadIndex(); const p = loadProgress(); const ctx = { completed: p.completed, spineById: spineMap(idx.spine) };
+    const prog = yugaProgress(idx.spine, ctx);
+    dialData = { cur: YUGAS.findIndex((y) => y.id === currentYuga(idx.spine, ctx)), fracs: prog.map((q) => (q.levels ? q.done / q.levels : 0)), levels: prog.map((q) => q.levels) };
+  } catch { /* no data: the dial shows without progress */ }
+  const key = JSON.stringify(dialData); if (key === dialKey) return; dialKey = key;
+  for (const d of document.querySelectorAll('[data-dial]')) { d.innerHTML = dialSvg(dialData); if (d.getAttribute('role') === 'img') d.setAttribute('aria-label', dialLabel(dialData)); }
+}
+screens.setOnShow(() => { paintDials(); });
+paintDials();
+if (DEV) globalThis.__chakra = chakra; // ?dev=1 only: lets tools/smoke.mjs read the ring state
 function showChakra() { screens.hide(); $('game').inert = true; $('game').setAttribute('aria-hidden', 'true'); chakra.open(); }
 
 async function boot() {
@@ -60,12 +79,12 @@ async function boot() {
     mission.logline = fill(raw.logline, name);
     mission.objectives.forEach((o, i) => { o.text = fill(raw.objectives[i].text, name); });
     mission.dialogue.forEach((d, i) => { d.text = fill(raw.dialogue[i].text, name); });
-    $('logline').textContent = mission.logline;
-    $('who').textContent = `Playing as ${name}.`;
+    $('logline').textContent = shortLine(mission.tagline || mission.logline);
+    $('who-btn').setAttribute('aria-label', `Change traveller. Now ${name}.`);
     $('who-avatar').innerHTML = avatarSvg(appearance(traveller)); // decorative: the name is in the adjacent text, and the svg is aria-hidden (empty alt equivalent)
     renderer2d?.setCharacter?.(appearance(traveller));
   };
-  const settings = loadSettings();
+  const settings = loadSettings(); settingsRef = settings;
   const canvas = $('stage');
   const canvas3d = $('stage3d');
   const renderer2d = assertRenderer(createRenderer2D(canvas));
@@ -74,14 +93,18 @@ async function boot() {
   let renderer3d = null;
   const ARIA_2D = canvas.getAttribute('aria-label');
   const ARIA_3D = 'City view of you, the guards and the checkpoints. The objective, health, checkpoints and captions are in the text panels, so you do not need the picture to follow the mission.';
-  const hud = createHud();
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const hud = createHud(document, { mode: () => (settings.buttonControls ? 'buttons' : coarse ? 'touch' : 'key') });
   const audio = createAudio();
   let game = null;
-  const input = createInput({ stage: canvas, buttons: [...document.querySelectorAll('[data-control]')], onPause: () => game?.pause() });
+  const input = createInput({ stage: canvas, buttons: [...document.querySelectorAll('[data-control]')], onPause: () => game?.pause(), joystick: $('joy'), knob: $('joy-knob') });
 
   const applyVisualSettings = () => {
     document.documentElement.classList.toggle('reduce-motion', settings.reduceMotion);
     $('game').dataset.side = settings.side;
+    $('game').dataset.controls = settings.buttonControls ? 'buttons' : 'stick';
+    $('game').dataset.autorun = settings.autoDrive ? '1' : '0';
+    input.state.buttonMode = settings.buttonControls; input.state.side = settings.side;
   };
   game = createGame({ mission, world, renderer: renderer2d, input, hud, screens, audio, settings, onSettings: applyVisualSettings, dev: DEV });
 
@@ -123,7 +146,6 @@ async function boot() {
   $('era').textContent = mission.era;
   $('start-title').textContent = mission.title;
   $('game').setAttribute('aria-label', mission.title);
-  $('logline').textContent = mission.logline;
   document.title = `Dharmastra - ${mission.title}`;
   $('set-timer').options[1].textContent = `Standard (${clock(world.timeLimit)})`;
   $('set-timer').options[2].textContent = `Extended (${clock(world.timeLimit * 2)})`;

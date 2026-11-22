@@ -73,7 +73,7 @@
   {
    "id": "c3",
    "speaker": "Ayasa",
-   "text": "Two raiders ahead, hungry and frightened. Turn them aside. Do not chase them.",
+   "text": "The road ahead has soldiers, and a captain. Block, roll, and wait for the opening. Turn them aside.",
    "trigger": "checkpoint-3"
   },
   {
@@ -117,6 +117,30 @@
    "speaker": "Ayasa",
    "text": "{name}, a sword sheathed has done its best work. You can roll, shove, climb, cut, block and shoot. Use them to shield someone.",
    "trigger": "win"
+  },
+  {
+   "id": "wc1",
+   "speaker": "Ayasa",
+   "text": "Breathe. The next wave comes, and the same rule holds: wait for the opening.",
+   "trigger": "wave-clear"
+  },
+  {
+   "id": "ph1",
+   "speaker": "Ayasa",
+   "text": "The captain has changed his stance. Watch his wind-up and roll to the side.",
+   "trigger": "phase"
+  },
+  {
+   "id": "cd1",
+   "speaker": "Ayasa",
+   "text": "The captain yields. Lower your hands, {name}. Let the road be quiet.",
+   "trigger": "captain-down"
+  },
+  {
+   "id": "fn1",
+   "speaker": "Ayasa",
+   "text": "That is the opening. Take it once, cleanly, then step back.",
+   "trigger": "finisher"
   }
  ],
  "events": [

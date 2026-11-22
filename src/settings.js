@@ -10,6 +10,8 @@ export function defaultSettings(win = window) {
     side: 'right', // which side the touch controls sit on
     blood: true, // brief small blood spatter on hits; off gives neutral sparks with the same timing
     graphics: '3d', // '3d' | '2d' (3d falls back to 2d automatically when WebGL is unavailable)
+    buttonControls: false, // true: single-press arrow and look buttons instead of the stick and touch drags (WCAG 2.5.7)
+    sound: true, // the chakra's lock click (the game has no sound files yet)
   };
 }
 
@@ -24,6 +26,8 @@ export function loadSettings(storage = safeStorage(), win = window) {
       side: saved.side === 'left' ? 'left' : 'right',
       graphics: saved.graphics === '2d' ? '2d' : '3d',
       blood: typeof saved.blood === 'boolean' ? saved.blood : base.blood,
+      buttonControls: typeof saved.buttonControls === 'boolean' ? saved.buttonControls : base.buttonControls,
+      sound: typeof saved.sound === 'boolean' ? saved.sound : base.sound,
     }, win, storage);
   } catch { return wireBloodToggle(base, win, storage); }
 }

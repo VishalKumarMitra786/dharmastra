@@ -63,13 +63,13 @@
   {
    "id": "hit-1",
    "speaker": "Suvrata",
-   "text": "That was a lantern cone. Stay in the shadows!",
+   "text": "A spear! Watch the wind-up and roll clear, {name}.",
    "trigger": "hit"
   },
   {
    "id": "hit-2",
    "speaker": "{name}",
-   "text": "Your hands are shaking. Steady, steady.",
+   "text": "Steady. Raise your guard just as the blow lands, or step aside.",
    "trigger": "hit"
   },
   {
@@ -95,6 +95,24 @@
    "speaker": "{name}",
    "text": "No glory in this. Just a road that stayed open.",
    "trigger": "win"
+  },
+  {
+   "id": "seen-1",
+   "speaker": "Bhadra",
+   "text": "They have seen us. Roll if a blow comes, then answer with your hands.",
+   "trigger": "seen"
+  },
+  {
+   "id": "down-1",
+   "speaker": "Bhadra",
+   "text": "He yields. Do not follow him. The road is ahead.",
+   "trigger": "enemy-down"
+  },
+  {
+   "id": "parry-1",
+   "speaker": "Bhadra",
+   "text": "Good, you turned his own strength aside. Now strike while he is open.",
+   "trigger": "parry"
   }
  ],
  "events": [

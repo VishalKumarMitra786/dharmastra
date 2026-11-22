@@ -19,13 +19,13 @@ function run(sim, secs, c = {}, first = {}) {
 const warp = (sim, p) => { sim.chariot.x = p.x; sim.chariot.y = p.y; };
 
 export function registerSangam(test) {
-  test('sangam mission: JSON and layout agree (3 checkpoints, 3 sacks, a raider, valid objectives)', () => {
+  test('sangam mission: JSON and layout agree (3 checkpoints, 3 sacks, three armed guards, valid objectives)', () => {
     assert.deepEqual(validateMission(mission), []);
     const w = parseLayout(layout);
     assert.equal(w.rules, 2);
     assert.equal(w.checkpoints.length, mission.objectives.length);
     assert.equal(w.pickups.filter((k) => k.kind === 'sack').length, 3);
-    assert.ok(w.spawns.some((a) => a.kind === 'raider'));
+    assert.deepEqual(w.spawns.map((a) => a.kind).sort(), ['shield', 'spearman', 'swordsman'], 'every guard is armed and has a kind');
     assert.deepEqual(validateObjectiveDefs(layout.objectives, w.checkpoints.length), []);
     for (const d of mission.dialogue) assert.ok(d.text.length <= 140, `${d.id} is ${d.text.length} characters`);
     for (const e of mission.events) assert.ok(['History', 'Tradition', 'Invented'].includes(e.label));
