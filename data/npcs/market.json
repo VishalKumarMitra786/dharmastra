@@ -1,0 +1,3724 @@
+{
+ "_meta": {
+  "schema_version": 1,
+  "status": "DESIGN DATA. Not wired in. A developer implements from docs/design/market-npcs.md.",
+  "rules": [
+   "Every in-game string is 80 characters or fewer, plain words, {name} for the player.",
+   "Every era label has label History, Tradition or Invented plus a year or Legend.",
+   "No real deity appears as a shopkeeper, a name or a joke.",
+   "Hunt soldiers are not market NPCs."
+  ],
+  "how_to_read": "eras[era].variants[archetype] holds names, goods, barks, talk root line and rumour. archetypes[] holds the era-neutral talk replies, task, reactions and mood barks. Tasks and reactions use the archetype id.",
+  "line_fields": "barks[], talk, rumour, role_name, goods[].name, labels[].text are era lines. Other lines live in archetypes[], ui, standing, hunt_alert.",
+  "assets_note": "Audio barks need captions. Child anklet needs a visual cue as well as a jingle."
+ },
+ "verbs": {
+  "menu": {
+   "max_choices": 4,
+   "order": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "entries": {
+    "talk": {
+     "label": "Talk",
+     "when": "always",
+     "does": "Opens the 2 to 3 step talk tree."
+    },
+    "ask": {
+     "label": "Ask",
+     "when": "NPC has an unshared rumour or hint, and standing is not Shadowed",
+     "does": "Gives the rumour line. A second Ask gives a repeat hint only if the NPC is Warm."
+    },
+    "trade": {
+     "label": "Trade",
+     "when": "variant.goods is not empty and NPC is not hostile",
+     "does": "Buy and sell at standing-adjusted prices. Sell price is 50 percent of base price."
+    },
+    "help": {
+     "label": "Help",
+     "when": "NPC task is available, active, or ready to hand in",
+     "does": "Offers, tracks and completes the NPC's tiny side task."
+    }
+   },
+   "rules": [
+    "Show only choices that apply. Never show a greyed choice.",
+    "If more than 4 apply, drop in this order: Ask repeat, Help when no task, then keep Talk.",
+    "Talk is always present, so the menu has between 1 and 4 buttons.",
+    "Each button is at least 44 px tall. Number keys 1 to 4 choose. Esc closes.",
+    "The menu pauses the world and the level clock (WCAG 2.2.1)."
+   ]
+  },
+  "world_actions": [
+   {
+    "id": "greet",
+    "label": "Greet",
+    "input": "Tap Greet, or key G",
+    "range_m": 3,
+    "effect": "Namaste (hands joined) or nod. Sets that NPC to Warm for 2 minutes. No standing change."
+   },
+   {
+    "id": "follow",
+    "label": "Follow",
+    "input": "Hold Follow (or toggle)",
+    "range_m": 3,
+    "effect": "The NPC walks beside the player for up to 60 seconds. Used by tasks (elder, child). They refuse if Wary."
+   },
+   {
+    "id": "give",
+    "label": "Give",
+    "input": "Choose an item, then tap the NPC",
+    "range_m": 2,
+    "effect": "Hands over one item. Standing +1 once per NPC per level. Also ends an angry NPC's anger (forgive window)."
+   },
+   {
+    "id": "take",
+    "label": "Take",
+    "input": "Tap the toss prompt or pick up from the ground",
+    "range_m": 2,
+    "effect": "Catch an item an NPC tosses (shopkeeper toss, child's ball) or pick up a dropped item. Never costs standing."
+   },
+   {
+    "id": "shove",
+    "label": "Shove",
+    "input": "Existing Push key (V)",
+    "range_m": 1.2,
+    "effect": "A short push. Blocked on protected NPCs. See reactions."
+   },
+   {
+    "id": "steal",
+    "label": "Take unseen",
+    "input": "Hold Do on a stall item while the NPC is looking away",
+    "range_m": 1.2,
+    "effect": "Takes one item without paying. Blocked on protected NPCs. See witness rules."
+   },
+   {
+    "id": "hit",
+    "label": "Strike",
+    "input": "Open hand, light cut key (J), unarmed only",
+    "range_m": 1.2,
+    "effect": "Open-hand blow. Staggers the NPC. Never damages. Never uses a weapon on a bystander. Blocked on protected NPCs."
+   }
+  ],
+  "protected_archetypes": [
+   "child",
+   "elder",
+   "priest"
+  ],
+  "protected_rule": "Shove, steal and hit are refused. The button shows the blocked line and nothing happens. No standing change. This is a rule of respect, not a penalty.",
+  "hunt_rule": "Hunt soldiers (grey cord) are not market NPCs. Shoving or fighting them never changes Dharma standing."
+ },
+ "standing": {
+  "name": "Dharma standing",
+  "icon": "Lamp of Dharma",
+  "one_line": "Kind acts light your lamp. Harm makes it dim.",
+  "range": {
+   "min": -6,
+   "max": 6,
+   "start": 0
+  },
+  "reset": "start of each level (see open question)",
+  "icon_spec": "Lamp icon beside a flame. Flame height 0 to 4 plus a text word and, on focus, the number. Never colour alone.",
+  "tiers": [
+   {
+    "id": "radiant",
+    "word": "Radiant",
+    "min": 5,
+    "max": 6,
+    "flame": 4,
+    "buy_mult": 0.85,
+    "sell_mult": 1.1,
+    "bark_mood": "warm",
+    "npc_greets_first": true,
+    "extra_task_offer": true,
+    "ask": "full",
+    "guard": {
+     "warnings": 2,
+     "turn_hostile_s": 8,
+     "accepts_apology": true,
+     "challenge_on_sight": false
+    }
+   },
+   {
+    "id": "bright",
+    "word": "Bright",
+    "min": 3,
+    "max": 4,
+    "flame": 3,
+    "buy_mult": 0.9,
+    "sell_mult": 1.05,
+    "bark_mood": "warm",
+    "npc_greets_first": false,
+    "extra_task_offer": false,
+    "ask": "full",
+    "guard": {
+     "warnings": 1,
+     "turn_hostile_s": 6,
+     "accepts_apology": true,
+     "challenge_on_sight": false
+    }
+   },
+   {
+    "id": "steady",
+    "word": "Steady",
+    "min": 0,
+    "max": 2,
+    "flame": 2,
+    "buy_mult": 1.0,
+    "sell_mult": 1.0,
+    "bark_mood": "normal",
+    "npc_greets_first": false,
+    "extra_task_offer": false,
+    "ask": "full",
+    "guard": {
+     "warnings": 1,
+     "turn_hostile_s": 4,
+     "accepts_apology": true,
+     "challenge_on_sight": false
+    }
+   },
+   {
+    "id": "dim",
+    "word": "Dim",
+    "min": -3,
+    "max": -1,
+    "flame": 1,
+    "buy_mult": 1.15,
+    "sell_mult": 0.9,
+    "bark_mood": "cold",
+    "npc_greets_first": false,
+    "extra_task_offer": false,
+    "ask": "full",
+    "guard": {
+     "warnings": 0,
+     "turn_hostile_s": 2,
+     "accepts_apology": false,
+     "challenge_on_sight": false
+    }
+   },
+   {
+    "id": "shadowed",
+    "word": "Shadowed",
+    "min": -6,
+    "max": -4,
+    "flame": 0,
+    "buy_mult": 1.3,
+    "sell_mult": 0.75,
+    "bark_mood": "cold",
+    "npc_greets_first": false,
+    "extra_task_offer": false,
+    "ask": "warning_only",
+    "guard": {
+     "warnings": 0,
+     "turn_hostile_s": 0,
+     "accepts_apology": false,
+     "challenge_on_sight": true,
+     "challenge_radius_m": 6
+    }
+   }
+  ],
+  "changes": [
+   {
+    "event": "task_done",
+    "delta": 2,
+    "note": "Once per task."
+   },
+   {
+    "event": "gift",
+    "delta": 1,
+    "note": "Once per NPC per level. Item must be a real item or coin."
+   },
+   {
+    "event": "kind_act",
+    "delta": 1,
+    "note": "Pull up a fallen NPC, return a dropped item, share water."
+   },
+   {
+    "event": "return_stolen",
+    "delta": 2,
+    "note": "Give stolen item back to its owner."
+   },
+   {
+    "event": "shove_witnessed",
+    "delta": -1,
+    "note": "The first witnessed shove each level is a free warning: 0."
+   },
+   {
+    "event": "steal_witnessed",
+    "delta": -3,
+    "note": ""
+   },
+   {
+    "event": "steal_unwitnessed",
+    "delta": -1,
+    "note": "Dharma sees all, but a smaller mark."
+   },
+   {
+    "event": "hit",
+    "delta": -3,
+    "note": "Always witnessed by the victim."
+   },
+   {
+    "event": "thief_catch",
+    "delta": 0,
+    "note": "Shoving or catching a marked task-thief is lawful. No change."
+   }
+  ],
+  "recovery": "Below 0, standing rises by 1 every 3 minutes toward 0. It never rises above 0 on its own. Positive standing does not decay.",
+  "caps": "Clamp to -6 and +6.",
+  "npc_memory": "An NPC you harmed stays Wary: no trade, no help, until you Give them something or finish a Help for another NPC nearby. Wary does not change global standing.",
+  "guard_catch": "When a hostile guard catches the player: stolen items go back, the player pays up to 5 coins, no jail, no death, standing unchanged. Guards give up after 10 seconds out of sight.",
+  "accessibility": "Standing change shows a caption like 'Your lamp dims a little' and a short sound with a visual pulse. Reduced motion: no pulse, text only."
+ },
+ "witness": {
+  "sees_when": [
+   "NPC is awake and not in a menu",
+   "within sight_m of the player",
+   "player is inside the NPC's 120 degree view cone",
+   "no wall or stall blocks the line"
+  ],
+  "sight_m": {
+   "default": 8,
+   "town_guard": 12
+  },
+  "victim": "The victim always counts as a witness for shove and hit. For steal, the victim counts only if not facing away or after noticing (see below).",
+  "hearing": {
+   "shout_radius_m": 12,
+   "effect": "Hearers turn and look. They become witnesses only if they then see the player within 3 seconds."
+  },
+  "crowd_cover": "With 3 or more NPCs within 2 m and the crouch skill, sight_m drops to 4. Not available before the crouch skill.",
+  "unwitnessed_steal": "No one saw: standing -1 now. The victim notices after 20 seconds and shouts once, without a chase.",
+  "children": "Child witnesses count the same as adults. They never chase.",
+  "guards": "A guard who hears a shout walks to the spot. He turns hostile only if he sees the act or the player holds the stolen item in view within 10 seconds.",
+  "cools_off": "A chase ends when the player is out of sight for 10 seconds or 20 m away.",
+  "hunt": "Hunt soldiers ignore market crimes and do not report. Civilians still react to fights nearby by fleeing."
+ },
+ "hunt_alert": {
+  "trigger": "Any Hunt soldier within 15 m draws a weapon.",
+  "npc_response": "Civilians stop idle barks, flee to shelter points, and say one cover line. Menus show 'Not now' until the area is clear for 8 seconds.",
+  "lines": [
+   "Not now! Take cover, {name}!",
+   "Get down! Soldiers!",
+   "Run! Away from the grey cords!"
+  ]
+ },
+ "items": [
+  {
+   "id": "heal_fruit",
+   "name": "Heal fruit",
+   "effect": "restore 2 hearts",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "lamp",
+   "name": "Road lamp",
+   "effect": "light source; guides the hint arrow at night",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "oil",
+   "name": "Lamp oil",
+   "effect": "refills a lamp",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "pot",
+   "name": "Clay pot",
+   "effect": "carry water or throw to draw eyes (no damage)",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "rope",
+   "name": "Rope",
+   "effect": "use at marked posts and ledges",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "arrows",
+   "name": "Arrow bundle",
+   "effect": "6 arrows",
+   "needs": "bow",
+   "gift_value": 1
+  },
+  {
+   "id": "staff",
+   "name": "Spare staff",
+   "effect": "loan, returns at level end",
+   "needs": "staff",
+   "gift_value": 1
+  },
+  {
+   "id": "water",
+   "name": "Cup of water",
+   "effect": "refill stamina",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "spice",
+   "name": "Spice pinch",
+   "effect": "small stamina boost",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "sweet",
+   "name": "Jaggery sweet",
+   "effect": "a gift item; no effect",
+   "needs": null,
+   "gift_value": 2
+  },
+  {
+   "id": "bandage",
+   "name": "Cloth strip",
+   "effect": "restore 1 heart",
+   "needs": null,
+   "gift_value": 1
+  },
+  {
+   "id": "flower",
+   "name": "Flower garland",
+   "effect": "a gift item; no effect",
+   "needs": null,
+   "gift_value": 2
+  }
+ ],
+ "ui": {
+  "menu_title": "Choose, {name}",
+  "close": "Close",
+  "back": "Back",
+  "greet_player": "{name} folds hands. Namaste.",
+  "nod_player": "{name} gives a small nod.",
+  "follow_on": "Follow me, if you like.",
+  "follow_off": "Stay here. Thank you.",
+  "follow_refuse": "Not now, {name}.",
+  "give_prompt": "Give what to them?",
+  "give_none": "You have nothing to give.",
+  "take_prompt": "Catch!",
+  "take_done": "Caught it. Thank you.",
+  "blocked": "That is not your way, {name}.",
+  "trade_buy": "Fair price. Thank you.",
+  "trade_no_coin": "Not enough coins, {name}.",
+  "trade_sell": "Sold. A fair trade.",
+  "trade_hostile": "No trade with you now.",
+  "ask_none": "Nothing new from me, {name}.",
+  "ask_warning": "Be careful, {name}. Folk are wary of you.",
+  "task_accept": "I will help.",
+  "task_decline": "Not now.",
+  "task_ready": "I have it. Here you go.",
+  "busy": "Not now! Take cover!",
+  "toss_gift": "Catch, {name}!",
+  "wary": "I do not trust you now.",
+  "forgive": "Hm. Forgiven. Be gentler.",
+  "crowd_gasp": "Oh! Did you see that?",
+  "guard_warn1": "Easy, {name}. Last warning.",
+  "guard_chase": "Stop right there!",
+  "guard_caught": "Hand it back. Pay the fine.",
+  "guard_calm": "Move along. No more trouble.",
+  "guard_apology": "Sorry, officer. It will not happen again.",
+  "guard_accept": "Good. Do not do it again.",
+  "guard_receive_note": "A note for me? Thank you.",
+  "guard_receive_water": "Cool water. Thank you.",
+  "standing_up": "Your lamp grows brighter.",
+  "standing_down": "Your lamp dims a little.",
+  "standing_down_unseen": "Unseen, but your lamp dims.",
+  "shelter": "Stay inside! It is not safe!"
+ },
+ "archetypes": [
+  {
+   "id": "lamp_seller",
+   "label": "Lamp seller",
+   "protected": false,
+   "look": {
+    "age": "adult, 30s to 60s",
+    "build": "slim to stocky",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "apron over plain wrap",
+    "headgear": "head-cloth or none"
+   },
+   "personality": "Patient and chatty. Fusses over fire safety. Hates waste.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Who are you?",
+      "reply": "I sell light. Small trade, good work.",
+      "next": {
+       "label": "Is it hard work?",
+       "reply": "Wicks and oil all day. I like it."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "How is trade?",
+      "reply": "Slow when folk are afraid. Steady otherwise.",
+      "next": null
+     }
+    ],
+    "goodbye": "Walk in light, {name}."
+   },
+   "task": {
+    "id": "carry_flame",
+    "type": "carry",
+    "offer": "Carry this lit lamp to my sister's stall? Keep it burning.",
+    "hint": "Shield the flame. Do not run too fast.",
+    "done": "Still lit! Thank you, {name}. Take this.",
+    "fail": "It went out. No harm. Try once more.",
+    "reward": {
+     "items": [
+      {
+       "id": "lamp",
+       "n": 1
+      }
+     ],
+     "coins": 0,
+     "standing": 2
+    },
+    "target_npc": "marker",
+    "limit_s": 90,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Welcome."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "A gift? That is kind. Thank you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "Careful! My lamps!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Stop that traveller!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Guard! Help!"
+    }
+   },
+   "mood_barks": {
+    "warm": "Welcome back, {name}! Your lamp shines.",
+    "cold": "Move along. I have no light for you."
+   }
+  },
+  {
+   "id": "spice_seller",
+   "label": "Spice or pepper seller",
+   "protected": false,
+   "look": {
+    "age": "adult, 25s to 60s",
+    "build": "slim to broad",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "long wrap, scale pouch",
+    "headgear": "head-cloth or bare head"
+   },
+   "personality": "Sharp with numbers, warm once trust is earned. Proud of fair weights.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Is it good quality?",
+      "reply": "Taste it. My name is on every bag.",
+      "next": {
+       "label": "Where is it from?",
+       "reply": "Far off. It came by road and by boat."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any advice?",
+      "reply": "Spice a little, never a lot.",
+      "next": null
+     }
+    ],
+    "goodbye": "Eat well, {name}."
+   },
+   "task": {
+    "id": "chase_thief",
+    "type": "chase",
+    "offer": "A thief took my pouch! Catch him, {name}!",
+    "hint": "He ran the lane. Cut him off at the corner.",
+    "done": "My pouch! Take some spice for your trouble.",
+    "fail": "He got away. Thank you for trying.",
+    "reward": {
+     "items": [
+      {
+       "id": "spice",
+       "n": 2
+      }
+     ],
+     "coins": 3,
+     "standing": 2
+    },
+    "target_npc": "npc_thief",
+    "limit_s": 40,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Fresh stock today."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "For me? You are generous. Thank you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "Mind the sacks! They spill!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! My spice! Guard!",
+     "chase_s": 8
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Stop! Somebody help!"
+    }
+   },
+   "mood_barks": {
+    "warm": "A friend! Take a pinch, {name}.",
+    "cold": "I will weigh this carefully. Very carefully."
+   }
+  },
+  {
+   "id": "potter",
+   "label": "Potter",
+   "protected": false,
+   "look": {
+    "age": "adult, 30s to 70s",
+    "build": "stocky or lean",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "sleeveless wrap, clay-dusted",
+    "headgear": "head-cloth or none"
+   },
+   "personality": "Calm and exact. Hates rushing. Talks to the clay.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "How is a pot made?",
+      "reply": "Clay, water, a steady hand, then fire.",
+      "next": {
+       "label": "Is it hard?",
+       "reply": "Years of breaking pots. Then fewer."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Which pot is best?",
+      "reply": "The one that does its job. Plain is fine.",
+      "next": null
+     }
+    ],
+    "goodbye": "Go gently, {name}."
+   },
+   "task": {
+    "id": "carry_pots",
+    "type": "carry",
+    "offer": "Carry these two pots to the well without a crack.",
+    "hint": "Walk, do not run. Pots break if you fall.",
+    "done": "Both whole! Keep one for your trouble.",
+    "fail": "One cracked. It happens. Come again.",
+    "reward": {
+     "items": [
+      {
+       "id": "pot",
+       "n": 1
+      }
+     ],
+     "coins": 0,
+     "standing": 2
+    },
+    "target_npc": "marker",
+    "limit_s": 90,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Handle with care."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "How kind. A pot for you someday.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "My pots! Mind your arms!",
+     "forgive_window_s": 20,
+     "damage_check": "breaks_pot_if_near_shelf"
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Bring that back!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Guard! Help me!"
+    }
+   },
+   "mood_barks": {
+    "warm": "Welcome, {name}. This one is for you.",
+    "cold": "I count every pot. Do not touch."
+   }
+  },
+  {
+   "id": "cloth_merchant",
+   "label": "Cloth merchant",
+   "protected": false,
+   "look": {
+    "age": "adult, 30s to 60s",
+    "build": "slim to broad",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "long wrap, shoulder cloth",
+    "headgear": "head-cloth or turban"
+   },
+   "personality": "Smooth talker, honest underneath. Notices everyone's clothes.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you sell?",
+      "reply": "Cloth, cord and bandage. All strong.",
+      "next": {
+       "label": "Is the rope good?",
+       "reply": "It held a cart once. Ask the cart."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "Everyone buys cloth. Everyone talks.",
+      "next": null
+     }
+    ],
+    "goodbye": "Keep warm, {name}."
+   },
+   "task": {
+    "id": "deliver_bundle",
+    "type": "deliver",
+    "offer": "Take this cloth bundle to the scribe's table.",
+    "hint": "He sits near the busiest stall.",
+    "done": "Delivered? Good. Here is a coil of rope.",
+    "fail": "Not delivered? No matter. Try again.",
+    "reward": {
+     "items": [
+      {
+       "id": "rope",
+       "n": 1
+      }
+     ],
+     "coins": 0,
+     "standing": 2
+    },
+    "target_npc": "scribe",
+    "limit_s": 120,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Fine cloth today."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "A gift? You flatter me. Thank you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "My cloth! Mind the folds!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Guard! That is mine!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Someone stop them!"
+    }
+   },
+   "mood_barks": {
+    "warm": "Welcome, {name}! A good price for you.",
+    "cold": "Prices are firm today. Very firm."
+   }
+  },
+  {
+   "id": "fruit_seller",
+   "label": "Fruit seller",
+   "protected": false,
+   "look": {
+    "age": "adult, 20s to 60s",
+    "build": "slim to round",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "simple wrap, basket on hip",
+    "headgear": "head-cloth or bare head"
+   },
+   "personality": "Cheerful. Gives small tastes. Hates waste and bruises.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Is the fruit fresh?",
+      "reply": "Picked this morning. Taste one.",
+      "next": {
+       "label": "How do you pick well?",
+       "reply": "Press gently. Smell. Trust your nose."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "Fruit sellers hear everything.",
+      "next": null
+     }
+    ],
+    "goodbye": "Eat well, {name}."
+   },
+   "task": {
+    "id": "gather_fruit",
+    "type": "fetch",
+    "offer": "My fruit rolled away! Please bring back three.",
+    "hint": "They roll downhill. Look near the lane edge.",
+    "done": "Three! Ripe and whole. Eat one, {name}.",
+    "fail": "Not all found. Thanks for looking.",
+    "reward": {
+     "items": [
+      {
+       "id": "heal_fruit",
+       "n": 2
+      }
+     ],
+     "coins": 0,
+     "standing": 2
+    },
+    "target_npc": "three_items",
+    "limit_s": 75,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Sweet fruit today."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Oh, thank you! Take a fruit back.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "throw_fruit",
+     "line": "Hey! My basket! Watch out!",
+     "forgive_window_s": 20,
+     "harmless": true
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Stop! Guard!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Please! Guard!"
+    }
+   },
+   "mood_barks": {
+    "warm": "Dear {name}! The ripest one is yours.",
+    "cold": "Fruit is for paying customers."
+   }
+  },
+  {
+   "id": "water_carrier",
+   "label": "Water carrier",
+   "protected": false,
+   "look": {
+    "age": "adult, 20s to 60s",
+    "build": "lean and strong",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "short wrap, pole and pots",
+    "headgear": "head-cloth"
+   },
+   "personality": "Quiet and steady. Knows every lane and every well.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Where is the well?",
+      "reply": "Past the lanes. I will point the way.",
+      "next": {
+       "label": "Is it a long walk?",
+       "reply": "Every day. My feet know it by heart."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "I walk the whole market. I hear things.",
+      "next": null
+     }
+    ],
+    "goodbye": "Go well, {name}."
+   },
+   "task": {
+    "id": "carry_water",
+    "type": "carry",
+    "offer": "Carry this water pot to the guard post. Slowly now.",
+    "hint": "Spill less, walk steady.",
+    "done": "Cool and full. You have good hands.",
+    "fail": "It spilled. Fill it and try again.",
+    "reward": {
+     "items": [],
+     "coins": 3,
+     "standing": 2
+    },
+    "target_npc": "town_guard",
+    "limit_s": 90,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Drink if you like."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Thank you. A kind hand.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "My water! Please be careful!",
+     "forgive_window_s": 20,
+     "spills_water": true
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Help me!",
+     "chase_s": 5
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Please help!"
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! Water is on me today.",
+    "cold": "Water is for those who ask kindly."
+   }
+  },
+  {
+   "id": "child",
+   "label": "Child",
+   "protected": true,
+   "look": {
+    "age": "child, about 6 to 10",
+    "build": "small",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "simple tunic or wrap",
+    "headgear": "bare head or small cap"
+   },
+   "personality": "Curious, quick, a little bold. Asks big questions.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Who are you?",
+      "reply": "I am me! Who are you?",
+      "next": {
+       "label": "Do you play games?",
+       "reply": "Yes! Hide-and-seek is best."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Can you tell me something?",
+      "reply": "Maybe. If you share a sweet.",
+      "next": null
+     }
+    ],
+    "goodbye": "Bye, {name}!"
+   },
+   "task": {
+    "id": "find_anklet",
+    "type": "find",
+    "offer": "My sister's anklet fell. Can you find it?",
+    "hint": "It jingles! Listen near the stalls.",
+    "done": "Found it! Thank you, {name}! Take this.",
+    "fail": "Not found yet. Please look again!",
+    "reward": {
+     "items": [
+      {
+       "id": "sweet",
+       "n": 1
+      }
+     ],
+     "coins": 0,
+     "standing": 2,
+     "rumour_bonus": true
+    },
+    "target_npc": "item_marker",
+    "limit_s": 90,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste! Hee hee."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Wow! Thank you!",
+     "mood": 1
+    },
+    "shove": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "steal": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "hit": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! You came back! Play with me!",
+    "cold": "Mama says not to talk to you."
+   }
+  },
+  {
+   "id": "elder",
+   "label": "Elder",
+   "protected": true,
+   "look": {
+    "age": "older adult, 60s to 80s",
+    "build": "slight or round",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "long wrap, shawl",
+    "headgear": "head-cloth or bare head"
+   },
+   "personality": "Gentle, wise, a little stubborn. Loves to talk, slowly.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "How are you?",
+      "reply": "Old, but still walking.",
+      "next": {
+       "label": "What have you learned?",
+       "reply": "Kindness costs little and pays back well."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any advice?",
+      "reply": "Walk slow. Look around. Help someone.",
+      "next": null
+     }
+    ],
+    "goodbye": "Go well, {name}."
+   },
+   "task": {
+    "id": "escort_walk",
+    "type": "escort",
+    "offer": "Walk me to the bench by the shrine? Slowly.",
+    "hint": "Wait if I fall behind.",
+    "done": "Thank you. A kind arm beats a stick.",
+    "fail": "We did not get there. Another time.",
+    "reward": {
+     "items": [
+      {
+       "id": "sweet",
+       "n": 1
+      }
+     ],
+     "coins": 0,
+     "standing": 2,
+     "rumour_bonus": true
+    },
+    "target_npc": "bench",
+    "limit_s": 150,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, child. Be well."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Bless you. You are kind.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "steal": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "hit": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! Good to see you again.",
+    "cold": "Hm. I hear you have been unkind."
+   }
+  },
+  {
+   "id": "musician",
+   "label": "Musician",
+   "protected": false,
+   "look": {
+    "age": "adult, 20s to 60s",
+    "build": "any",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "bright shoulder cloth",
+    "headgear": "head-cloth or garland"
+   },
+   "personality": "Dreamy, generous, easily startled. Pays attention to moods.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you play?",
+      "reply": "Whatever the street asks for.",
+      "next": {
+       "label": "Teach me?",
+       "reply": "Listen first. The hands come later."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "Songs travel faster than news.",
+      "next": null
+     }
+    ],
+    "goodbye": "Play on, {name}."
+   },
+   "task": {
+    "id": "fetch_cord",
+    "type": "fetch",
+    "offer": "My string broke. Bring a cord from the cloth stall?",
+    "hint": "Ask the cloth seller. Say it is for music.",
+    "done": "Sweet! Here is a thank you, {name}.",
+    "fail": "No cord yet. I will wait.",
+    "reward": {
+     "items": [],
+     "coins": 3,
+     "standing": 2,
+     "buff": {
+      "id": "song",
+      "seconds": 60
+     }
+    },
+    "target_npc": "cloth_merchant",
+    "limit_s": 120,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. A song for you."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Thank you! I will play for you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "flee",
+     "line": "Easy! Not the instrument!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! My music! Guard!",
+     "chase_s": 5
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Please! Someone!"
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! I wrote a song for you.",
+    "cold": "I will not play for you."
+   }
+  },
+  {
+   "id": "scribe",
+   "label": "Scribe",
+   "protected": false,
+   "look": {
+    "age": "adult, 25s to 60s",
+    "build": "slim",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "plain long wrap, ink-stained or knotted cords",
+    "headgear": "head-cloth or none"
+   },
+   "personality": "Precise, dry humour. Writes things down so no one lies.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you write?",
+      "reply": "Names, counts and messages.",
+      "next": {
+       "label": "Can you read this?",
+       "reply": "Show me. I will tell you what it says."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "I write what I hear. Mostly.",
+      "next": null
+     }
+    ],
+    "goodbye": "Safe road, {name}."
+   },
+   "task": {
+    "id": "carry_note",
+    "type": "deliver",
+    "offer": "Take this note to the guard post, {name}.",
+    "hint": "Keep it dry. Hand it to the guard.",
+    "done": "Received. Take this for the walk.",
+    "fail": "The note did not arrive. Try again.",
+    "reward": {
+     "items": [],
+     "coins": 3,
+     "standing": 2
+    },
+    "target_npc": "town_guard",
+    "limit_s": 120,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Anything to write?"
+    },
+    "gift": {
+     "act": "thank",
+     "line": "How thoughtful. Thank you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "My work! Mind the table!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! That is not yours!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Guard! Guard! Please!"
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! A fair day to you.",
+    "cold": "I have nothing to write for you."
+   }
+  },
+  {
+   "id": "blacksmith",
+   "label": "Blacksmith",
+   "protected": false,
+   "look": {
+    "age": "adult, 30s to 60s",
+    "build": "broad and strong",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "sleeveless wrap, leather apron",
+    "headgear": "bare head or cloth band"
+   },
+   "personality": "Gruff, fair, proud of work. Respects anyone who works hard.",
+   "menu": [
+    "talk",
+    "ask",
+    "trade",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you make?",
+      "reply": "Hooks, nails and tool tips. Honest iron.",
+      "next": {
+       "label": "Is it hot work?",
+       "reply": "Hot, loud and good. I would not swap."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any advice?",
+      "reply": "Learn one thing well. Then another.",
+      "next": null
+     }
+    ],
+    "goodbye": "Mind the sparks, {name}."
+   },
+   "task": {
+    "id": "pump_bellows",
+    "type": "hold",
+    "offer": "Work my bellows for a moment? Hold Do.",
+    "hint": "Steady strokes. Not too fast.",
+    "done": "Hot enough. Take these, free.",
+    "fail": "The fire died. Try again.",
+    "reward": {
+     "items": [
+      {
+       "id": "arrows",
+       "n": 3,
+       "needs": "bow"
+      }
+     ],
+     "coins": 4,
+     "standing": 2
+    },
+    "target_npc": "bellows",
+    "limit_s": 60,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "nod",
+     "line": "Hm. Good evening, {name}."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Fair enough. Thanks.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "fight_back",
+     "line": "Hey! Do that again, and I push back!",
+     "forgive_window_s": 20,
+     "stagger_s": 1.0
+    },
+    "steal": {
+     "act": "fight_back",
+     "line": "Drop it! Now! Guard!",
+     "chase_s": 8,
+     "stagger_s": 1.0,
+     "shout_guard": true
+    },
+    "hit": {
+     "act": "fight_back",
+     "line": "Enough! I push harder than you!",
+     "stagger_s": 1.5,
+     "shout_guard": true
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! Come, share a cup with me.",
+    "cold": "I do not work for thieves."
+   }
+  },
+  {
+   "id": "priest",
+   "label": "Temple priest or pandit",
+   "protected": true,
+   "look": {
+    "age": "adult or older adult",
+    "build": "any",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "plain wrap, sacred thread or beads as the era fits",
+    "headgear": "bare head or cloth"
+   },
+   "personality": "Calm, kind, unhurried. Never pushes. Never sells anything.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you do here?",
+      "reply": "I tend the flame and keep the peace.",
+      "next": {
+       "label": "May I rest here?",
+       "reply": "Yes. All are welcome. Sit and be quiet."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any blessing?",
+      "reply": "Take it freely. It costs nothing.",
+      "next": null
+     }
+    ],
+    "goodbye": "Go in peace, {name}."
+   },
+   "task": {
+    "id": "light_lamps",
+    "type": "place",
+    "offer": "Please set three small lamps on the shrine steps.",
+    "hint": "Left, middle, right. Take your time.",
+    "done": "Peace to you. May your road stay open.",
+    "fail": "The lamps are not set. Come again.",
+    "reward": {
+     "items": [],
+     "coins": 0,
+     "standing": 2,
+     "blessing": {
+      "heal": 1
+     }
+    },
+    "target_npc": "shrine_steps",
+    "limit_s": 120,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}. Peace be with you."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Thank you. May it return to you.",
+     "mood": 1
+    },
+    "shove": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "steal": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    },
+    "hit": {
+     "act": "blocked",
+     "line": "That is not your way, {name}."
+    }
+   },
+   "mood_barks": {
+    "warm": "Peace to you, {name}. Your lamp is bright.",
+    "cold": "Peace to you, even so. Be gentler."
+   }
+  },
+  {
+   "id": "storyteller",
+   "label": "Travelling storyteller",
+   "protected": false,
+   "look": {
+    "age": "adult, 30s to 70s",
+    "build": "any",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "road-worn wrap, bright shoulder cloth",
+    "headgear": "head-cloth or bare head"
+   },
+   "personality": "Warm, dramatic, curious. Collects sayings and gives credit.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "Tell me a tale.",
+      "reply": "Once, a road stayed open all night.",
+      "next": {
+       "label": "Why that tale?",
+       "reply": "Because roads keep the best secrets."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any news?",
+      "reply": "News and tales walk together.",
+      "next": null
+     }
+    ],
+    "goodbye": "Tell it well, {name}."
+   },
+   "task": {
+    "id": "collect_sayings",
+    "type": "talk",
+    "offer": "Ask three people for a saying. I will weave them in.",
+    "hint": "Anyone will do. Elders know many.",
+    "done": "Lovely! A fine tale grows. Here, for you.",
+    "fail": "Not enough sayings yet. Keep asking.",
+    "reward": {
+     "items": [],
+     "coins": 3,
+     "standing": 2,
+     "rumour_bonus": true
+    },
+    "target_npc": "three_npcs",
+    "limit_s": 180,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "return_namaste",
+     "line": "Namaste, {name}! Sit, sit."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Wonderful! A tale for you!",
+     "mood": 1
+    },
+    "shove": {
+     "act": "scold",
+     "line": "Oh! Not in the middle of a tale!",
+     "forgive_window_s": 20
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Thief! Even in my tales!",
+     "chase_s": 6
+    },
+    "hit": {
+     "act": "flee_and_shout",
+     "line": "Help! Guard! Help!"
+    }
+   },
+   "mood_barks": {
+    "warm": "{name}! I added you to my tale.",
+    "cold": "I will tell a different tale about you."
+   }
+  },
+  {
+   "id": "town_guard",
+   "label": "Town guard",
+   "protected": false,
+   "look": {
+    "age": "adult, 25s to 55s",
+    "build": "strong to average",
+    "skin_tones": [
+     "deep brown",
+     "dark brown",
+     "medium brown",
+     "warm tan",
+     "light brown",
+     "olive"
+    ],
+    "garment": "short wrap, cloth belt",
+    "headgear": "simple turban or cap"
+   },
+   "personality": "Stern but fair. Dislikes crowds. Likes honest people.",
+   "menu": [
+    "talk",
+    "ask",
+    "help"
+   ],
+   "talk": {
+    "root_line_from": "eras[era].variants[id].talk",
+    "choices": [
+     {
+      "id": "c1",
+      "label": "What do you guard?",
+      "reply": "The lanes, the gate, and the peace.",
+      "next": {
+       "label": "Any trouble?",
+       "reply": "Not yet. Let us keep it that way."
+      }
+     },
+     {
+      "id": "c2",
+      "label": "Any advice?",
+      "reply": "Stay in the lit lanes. Be kind.",
+      "next": null
+     }
+    ],
+    "goodbye": "Safe road, {name}."
+   },
+   "task": {
+    "id": "return_purse",
+    "type": "deliver",
+    "offer": "Found a purse. Return it to the fruit seller?",
+    "hint": "Ask around if lost.",
+    "done": "Honest of you. Take this staff on loan.",
+    "fail": "Purse not returned. Try once more.",
+    "reward": {
+     "items": [
+      {
+       "id": "staff",
+       "n": 1,
+       "needs": "staff"
+      }
+     ],
+     "coins": 4,
+     "standing": 2
+    },
+    "target_npc": "fruit_seller",
+    "limit_s": 150,
+    "repeatable": false,
+    "blocks_mission": false
+   },
+   "reactions": {
+    "greet": {
+     "act": "nod",
+     "line": "Evening, {name}."
+    },
+    "gift": {
+     "act": "thank",
+     "line": "Gifts to a guard? Careful. But thanks.",
+     "mood": 0
+    },
+    "shove": {
+     "act": "warn",
+     "line": "Hands to yourself, {name}. Last warning."
+    },
+    "steal": {
+     "act": "shout_guard",
+     "line": "Stop! Hand it back!",
+     "chase_s": null,
+     "hostile": true
+    },
+    "hit": {
+     "act": "hold_player",
+     "line": "That is it. Stop right there!",
+     "hostile": true
+    }
+   },
+   "mood_barks": {
+    "warm": "Good to see you, {name}. Walk safe.",
+    "cold": "I am watching you. Keep your hands still."
+   }
+  }
+ ],
+ "eras": {
+  "hastinapur": {
+   "name": "Hastinapur, Dvapara Yuga",
+   "mission": "dvapara-escape",
+   "place": "Lamp Bazaar by night",
+   "currency": {
+    "id": "coin",
+    "display": "clay token",
+    "label": "Invented",
+    "year": "Legend"
+   },
+   "setting": "Night, lamp rows, canal lane, bridge bell. Tense but human.",
+   "dress": "Plain wraps and shoulder cloths, undyed to light dyes, no stitched tunics.",
+   "pressure": "Dawn bar; bridge bell",
+   "labels": [
+    {
+     "id": "h1",
+     "label": "History",
+     "year": "c. 1100-800 BCE",
+     "text": "Painted Grey Ware at Hastinapur Period II (B. B. Lal): the potter's grey bowls.",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "h2",
+     "label": "History",
+     "year": "c. 1000-600 BCE (as reported, unverified)",
+     "text": "Iron appears at Painted Grey Ware sites of the Ganga plain. Not checked here.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "h3",
+     "label": "History",
+     "year": "c. 1100-800 BCE (as reported, unverified)",
+     "text": "Farming and cattle at Painted Grey Ware sites. Exact crops not checked.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "h4",
+     "label": "History",
+     "year": "Absence of evidence (unverified)",
+     "text": "No coins or known script in these layers. Our tally knots are a story device.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "h5",
+     "label": "Tradition",
+     "year": "Legend",
+     "text": "Priests tending a household fire in the Vedic tradition. Shown with respect.",
+     "status": "tradition_review"
+    },
+    {
+     "id": "h6",
+     "label": "Tradition",
+     "year": "Legend",
+     "text": "Road reciters of tales, as in the epic tradition. No epic figure is named.",
+     "status": "tradition_review"
+    },
+    {
+     "id": "h7",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "The Lamp Bazaar crowd, the market folk, their names, tasks and clay tokens.",
+     "status": "invented"
+    },
+    {
+     "id": "h8",
+     "label": "Tradition",
+     "year": "Legend",
+     "text": "The eve of the great war (story frame, from docs/story.md).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "h9",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "Clay lamps for sale. Lamp use in this period not checked.",
+     "status": "invented"
+    },
+    {
+     "id": "h10",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "Woven cloth and cord for sale. Fabrics of the period not checked.",
+     "status": "invented"
+    }
+   ],
+   "variants": {
+    "lamp_seller": {
+     "names": [
+      "Sumana",
+      "Aryaka",
+      "Vasumati",
+      "Yashas"
+     ],
+     "role_name": "Lamp seller",
+     "goods": [
+      {
+       "item": "lamp",
+       "name": "clay lamp",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "oil",
+       "name": "pot of oil",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Lamps! Light your way before the oil runs short.",
+      "Clay lamps, warm in the hand. Come close.",
+      "Night is long, {name}. A flame is short.",
+      "Mind the oil. It spills and it burns.",
+      "Fewer buyers tonight. Everyone hurries home.",
+      "A lamp lit here guides a stranger home."
+     ],
+     "talk": "Lamps for the night, {name}? Take your time. Or none at all.",
+     "rumour": "Men with grey cords on their wrists. Not the city watch. Keep clear.",
+     "labels": [
+      "h7",
+      "h9"
+     ]
+    },
+    "spice_seller": {
+     "names": [
+      "Kalyani",
+      "Chandak",
+      "Mallika",
+      "Harita"
+     ],
+     "role_name": "Salt and seed seller",
+     "goods": [
+      {
+       "item": "spice",
+       "name": "salt and mustard seed",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Salt and mustard seed! Fresh from the field.",
+      "A pinch of ginger warms a cold night.",
+      "Grain is dear this season. Salt is not.",
+      "Smell this, {name}. It lifts a tired heart.",
+      "Seeds by the handful. Fair measure, always.",
+      "My scale is true. Ask anyone in the row."
+     ],
+     "talk": "Salt, mustard, ginger. What does your cook need, {name}?",
+     "rumour": "The canal bridge lifts at the bell. Cross before it rings.",
+     "labels": [
+      "h3",
+      "h7"
+     ]
+    },
+    "potter": {
+     "names": [
+      "Sudatta",
+      "Nandini",
+      "Pravin",
+      "Hemavati"
+     ],
+     "role_name": "Potter",
+     "goods": [
+      {
+       "item": "pot",
+       "name": "grey clay pot",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Grey bowls, smooth as river stone!",
+      "Hand-turned, fired hard. They will not leak.",
+      "Careful near my shelf, {name}. Clay breaks.",
+      "A pot holds water, grain, or a long night.",
+      "The kiln is still warm. Come see.",
+      "Every pot has a thumb mark. That one is mine."
+     ],
+     "talk": "Grey bowls and water pots. Pick one up, {name}. Go gently.",
+     "rumour": "Stall roofs are sound. When the lane fills, go over it.",
+     "labels": [
+      "h1"
+     ]
+    },
+    "cloth_merchant": {
+     "names": [
+      "Vasuman",
+      "Sunanda",
+      "Somadatta",
+      "Vimala"
+     ],
+     "role_name": "Cloth and cord seller",
+     "goods": [
+      {
+       "item": "rope",
+       "name": "twisted cord rope",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "bandage",
+       "name": "cloth strip",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Woven cloth! Soft wool, plain weave.",
+      "Cords and cloth strips. Strong and cheap.",
+      "A cloth wrap keeps off the night chill.",
+      "Rope for a roof, a cart, or a rescue.",
+      "Feel the weave, {name}. No flaws.",
+      "Dye dries slow in this damp air."
+     ],
+     "talk": "Cloth and cord, {name}. Tell me what you need to carry.",
+     "rumour": "The bridge bell hangs from a rope. Cut it, and you gain a little time.",
+     "labels": [
+      "h7",
+      "h10"
+     ]
+    },
+    "fruit_seller": {
+     "names": [
+      "Pushpa",
+      "Girika",
+      "Rohini",
+      "Devadatta"
+     ],
+     "role_name": "Fruit seller",
+     "goods": [
+      {
+       "item": "heal_fruit",
+       "name": "ripe ber and jamun",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "sweet",
+       "name": "jaggery sweet",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Sweet fruit! Ripe tonight, gone tomorrow.",
+      "Jamun, ber, mango. Taste one, {name}.",
+      "Fruit mends a tired runner. It is true.",
+      "Cool fruit for a hot-footed night.",
+      "Mind the rolling ones! They run off.",
+      "Last of the day's basket. A fair price."
+     ],
+     "talk": "Ripe fruit, {name}. A bite will keep you running.",
+     "rumour": "A child carries a lantern through the rows. Mind the little flame.",
+     "labels": [
+      "h7"
+     ]
+    },
+    "water_carrier": {
+     "names": [
+      "Kaushal",
+      "Sarala",
+      "Mitravan",
+      "Shruti"
+     ],
+     "role_name": "Water carrier",
+     "goods": [
+      {
+       "item": "water",
+       "name": "cup of cool water",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Water! Cool water from the deep well.",
+      "A sip for the road, {name}?",
+      "My pots are heavy. My feet know every step.",
+      "The canal is loud tonight. The well is quiet.",
+      "Water holds no grudge. Drink.",
+      "Lamp work is thirsty work. Drink up."
+     ],
+     "talk": "Water is one token, {name}. Or a kind word.",
+     "rumour": "The canal lane is long and crowded. Do not stop to fight there.",
+     "labels": [
+      "h7"
+     ]
+    },
+    "child": {
+     "names": [
+      "Anuj",
+      "Chitra",
+      "Kirti",
+      "Tulika"
+     ],
+     "role_name": "Child",
+     "goods": [],
+     "barks": [
+      "Look! My lantern is lit!",
+      "Race you to the well, {name}!",
+      "Why is everyone so quiet tonight?",
+      "I can hop on one foot. Watch me!",
+      "The big lamps are pretty from up here.",
+      "Mother says stay close. I am close!"
+     ],
+     "talk": "Hello, {name}! Do you want to see my lantern?",
+     "rumour": "I saw men with grey string on their wrists. They looked cross.",
+     "labels": [
+      "h7"
+     ]
+    },
+    "elder": {
+     "names": [
+      "Sujata",
+      "Gunavan",
+      "Ratnavati",
+      "Dhanvan"
+     ],
+     "role_name": "Elder",
+     "goods": [],
+     "barks": [
+      "I have seen many nights like this one.",
+      "Sit awhile, {name}. The road waits.",
+      "Young feet. How I miss them.",
+      "Be kind to strangers. Roads remember.",
+      "The old well has never run dry. Not once.",
+      "Hurry slowly, child. It saves time."
+     ],
+     "talk": "Namaste, {name}. Walk slowly. The city is restless tonight.",
+     "rumour": "When the bell rings, the bridge lifts. Cross while it is low.",
+     "labels": [
+      "h7",
+      "h8"
+     ]
+    },
+    "musician": {
+     "names": [
+      "Madhavi",
+      "Suhasini",
+      "Jivan",
+      "Sukant"
+     ],
+     "role_name": "Musician",
+     "goods": [],
+     "barks": [
+      "A tune for the tired. Pay what you like.",
+      "Flute and drum. The night wants music.",
+      "Even a worried city likes a song.",
+      "Listen, {name}. That one is for the road.",
+      "My drum keeps time. Your feet can too.",
+      "Soft tonight. The lanes are listening."
+     ],
+     "talk": "A song, {name}? Or news? I carry both.",
+     "rumour": "The east gate opens on a captain's word. Find an honest one.",
+     "labels": [
+      "h7"
+     ]
+    },
+    "scribe": {
+     "names": [
+      "Medhavin",
+      "Lekha",
+      "Ganaka",
+      "Buddhika"
+     ],
+     "role_name": "Tally keeper",
+     "goods": [],
+     "barks": [
+      "Counts kept, knots tied, grain tallied.",
+      "Ten sacks in, nine out. Someone is hungry.",
+      "I tie a knot for every promise made.",
+      "Messages carried. Tallies kept. Ask me.",
+      "Mind the knots, {name}. They are my memory.",
+      "A fair count makes a fair market."
+     ],
+     "talk": "I keep the tallies. Need a count or a message, {name}?",
+     "rumour": "Village grain runs low. A plea at the east gate could feed them.",
+     "labels": [
+      "h4",
+      "h7"
+     ]
+    },
+    "blacksmith": {
+     "names": [
+      "Dridha",
+      "Sthira",
+      "Bahuvan",
+      "Kumuda"
+     ],
+     "role_name": "Smith",
+     "goods": [
+      {
+       "item": "arrows",
+       "name": "iron-tipped arrow bundle",
+       "price": 3,
+       "qty": null,
+       "needs": "bow"
+      }
+     ],
+     "barks": [
+      "Hammer and fire! Hooks, blades, nails.",
+      "Iron is hard. So is the work.",
+      "Stand back, {name}. Sparks bite.",
+      "The bellows are tired. So am I.",
+      "A good hook holds a roof, a cart, a life.",
+      "Strike while it glows. Never after."
+     ],
+     "talk": "Mind the sparks, {name}. What do you need mended?",
+     "rumour": "Those spear points were not made here. Wrong shape, wrong hands.",
+     "labels": [
+      "h2"
+     ]
+    },
+    "priest": {
+     "names": [
+      "Vishrut",
+      "Sumedha",
+      "Havishmat",
+      "Ritayu"
+     ],
+     "role_name": "Fire-keeper",
+     "goods": [],
+     "barks": [
+      "May your road be safe, traveller.",
+      "The flame is tended. Be at peace.",
+      "Come, share the evening quiet.",
+      "A kind word is also an offering.",
+      "Walk with care. Night hides many things.",
+      "Peace to this city, and to you."
+     ],
+     "talk": "Namaste, {name}. May the warmth of the flame go with you.",
+     "rumour": "Keep to the lit lanes. Dark corners hide trouble tonight.",
+     "labels": [
+      "h5"
+     ]
+    },
+    "storyteller": {
+     "names": [
+      "Vakpati",
+      "Vachala",
+      "Gathika",
+      "Shlokin"
+     ],
+     "role_name": "Travelling reciter",
+     "goods": [],
+     "barks": [
+      "Gather round! A tale of the long road!",
+      "Once, a lamp walked all night. Listen!",
+      "Hush, children. The best part is next.",
+      "Tales cost nothing. Listening takes a little time.",
+      "A road remembers who walked it, {name}.",
+      "Shall I tell of the river and the lamp?"
+     ],
+     "talk": "A story, {name}? I know the river tale and the lamp tale.",
+     "rumour": "In my tale, the swift cross the bridge before the bell.",
+     "labels": [
+      "h6"
+     ]
+    },
+    "town_guard": {
+     "names": [
+      "Balavant",
+      "Veerak",
+      "Shaurya",
+      "Kshatrin"
+     ],
+     "role_name": "City watch",
+     "goods": [],
+     "barks": [
+      "Keep moving. Keep the lanes clear.",
+      "Quiet night. Let us keep it so.",
+      "The watch changes at the bell.",
+      "Mind the crowd, {name}. No pushing.",
+      "Lost? Ask. Tempted to steal? Think twice.",
+      "Grey cords? Not ours. Stay clear of them."
+     ],
+     "talk": "Evening, {name}. The watch is on. How can I help?",
+     "rumour": "The bridge bell shuts the canal. After it rings, no one crosses.",
+     "labels": [
+      "h7"
+     ]
+    }
+   }
+  },
+  "pataliputra": {
+   "name": "Pataliputra, Mauryan empire",
+   "mission": "mauryan-spy",
+   "place": "Ganga wharf lanes in monsoon rain",
+   "currency": {
+    "id": "coin",
+    "display": "silver pana",
+    "label": "History",
+    "year": "c. 4th-2nd century BCE (as reported, unverified)"
+   },
+   "setting": "Rain, wharf planks, timber yard, palisade lane, sluice house.",
+   "dress": "Wraps, shoulder cloths, oiled rain cloths, straw hats.",
+   "pressure": "River gauge; watch lanterns",
+   "labels": [
+    {
+     "id": "p1",
+     "label": "History",
+     "year": "c. 4th-2nd century BCE (as reported, unverified)",
+     "text": "Punch-marked silver coins (karshapana) in the Mauryan period. Pages not read.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "p2",
+     "label": "History",
+     "year": "c. late 4th-early 3rd century BCE (as reported, unverified)",
+     "text": "Megasthenes, via later writers, describes officials who oversee the city.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "p3",
+     "label": "History",
+     "year": "c. 3rd century BCE",
+     "text": "Brahmi script on Ashokan edicts. Everyday letter writing is our assumption.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "p4",
+     "label": "History",
+     "year": "c. 700-200 BCE (as reported, unverified)",
+     "text": "Northern Black Polished Ware, a fine glossy pottery.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "p5",
+     "label": "History",
+     "year": "c. 257 BCE (as reported)",
+     "text": "Ashokan edict records wells dug along roads (docs/story.md).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "p6",
+     "label": "History",
+     "year": "c. 260-232 BCE (as reported, unverified)",
+     "text": "Ashoka patronised Buddhist monks; other teachers and traditions lived alongside.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "p7",
+     "label": "Tradition",
+     "year": "Contested",
+     "text": "Arthashastra covers city watch and night rules. Date and author contested.",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "p8",
+     "label": "History",
+     "year": "c. late 4th-early 3rd century BCE; 1892-1899 CE",
+     "text": "Timber wall and palisade at Pataliputra (Megasthenes; Waddell).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "p9",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "The rain-market stalls, names and tasks near the Ganga wharf.",
+     "status": "invented"
+    }
+   ],
+   "variants": {
+    "lamp_seller": {
+     "names": [
+      "Tissa",
+      "Nanda",
+      "Gopaka",
+      "Upala"
+     ],
+     "role_name": "Lamp seller",
+     "goods": [
+      {
+       "item": "lamp",
+       "name": "hooded rain lamp",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "oil",
+       "name": "cup of oil",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Rain lamps! Hooded lamps that keep their flame.",
+      "Wet night, dark lane. Buy a light, {name}.",
+      "My wicks are dry. Everything else is not.",
+      "A lamp saves a stumble. Maybe a fall.",
+      "The river is loud tonight. Light helps.",
+      "Hooded lamps, plenty of oil. Come in from the rain."
+     ],
+     "talk": "Rain lamps, {name}. The hood keeps the wind out.",
+     "rumour": "Watch lanterns sweep the palisade lane in pairs tonight.",
+     "labels": [
+      "p9"
+     ]
+    },
+    "spice_seller": {
+     "names": [
+      "Dhanika",
+      "Sumitta",
+      "Bhadda",
+      "Nandaka"
+     ],
+     "role_name": "Pepper and ginger seller",
+     "goods": [
+      {
+       "item": "spice",
+       "name": "pepper and ginger",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Pepper from the far south! Hot and clean.",
+      "Ginger for the damp chest. Rain brings coughs.",
+      "Cumin, ginger, pepper. Honest weight.",
+      "Weighed true on the marked scale.",
+      "Rain ruins loose seed. Mine is wrapped.",
+      "Taste a pinch, {name}. No charge."
+     ],
+     "talk": "Pepper came a long way to this stall, {name}. Take some.",
+     "rumour": "Watchmen see what moves. Stand still in shadow and they pass.",
+     "labels": [
+      "p1",
+      "p2"
+     ]
+    },
+    "potter": {
+     "names": [
+      "Pusa",
+      "Culla",
+      "Sonaka",
+      "Mahaka"
+     ],
+     "role_name": "Potter",
+     "goods": [
+      {
+       "item": "pot",
+       "name": "rain jar",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Polished bowls, black as the night river!",
+      "Water jars, grain jars. Sound and plain.",
+      "Rain ruins the drying rack. Not the fired ware.",
+      "Do not lean on the shelf, {name}.",
+      "Fired hard, rung true. Hear that? No crack.",
+      "A pot outlasts its maker. Choose well."
+     ],
+     "talk": "Fine bowls and plain jars. Tap one, {name}. Hear it ring.",
+     "rumour": "Timber stacks in the yard stand tall. Good cover, bad footing.",
+     "labels": [
+      "p4"
+     ]
+    },
+    "cloth_merchant": {
+     "names": [
+      "Bhaddiya",
+      "Mitta",
+      "Kosika",
+      "Dhammika"
+     ],
+     "role_name": "Cloth and cord seller",
+     "goods": [
+      {
+       "item": "rope",
+       "name": "boat cord",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "bandage",
+       "name": "cloth strip",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Cotton and wool! Dry cloth for a wet night.",
+      "Rain wraps! Oiled cloth and straw hats.",
+      "Strong cord for boats and bundles.",
+      "Cloth from the east. Weave from the west.",
+      "Wrap up, {name}. The river air bites.",
+      "Fair price, fair cloth, fair word."
+     ],
+     "talk": "Cloth and cord, {name}. Rain is hard on the unready.",
+     "rumour": "Rain-soaked posts swell and slip. Do not linger in the palisade lane.",
+     "labels": [
+      "p8"
+     ]
+    },
+    "fruit_seller": {
+     "names": [
+      "Kisa",
+      "Jivala",
+      "Rohita",
+      "Padumi"
+     ],
+     "role_name": "Fruit seller",
+     "goods": [
+      {
+       "item": "heal_fruit",
+       "name": "jamun and plantain",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "sweet",
+       "name": "jaggery sweet",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Jamun and plantain! Sweet in the rain.",
+      "Ripe fruit! Wet hands, sweet mouths.",
+      "A bite of sweet for a bitter night.",
+      "Take two, {name}. They keep the cold off.",
+      "From the orchard to your hand by dusk.",
+      "Dry basket, wet street. Come under the awning."
+     ],
+     "talk": "Fruit to warm a wet night, {name}. A bite or two?",
+     "rumour": "The sluice house keeps the river gauge. When it climbs, so does worry.",
+     "labels": [
+      "p9"
+     ]
+    },
+    "water_carrier": {
+     "names": [
+      "Sona",
+      "Uttara",
+      "Kappa",
+      "Vaccha"
+     ],
+     "role_name": "Water carrier",
+     "goods": [
+      {
+       "item": "water",
+       "name": "cup of well water",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Well water! Clean and cold. No river mud.",
+      "The river is brown tonight. My well is clear.",
+      "A cup for the road, {name}?",
+      "Wells were dug for travellers. Drink.",
+      "Rain on my pole, rain on my head.",
+      "A full pot is a quiet pot."
+     ],
+     "talk": "Well water, {name}. The river is too muddy to drink tonight.",
+     "rumour": "Boats are tied double at the wharf. The river is rising, they say.",
+     "labels": [
+      "p5"
+     ]
+    },
+    "child": {
+     "names": [
+      "Bimba",
+      "Nanduka",
+      "Kuti",
+      "Pipali"
+     ],
+     "role_name": "Child",
+     "goods": [],
+     "barks": [
+      "The rain is so loud! I love it!",
+      "Splash! Catch me if you can, {name}!",
+      "Boats! So many boats on the river.",
+      "I saw a man run with a pouch.",
+      "I am not scared of the watch. A little scared.",
+      "Do puddles have bottoms? Let me check."
+     ],
+     "talk": "Hello! Do you like rain? I like rain.",
+     "rumour": "The timber yard has stacks taller than a house. Good for hiding!",
+     "labels": [
+      "p9"
+     ]
+    },
+    "elder": {
+     "names": [
+      "Mahallaka",
+      "Mahallika",
+      "Kevata",
+      "Yasoja"
+     ],
+     "role_name": "Elder",
+     "goods": [],
+     "barks": [
+      "This city was a village once, they say.",
+      "Rain again. The river rises, old bones ache.",
+      "Be careful in the dark, child.",
+      "A kind deed is never wasted.",
+      "Sit, {name}. Rest your feet a little.",
+      "My knees warn me before the rain does."
+     ],
+     "talk": "Come under the awning, {name}. The night is wet.",
+     "rumour": "The wall is old wood. Wet wood groans. Listen for it.",
+     "labels": [
+      "p8"
+     ]
+    },
+    "musician": {
+     "names": [
+      "Vinika",
+      "Gitaka",
+      "Sarika",
+      "Muraja"
+     ],
+     "role_name": "Musician",
+     "goods": [],
+     "barks": [
+      "Harp and drum! A tune against the rain.",
+      "Rain makes the best drum. Listen.",
+      "A song keeps spirits up, and mine too.",
+      "Pay in coin or in kindness, {name}.",
+      "The watch drum beats. Mine beats softer.",
+      "Soft song for a hard night."
+     ],
+     "talk": "A tune, {name}? The rain asks for one.",
+     "rumour": "The watch drum sounds at each turn. Count the beats, then go.",
+     "labels": [
+      "p9"
+     ]
+    },
+    "scribe": {
+     "names": [
+      "Lekhaka",
+      "Gananaka",
+      "Patika",
+      "Akkhara"
+     ],
+     "role_name": "Letter writer",
+     "goods": [],
+     "barks": [
+      "Letters written clear. Names, counts, notes.",
+      "Dictate, I will write. Fair price.",
+      "Writing dries slow in rain. Patience.",
+      "A note carried is a promise kept.",
+      "Count twice, write once, {name}.",
+      "The wharf is busy. So is my stylus."
+     ],
+     "talk": "I write letters and keep counts, {name}. What shall I write?",
+     "rumour": "The sluice house keeps the water record. Overseer Kshema reads it nightly.",
+     "labels": [
+      "p3"
+     ]
+    },
+    "blacksmith": {
+     "names": [
+      "Lohaka",
+      "Dhamaka",
+      "Tapaka",
+      "Ghanaka"
+     ],
+     "role_name": "Smith",
+     "goods": [
+      {
+       "item": "arrows",
+       "name": "iron-tipped arrow bundle",
+       "price": 3,
+       "qty": null,
+       "needs": "bow"
+      }
+     ],
+     "barks": [
+      "Iron hooks and nails! Hammer all night.",
+      "Rain hisses on hot iron. I like the sound.",
+      "Stand clear, {name}. Sparks jump.",
+      "Boats need nails. Boats need me.",
+      "Good iron lasts. Bad iron rusts.",
+      "Bellows, coal, patience."
+     ],
+     "talk": "Iron work, {name}. Hooks, nails, tools. What do you need?",
+     "rumour": "Palisade ties are rusting. Iron rings give way before the wood.",
+     "labels": [
+      "p9"
+     ]
+    },
+    "priest": {
+     "names": [
+      "Dhammaka",
+      "Santika",
+      "Sobhita",
+      "Pasada"
+     ],
+     "role_name": "Wandering monk",
+     "goods": [],
+     "barks": [
+      "May you be well and free from fear.",
+      "Rain falls on all alike. Peace to you.",
+      "I walk, and I ask for little.",
+      "A gentle word is a gift to everyone.",
+      "Be calm, traveller. Calm sees clearly.",
+      "May your road be safe, {name}."
+     ],
+     "talk": "Peace be with you, {name}. How can I help on this wet night?",
+     "rumour": "Walk with calm. The night watch is on edge, and so is the river.",
+     "labels": [
+      "p6"
+     ]
+    },
+    "storyteller": {
+     "names": [
+      "Kathika",
+      "Pavada",
+      "Akhyaka",
+      "Vacika"
+     ],
+     "role_name": "Travelling storyteller",
+     "goods": [],
+     "barks": [
+      "A tale of the river city! Come close!",
+      "Once, a quiet foot crossed a loud night.",
+      "Rain makes the best tale weather.",
+      "Hush, {name}. The tale is about to turn.",
+      "A story told is a story saved.",
+      "Tales are free. The shelter costs extra."
+     ],
+     "talk": "A story, {name}? Of the river, or of the quiet foot?",
+     "rumour": "In my tale, the quiet foot crosses where the loud foot is caught.",
+     "labels": [
+      "p9"
+     ]
+    },
+    "town_guard": {
+     "names": [
+      "Rakkhaka",
+      "Palaka",
+      "Rakkhita",
+      "Nagarika"
+     ],
+     "role_name": "Night watch",
+     "goods": [],
+     "barks": [
+      "Move along. Keep to the lit lanes.",
+      "Watch is doubled tonight. Stay clear.",
+      "Curfew soon. Home, friends, home.",
+      "No pushing at the wharf, {name}.",
+      "Questions? Ask. Trouble? Not on my watch.",
+      "River wall holds. So do I."
+     ],
+     "talk": "Evening, {name}. The night watch is on duty. Need help?",
+     "rumour": "Watch is doubled tonight. Keep out of the palisade lane, traveller.",
+     "labels": [
+      "p7",
+      "p8"
+     ]
+    }
+   }
+  },
+  "sangam": {
+   "name": "Sangam pepper road",
+   "mission": "sangam-staff",
+   "place": "Hill village stalls on the pepper road, dusk",
+   "currency": {
+    "id": "coin",
+    "display": "coin or measure of grain",
+    "label": "Invented",
+    "year": "Legend"
+   },
+   "setting": "Stream bank, rope bridge, goat path, harbour scales at evening tide.",
+   "dress": "Light cotton wraps, palm-leaf hats, bead and shell jewellery.",
+   "pressure": "Evening tide",
+   "labels": [
+    {
+     "id": "s1",
+     "label": "History",
+     "year": "c. 300 BCE-300 CE (dates debated)",
+     "text": "Sangam age poems and trade in Tamilakam (docs/story.md).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "s2",
+     "label": "History",
+     "year": "c. 1st century CE (as reported)",
+     "text": "Pepper traded to Yavana (Greek and Roman) merchants from a coast harbour.",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "s3",
+     "label": "History",
+     "year": "c. 1st century BCE-3rd century CE (as reported, unverified)",
+     "text": "Roman coins found in southern India. Used here as a hint of trade only.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "s4",
+     "label": "History",
+     "year": "c. 3rd century BCE onward (as reported, unverified)",
+     "text": "Tamil-Brahmi inscriptions, such as Mangulam. Palm leaf writing is Tradition.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "s5",
+     "label": "History",
+     "year": "c. 300 BCE-300 CE (as reported, unverified)",
+     "text": "Bards with a lute-harp (yazh) in Sangam poems.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "s6",
+     "label": "History",
+     "year": "c. 300 BCE-300 CE (as reported, unverified)",
+     "text": "Salt traded for grain in Sangam poems. Not used in lines yet.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "s7",
+     "label": "Tradition",
+     "year": "at least 4th century BCE (as reported)",
+     "text": "Bamboo staff practice named for silambu bamboo (silambam).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "s8",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "The pepper-road market folk, names, tasks and the caravan.",
+     "status": "invented"
+    },
+    {
+     "id": "s9",
+     "label": "History",
+     "year": "c. 1000 BCE-300 CE (as reported, unverified)",
+     "text": "Black-and-red ware pottery in the south.",
+     "status": "as_reported_unverified"
+    }
+   ],
+   "variants": {
+    "lamp_seller": {
+     "names": [
+      "Mullai",
+      "Selvan",
+      "Kuyil",
+      "Thennan"
+     ],
+     "role_name": "Lamp seller",
+     "goods": [
+      {
+       "item": "lamp",
+       "name": "bronze or clay lamp",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "oil",
+       "name": "cup of oil",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Lamps for the hill path! Dusk comes quick.",
+      "Bronze or clay. Both burn bright.",
+      "Evening tide is near. Light before you go.",
+      "A hill road in the dark is a hard road.",
+      "Wicks of cotton, oil by the cup.",
+      "Take a flame up the pass, {name}."
+     ],
+     "talk": "Lamps for the pass, {name}? The path gets dark fast.",
+     "rumour": "The old rope bridge sways even in calm air. Test each plank.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "spice_seller": {
+     "names": [
+      "Ponni",
+      "Kadalan",
+      "Malar",
+      "Arivan"
+     ],
+     "role_name": "Pepper seller",
+     "goods": [
+      {
+       "item": "spice",
+       "name": "black pepper",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Black pepper! The best from the hills.",
+      "Gold in a sack. Ask the harbour.",
+      "Pepper climbs on trees. Yes, trees.",
+      "Hill pay, hill pepper. Handle with care.",
+      "Smell that, {name}? That is a winter's wages.",
+      "Weigh it twice. I always do."
+     ],
+     "talk": "Hill pepper, {name}. A whole season in one sack.",
+     "rumour": "Sacks must reach the harbour scales before the tide turns.",
+     "labels": [
+      "s2",
+      "s3"
+     ]
+    },
+    "potter": {
+     "names": [
+      "Nilavu",
+      "Mazhavan",
+      "Kayal",
+      "Ezhilan"
+     ],
+     "role_name": "Potter",
+     "goods": [
+      {
+       "item": "pot",
+       "name": "clay jar",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Jars for grain, jars for water!",
+      "Red clay, hill clay. Fired in my own kiln.",
+      "Black-and-red ware, plain and strong.",
+      "Mind the jars, {name}. Clay is shy.",
+      "A cracked jar is a lesson. Mind your elbows.",
+      "Fill one at the stream. It stays cool."
+     ],
+     "talk": "Black-and-red jars, {name}. Sturdy for the road.",
+     "rumour": "The stream bank is slick. Jars and travellers both slip there.",
+     "labels": [
+      "s9"
+     ]
+    },
+    "cloth_merchant": {
+     "names": [
+      "Vanji",
+      "Thenral",
+      "Alli",
+      "Kuvalai"
+     ],
+     "role_name": "Cloth and sack seller",
+     "goods": [
+      {
+       "item": "rope",
+       "name": "strong cord",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "bandage",
+       "name": "cloth strip",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Fine cotton! Light for the hot coast.",
+      "Cloth, cord and sack. Everything to carry.",
+      "Strong sacks hold pepper. Weak ones spill.",
+      "Dyed in plant colours. They hold fast.",
+      "A good rope has saved a sack and a life.",
+      "Feel the thread, {name}. Even and strong."
+     ],
+     "talk": "Cloth, sacks and cord, {name}. What are you carrying?",
+     "rumour": "Ropes do not snap alone. Keep your sacks tied and your eyes up.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "fruit_seller": {
+     "names": [
+      "Vennila",
+      "Pavai",
+      "Aruvi",
+      "Inbam"
+     ],
+     "role_name": "Fruit seller",
+     "goods": [
+      {
+       "item": "heal_fruit",
+       "name": "banana and jackfruit",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "sweet",
+       "name": "jaggery sweet",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Bananas! Sweet jackfruit! Fresh from the grove.",
+      "Hill fruit, coast fruit. Taste one, {name}.",
+      "A ripe fruit for a hard climb.",
+      "Peel it yourself. I only pick.",
+      "Fruit is the best pay for a tired back.",
+      "Fresh since dawn. Gone by dusk."
+     ],
+     "talk": "Fruit for the climb, {name}? Take your pick.",
+     "rumour": "Goats use the narrow path above the stream. So do worse company.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "water_carrier": {
+     "names": [
+      "Tendral",
+      "Oviya",
+      "Kuzhalan",
+      "Neerali"
+     ],
+     "role_name": "Water carrier",
+     "goods": [
+      {
+       "item": "water",
+       "name": "cup of spring water",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Spring water! Sweet and cold from the hill.",
+      "Drink before the climb, {name}.",
+      "The stream runs high. Take water from my jars.",
+      "Cool water costs less than a cramp.",
+      "Pots on a pole, steps on the stone.",
+      "Careful on wet rocks. I know them well."
+     ],
+     "talk": "Spring water, {name}. Drink slowly. The path is steep.",
+     "rumour": "Rocks near the ledge crumble. Test each step before you trust it.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "child": {
+     "names": [
+      "Mugil",
+      "Arul",
+      "Tenmozhi",
+      "Siru"
+     ],
+     "role_name": "Child",
+     "goods": [],
+     "barks": [
+      "I can climb the big rock!",
+      "Hear the stream? It is singing.",
+      "Catch me, {name}! You cannot!",
+      "Look, a goat! He is eating my string.",
+      "Father says pepper pays for winter.",
+      "I counted ten boats at the harbour once."
+     ],
+     "talk": "Hello! Do you have a goat? I like goats.",
+     "rumour": "A man on the high rock watched the bridge all morning. He had a bow.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "elder": {
+     "names": [
+      "Mudhiyon",
+      "Mudhiyal",
+      "Arivudai",
+      "Kaliyan"
+     ],
+     "role_name": "Elder",
+     "goods": [],
+     "barks": [
+      "I walked this pass before you were born.",
+      "Pepper pays, but patience pays better.",
+      "Sit, sit. The harbour can wait a breath.",
+      "The hills feed us. Be kind to them.",
+      "Mind the old ones on the path, {name}.",
+      "My knees say rain. They are never wrong."
+     ],
+     "talk": "Vanakkam, {name}. Walk slowly. The hills teach patience.",
+     "rumour": "At dusk the tide turns. Sacks must reach the scales before it.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "musician": {
+     "names": [
+      "Yazhini",
+      "Isaiyan",
+      "Kuralan",
+      "Isai"
+     ],
+     "role_name": "Bard with a yazh",
+     "goods": [],
+     "barks": [
+      "Strings and song! A tune for the road.",
+      "The yazh sings of hills and harbours.",
+      "A bard eats what the song earns.",
+      "Listen, {name}. That one is for the stream.",
+      "Sing it once, and the road remembers.",
+      "Soft strings tonight. The wind is up."
+     ],
+     "talk": "A song for the pass, {name}? Or news from the harbour?",
+     "rumour": "I sang for the caravan at dawn. Their master worried about the bridge.",
+     "labels": [
+      "s5"
+     ]
+    },
+    "scribe": {
+     "names": [
+      "Kanakkan",
+      "Mathi",
+      "Ezhuthan",
+      "Nallan"
+     ],
+     "role_name": "Scribe and counter",
+     "goods": [],
+     "barks": [
+      "Letters cut on stone, marks on leaf.",
+      "A sack counted is a sack kept.",
+      "Palm leaf keeps a promise longer than breath.",
+      "The harbour scale gives numbers. I write them.",
+      "Need a mark? A name? A count?",
+      "Mind the stylus, {name}. It scratches deep."
+     ],
+     "talk": "I keep counts and write names, {name}. What is yours to write?",
+     "rumour": "The harbour clerk seals each sack. A sealed sack cannot be argued with.",
+     "labels": [
+      "s4"
+     ]
+    },
+    "blacksmith": {
+     "names": [
+      "Valavan",
+      "Thazhal",
+      "Kodiyan",
+      "Anbazhagan"
+     ],
+     "role_name": "Smith",
+     "goods": [
+      {
+       "item": "arrows",
+       "name": "iron-tipped arrow bundle",
+       "price": 3,
+       "qty": null,
+       "needs": "bow"
+      }
+     ],
+     "barks": [
+      "Iron and fire! Hooks, nails, spear tips.",
+      "Charcoal is dear. Iron is dearer.",
+      "Stand back, {name}. Sparks fly.",
+      "A hook holds a sack. A good one holds a bridge.",
+      "Bellows, hammer, patience. That is a smith.",
+      "I mend, I do not break. Remember that."
+     ],
+     "talk": "Iron work, {name}. What needs mending or making?",
+     "rumour": "That rope bridge was strong. Ropes do not snap on their own.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "priest": {
+     "names": [
+      "Arulan",
+      "Nallar",
+      "Gnani",
+      "Pugazh"
+     ],
+     "role_name": "Hill shrine keeper",
+     "goods": [],
+     "barks": [
+      "May the hills keep you, traveller.",
+      "Flowers at the shrine, peace in the heart.",
+      "Come in quietly. Leave worries at the door.",
+      "A traveller's blessing costs nothing.",
+      "Safe road, kind hands, full heart.",
+      "The hill is old. Be gentle with it."
+     ],
+     "talk": "Vanakkam, {name}. May your road be safe and your load light.",
+     "rumour": "Walk the goat path by day. After dusk the stones are treacherous.",
+     "labels": [
+      "s8"
+     ]
+    },
+    "storyteller": {
+     "names": [
+      "Kathaiyan",
+      "Paadini",
+      "Sollan",
+      "Vaiyan"
+     ],
+     "role_name": "Travelling storyteller",
+     "goods": [],
+     "barks": [
+      "A tale from the hill! A tale from the sea!",
+      "Hush now. The best part is the bridge.",
+      "My story has a pepper vine and a clever goat.",
+      "Sit close, {name}. The wind carries the words.",
+      "Tales are cheap. Listening is a gift.",
+      "Once, a road stayed open all night..."
+     ],
+     "talk": "A tale for the road, {name}? Hills, sea, or goats?",
+     "rumour": "In my tale, the staff turns spears. Ask Poonkodi at the bamboo grove.",
+     "labels": [
+      "s7",
+      "s8"
+     ]
+    },
+    "town_guard": {
+     "names": [
+      "Kaavalan",
+      "Veeran",
+      "Maravan",
+      "Thalaiyan"
+     ],
+     "role_name": "Harbour watch",
+     "goods": [],
+     "barks": [
+      "Keep to the road. Keep sacks in sight.",
+      "Harbour watch. We keep the scales honest.",
+      "No pushing at the weigh stand, {name}.",
+      "Thieves like crowded harbours. Watch your purse.",
+      "Slow day. I like slow days.",
+      "Report trouble to me. Do not make it."
+     ],
+     "talk": "Evening, {name}. The harbour watch is at your service.",
+     "rumour": "Someone is watching the pass. Stay close to the caravan.",
+     "labels": [
+      "s8"
+     ]
+    }
+   }
+  },
+  "gupta": {
+   "name": "Gupta forge road",
+   "mission": "gupta-forge",
+   "place": "Roadside stalls beside the forge, near dawn",
+   "currency": {
+    "id": "coin",
+    "display": "small coin",
+    "label": "Invented",
+    "year": "Legend"
+   },
+   "setting": "Forge yard, gate, shed, bellows, bridge nails due by dawn.",
+   "dress": "Stitched cotton and some silk, belts, simple jewellery.",
+   "pressure": "Dawn bar; gate bar",
+   "labels": [
+    {
+     "id": "g1",
+     "label": "History",
+     "year": "c. 320-550 CE",
+     "text": "Gupta empire (docs/story.md).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "g2",
+     "label": "History",
+     "year": "c. 4th-5th century CE (debated)",
+     "text": "Delhi iron pillar, known for resisting rust.",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "g3",
+     "label": "History",
+     "year": "4th-6th century CE (as reported)",
+     "text": "Gold coins of the Gupta kings, including archer types.",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "g4",
+     "label": "History",
+     "year": "c. 335-380 CE (as reported, unverified)",
+     "text": "Gold coins show a lute-type instrument (lyrist type). No ruler is shown in game.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "g5",
+     "label": "History",
+     "year": "c. 436-473 CE (as reported, unverified)",
+     "text": "A silk-weavers' guild is named in the Mandasor inscription. Pages not read.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "g6",
+     "label": "History",
+     "year": "c. 5th-6th century CE (as reported, unverified)",
+     "text": "Early brick and stone temples, for example at Deogarh and Bhitargaon.",
+     "status": "as_reported_unverified"
+    },
+    {
+     "id": "g7",
+     "label": "Tradition",
+     "year": "date unclear",
+     "text": "The Dhanurveda, the science of the bow (docs/story.md).",
+     "status": "in_repo_needs_review"
+    },
+    {
+     "id": "g8",
+     "label": "Invented",
+     "year": "Legend",
+     "text": "The forge-road market folk, names and tasks, and the smith Ayasa's neighbours.",
+     "status": "invented"
+    }
+   ],
+   "variants": {
+    "lamp_seller": {
+     "names": [
+      "Dipika",
+      "Dattaka",
+      "Vasanti",
+      "Ratnaka"
+     ],
+     "role_name": "Lamp seller",
+     "goods": [
+      {
+       "item": "lamp",
+       "name": "brass or clay lamp",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "oil",
+       "name": "cup of oil",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Lamps and wicks! Light the forge road.",
+      "Brass lamps, clay lamps. All burn well.",
+      "Dawn is far, {name}. A lamp is near.",
+      "The forge road is long and dark. Buy light.",
+      "Oil is cheap. Falling in a ditch is not.",
+      "Smiths use my lamps for night work."
+     ],
+     "talk": "Lamps for the forge road, {name}? The nights are black.",
+     "rumour": "Watch the forge gate at night. Strange men gather near it.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "spice_seller": {
+     "names": [
+      "Madhuri",
+      "Sarvadatta",
+      "Kumudini",
+      "Nagadatta"
+     ],
+     "role_name": "Spice seller",
+     "goods": [
+      {
+       "item": "spice",
+       "name": "pepper and cumin",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Pepper, ginger, cumin, cardamom!",
+      "Spice from the south, salt from the coast.",
+      "Warm food for a cold dawn.",
+      "A pinch for the soup, a pinch for the road.",
+      "Honest weights. Ask anyone on the road.",
+      "Pepper keeps well. So do friends, {name}."
+     ],
+     "talk": "Spice for the road, {name}? Or something to warm the pot?",
+     "rumour": "Raiders were seen near the bridge works. Walk with a crowd.",
+     "labels": [
+      "g3",
+      "g8"
+     ]
+    },
+    "potter": {
+     "names": [
+      "Bandhula",
+      "Charulata",
+      "Priyadatta",
+      "Bhadrika"
+     ],
+     "role_name": "Potter",
+     "goods": [
+      {
+       "item": "pot",
+       "name": "cooling jar",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Pots and pans! Strong, fired, ready!",
+      "Water jars, oil jars, cooking pots.",
+      "Careful, {name}. A broken pot is a lost coin.",
+      "Plain red clay. Plain honest work.",
+      "Smiths buy my cooling jars by the dozen.",
+      "Clay remembers every thumb."
+     ],
+     "talk": "Pots for the pot, {name}. Take one in your hands.",
+     "rumour": "The smith wants cooling jars by dawn. Something big is being made.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "cloth_merchant": {
+     "names": [
+      "Pramila",
+      "Mitrasena",
+      "Hemlata",
+      "Dharmapal"
+     ],
+     "role_name": "Cloth and cord seller",
+     "goods": [
+      {
+       "item": "rope",
+       "name": "strong cord",
+       "price": 3,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "bandage",
+       "name": "cloth strip",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Cotton and silk! Fine weave, fair price.",
+      "Silk for some, cotton for most. Both warm.",
+      "Ropes and sacking for the road.",
+      "Cord for bundles, cloth for bandages.",
+      "Strong cloth, strong stitch, strong word.",
+      "Feel the weave, {name}. No flaws."
+     ],
+     "talk": "Cloth, cord and bandage, {name}. What do you need?",
+     "rumour": "A rider with a grey cord on his wrist asked about couriers.",
+     "labels": [
+      "g5"
+     ]
+    },
+    "fruit_seller": {
+     "names": [
+      "Sarika",
+      "Kumaradatta",
+      "Indumati",
+      "Gunin"
+     ],
+     "role_name": "Fruit seller",
+     "goods": [
+      {
+       "item": "heal_fruit",
+       "name": "pomegranate and mango",
+       "price": 2,
+       "qty": null,
+       "needs": null
+      },
+      {
+       "item": "sweet",
+       "name": "jaggery sweet",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Mangoes and pomegranates! Sweet and fresh.",
+      "A fruit makes a tired traveller smile.",
+      "Pomegranate! Red and juicy.",
+      "Eat one now, {name}. Carry one for later.",
+      "Fresh from the grove at dawn.",
+      "Sweet fruit, small price, big smile."
+     ],
+     "talk": "Fruit for the road, {name}? A bite heals more than you think.",
+     "rumour": "Bridge nails are due by dawn. The village cannot cross without them.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "water_carrier": {
+     "names": [
+      "Sulochana",
+      "Ravisena",
+      "Mrinal",
+      "Sushena"
+     ],
+     "role_name": "Water carrier",
+     "goods": [
+      {
+       "item": "water",
+       "name": "cup of cool water",
+       "price": 1,
+       "qty": null,
+       "needs": null
+      }
+     ],
+     "barks": [
+      "Cool water! Wells along the road.",
+      "A sip for the smith, a sip for you.",
+      "The road is dusty, {name}. Drink.",
+      "Charcoal makes thirst. Water cures it.",
+      "Pot on my shoulder, road under my feet.",
+      "A drink given today is repaid tomorrow."
+     ],
+     "talk": "Water, {name}. The forge makes everyone thirsty.",
+     "rumour": "The forge gate is the only way in. Guard it well after dark.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "child": {
+     "names": [
+      "Chiru",
+      "Lalita",
+      "Kundan",
+      "Tilaka"
+     ],
+     "role_name": "Child",
+     "goods": [],
+     "barks": [
+      "I want to be a smith! Or a drummer!",
+      "The anvil is so loud! Bang bang bang!",
+      "Race me, {name}! To the big tree!",
+      "I saw sparks fly like stars.",
+      "My ball went under the cart. Again.",
+      "Father says I ask too many questions."
+     ],
+     "talk": "Hello! Have you seen the forge? It has fire inside.",
+     "rumour": "Big men with grey string came to the gate. They bought nothing.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "elder": {
+     "names": [
+      "Gunavati",
+      "Sukirti",
+      "Dharmasen",
+      "Priyamvada"
+     ],
+     "role_name": "Elder",
+     "goods": [],
+     "barks": [
+      "I remember when this road was a path.",
+      "The forge fire has burned all my life.",
+      "Sit with me, {name}. The sun is kind.",
+      "Young people hurry. Old people arrive.",
+      "A good smith is a good neighbour.",
+      "Mind the cart ruts. They are deep."
+     ],
+     "talk": "Namaste, {name}. The road is long. Rest your feet.",
+     "rumour": "Bridge nails matter more than any sword. People must cross.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "musician": {
+     "names": [
+      "Swaralata",
+      "Madhurak",
+      "Ragini",
+      "Tantuka"
+     ],
+     "role_name": "Musician",
+     "goods": [],
+     "barks": [
+      "Veena and flute! Songs for the road.",
+      "Old coins show a lute like mine. I am proud.",
+      "A song for the smith. A song for the sparks.",
+      "Strings tuned, voice warm, {name}.",
+      "The anvil keeps my beat.",
+      "Pay in coin, or sing along."
+     ],
+     "talk": "A song, {name}? The anvil keeps time for me.",
+     "rumour": "The anvils stopped at dusk. When anvils stop, trouble starts.",
+     "labels": [
+      "g4"
+     ]
+    },
+    "scribe": {
+     "names": [
+      "Lekhin",
+      "Patrika",
+      "Granthin",
+      "Akshar"
+     ],
+     "role_name": "Letter writer",
+     "goods": [],
+     "barks": [
+      "Letters, deeds, accounts. Written fair.",
+      "Palm leaf or bark. Which will you have?",
+      "A letter sent is a mind opened.",
+      "I write what you say, {name}. No more.",
+      "Names and numbers, neatly kept.",
+      "The forge orders are mine to keep."
+     ],
+     "talk": "Letters and accounts, {name}. What shall I write for you?",
+     "rumour": "The smith Ayasa promised bridge nails by dawn. The village counts on it.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "blacksmith": {
+     "names": [
+      "Angara",
+      "Sthaman",
+      "Lohit",
+      "Dhumra"
+     ],
+     "role_name": "Smith",
+     "goods": [
+      {
+       "item": "arrows",
+       "name": "iron-tipped arrow bundle",
+       "price": 3,
+       "qty": null,
+       "needs": "bow"
+      }
+     ],
+     "barks": [
+      "Iron! Hooks, nails, tools! Fire-fresh!",
+      "Iron that does not rust? I would love to know how.",
+      "Hammer and tongs! Mind the sparks, {name}.",
+      "Good iron makes a good road.",
+      "Nails for the bridge are my best work.",
+      "Charcoal, bellows, patience."
+     ],
+     "talk": "Mind the sparks, {name}. What can I forge or mend?",
+     "rumour": "The bellows must work until dawn. The fire cannot sleep.",
+     "labels": [
+      "g2",
+      "g7"
+     ]
+    },
+    "priest": {
+     "names": [
+      "Dharmasharma",
+      "Vedamitra",
+      "Shantidatta",
+      "Nirmal"
+     ],
+     "role_name": "Shrine priest",
+     "goods": [],
+     "barks": [
+      "May you be at peace, traveller.",
+      "The small stone shrine is open to all.",
+      "Bring a flower, or just bring yourself.",
+      "A calm mind walks farther, {name}.",
+      "I keep the lamps. Please keep the peace.",
+      "May this road stay open, and kind."
+     ],
+     "talk": "Namaste, {name}. The shrine is quiet if you wish to rest.",
+     "rumour": "Do not linger near the forge gate after dark. Danger gathers there.",
+     "labels": [
+      "g6"
+     ]
+    },
+    "storyteller": {
+     "names": [
+      "Akhyan",
+      "Kathadatta",
+      "Vachaka",
+      "Charita"
+     ],
+     "role_name": "Travelling storyteller",
+     "goods": [],
+     "barks": [
+      "A tale! Of smiths and roads and dawn!",
+      "Hush! The hero of this tale is a hammer.",
+      "I tell it plain. The listeners make it grand.",
+      "Sit, {name}. The best tale is a short one.",
+      "A story keeps the forge road company.",
+      "Once there was a gate that never shut..."
+     ],
+     "talk": "A tale, {name}? Of smiths, roads, or the dawn bell?",
+     "rumour": "In my tale the gate holds till the dawn bell. I hope it is true.",
+     "labels": [
+      "g8"
+     ]
+    },
+    "town_guard": {
+     "names": [
+      "Prahari",
+      "Veerasen",
+      "Ranamitra",
+      "Balamitra"
+     ],
+     "role_name": "Road watch",
+     "goods": [],
+     "barks": [
+      "Move along. The road belongs to all.",
+      "Raiders about. Stay near the crowd.",
+      "Keep to the lit lane, {name}.",
+      "No fights at the forge, please.",
+      "Watch is tight tonight. Help if you can.",
+      "Honest folk have nothing to fear."
+     ],
+     "talk": "Evening, {name}. The road watch is on duty.",
+     "rumour": "Raiders gather near the forge gate. If you can, help hold it.",
+     "labels": [
+      "g1"
+     ]
+    }
+   }
+  }
+ }
+}

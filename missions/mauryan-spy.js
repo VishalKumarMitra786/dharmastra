@@ -6,6 +6,13 @@ export const layout = {
   rules: 2, // combat on. Stealth stays: stay out of a watchman's sight cone and he never fights you. Seen, he calls his mates, and he is armed.
   theme: 'pataliputra', // era look used by the 3D renderer
   tileSize: 72,
+  // Props (docs/review/prop-hooks.md; tile units): a night market of pots and lamps, benches in the lanes. Stealth is still the point: a thrown pot makes noise and wakes the watch, and a prop never makes you unseen.
+  props: [
+    { kind: 'clay-pot', at: [2.5, 6.5] }, { kind: 'clay-pot', at: [8.5, 1.5] }, { kind: 'clay-pot', at: [20.5, 6.5] }, { kind: 'clay-pot', at: [26.5, 11.5] },
+    { kind: 'oil-lamp', at: [7.5, 11.5] }, { kind: 'oil-lamp', at: [14.5, 8.5] }, { kind: 'oil-lamp', at: [31.5, 6.5] },
+    { kind: 'bench', at: [14.5, 6.5] }, { kind: 'bench', at: [23.5, 11.5] }, { kind: 'crate', at: [2.5, 2.5] },
+    { kind: 'grain-sack', at: [8.5, 7.5] }, { kind: 'stone', at: [19.5, 10.5] }, { kind: 'rope', at: [30.5, 1.5] }, { kind: 'stick', at: [4.5, 12.5] },
+  ],
   startAngle: 0, // radians, 0 = east
   timeLimit: 300, // seconds in "standard" timer mode; "extended" doubles it
   rows: [

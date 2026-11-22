@@ -17,6 +17,10 @@
 //              attack: null | {id, idx, of (chain length), reach, halfArc, unblockable, ranged, windup, active, recover},
 //              target: null | {id:'player', x, y, angle}  who it is going for, aim: null | {x0,y0,x1,y1,locked} (archer aim line), guard (shield raised), open (can be finished),
 //              role: attacker|flanker|waiting|chaser|archer|none, calling (shouting for allies), flinch, phaseNo (captain phase 1..3), invulnerable, awareness 0..1, sight: {range, half}}],
+//   props: [{id, kind, name, x, y, state: idle|held|thrown|broken, angle, z (0..1 lift while thrown), uses, maxUses, durability 0..1, crack 0|1|2|3 (3 = broken), holder: 'player'|null, fire}]  (docs/review/prop-hooks.md)
+//   player.held: null | {id, kind, name, cls, uses, maxUses, durability, crack, twoHands, canThrow, fire, guard}; player.weapon is 'none' while a prop is held
+//   enemies[].carry: prop kind in hand or null (unarmed), enemies[].rearm: null | {propId, grabbing, t 0..1} (walking to / bending for a loose prop)
+//   hud: {heldName, heldDurability 0..1, heldCrack, prompt (<= 3 words, '' when none), promptProp}
 //   pickups: [{id,x,y,kind,taken}], targets: [{id,x,y,flash 0..1}],
 //   arrows: [{x,y,angle}] (the player's, in flight), projectiles: [{x,y,angle,from: 'player'|'enemy',kind:'arrow'}] (every arrow in flight),
 //   obstacles: [{x,y,w,d,kind: lowwall|beam|grass|ledge|pit}], events: [{type,x,y,...}] (one-shot, drained by this call),
@@ -25,7 +29,7 @@
 //   effects: {shake: 0..1, flash: 0..1}, reducedMotion: boolean, time: seconds
 // }
 // Contract for the renderer: see docs/review/combat-hooks.md.
-import { COMBAT, ENEMY, COMBOS, dodgeInvulnerable, attackClear, MAX_ATTACKERS } from './combat.js';
+import { COMBAT, kitOf, comboSetFor, dodgeInvulnerable, attackClear, MAX_ATTACKERS, propsFrame, heldFrame, propPrompt } from './combat.js';
 export const RENDERER_METHODS = ['resize', 'setWorld', 'render'];
 
 export function assertRenderer(r) {
@@ -45,13 +49,14 @@ function aimLine(sim, e, a) {
 }
 
 function enemyFrame(sim, e) {
-  const R = ENEMY[e.kind] || ENEMY.raider; const a = e.atk; const c = sim.chariot;
+  const R = kitOf(e); const a = e.atk; const c = sim.chariot;
   const phase = a ? a.phase : null;
   const bearing = Math.atan2(c.y - e.y, c.x - e.x);
   const sight = e.kind === 'sparrer' ? R.sight : R.sight;
   return {
     id: e.id, kind: e.kind, weapon: R.weapon, x: e.x, y: e.y, angle: e.angle, facing: e.angle, hpFrac: e.maxHp ? e.hp / e.maxHp : 0,
-    state: phase || (e.state === 'attack' ? 'chase' : e.state), phase, phaseT: a ? Math.min(1, a.t / PHASE_DUR(a, phase)) : 0,
+    state: phase || (e.state === 'attack' || e.state === 'rearm' ? 'chase' : e.state), carry: e.carry ?? null,
+    rearm: e.state === 'rearm' && e.rearm ? { propId: e.rearm.id, grabbing: e.rearm.t > 0, t: Math.min(1, e.rearm.t / 0.7) } : null, phase, phaseT: a ? Math.min(1, a.t / PHASE_DUR(a, phase)) : 0,
     windup: phase === 'windup' ? Math.min(1, a.t / a.windup) : 0,
     attack: a ? { id: a.name, idx: a.idx, of: a.n, reach: a.def.reach, halfArc: a.def.halfArc, unblockable: !!a.def.unblockable, ranged: !!a.def.ranged, windup: a.windup, active: a.def.active, recover: a.def.recover } : null,
     target: e.aware && e.state !== 'down' && e.state !== 'patrol' ? { id: 'player', x: c.x, y: c.y, angle: bearing } : null,
@@ -68,10 +73,11 @@ export function makeFrame(sim, effects, reducedMotion, cam = {}, extra = {}) {
   const swing = (p?.state === 'attack' || p?.state === 'shove') && !!spec;
   const fx = sim.fx ? sim.fx.splice(0) : []; // one-shot feedback: each event is shown in exactly one frame
   const live = (sim.enemies || []);
-  const heavySpec = p ? (COMBOS[p.weapon] || COMBOS.none).heavy : null;
+  const heavySpec = p ? comboSetFor(p).heavy : null;
+  const held = p && sim.rules2 ? heldFrame(sim) : null; const prompt = sim.rules2 ? propPrompt(sim) : null;
   return {
     player: {
-      state: p?.state ?? 'idle', stateT: p?.stateT ?? 0, weapon: p?.weapon ?? 'none', crouch: !!p?.crouching,
+      state: p?.state ?? 'idle', stateT: p?.stateT ?? 0, weapon: held ? 'none' : p?.weapon ?? 'none', held, crouch: !!p?.crouching,
       stamina: p ? p.stamina / COMBAT.stamina.max : 1, draw: p ? p.draw / COMBAT.bow.drawTime : 0, arrows: p?.arrows ?? 0,
       invulnerable: !!p && dodgeInvulnerable(p), blocking: p?.state === 'block', parrying: p?.state === 'block' && p.stateT <= COMBAT.block.parryWindow, aimAngle: p?.aimAngle ?? 0,
       facing: c.moveAngle ?? c.angle, combo: p?.combo ?? -1, finisher: p?.state === 'finisher',
@@ -80,6 +86,8 @@ export function makeFrame(sim, effects, reducedMotion, cam = {}, extra = {}) {
     targets: (sim.targets || []).map((t) => ({ id: t.id, x: t.x, y: t.y, flash: Math.min(1, t.flash / 0.3) })),
     arrows: (sim.arrows || []).filter((a) => a.active).map((a) => ({ x: a.x, y: a.y, angle: a.angle })),
     projectiles: [...(sim.arrows || []).filter((a) => a.active).map((a) => ({ x: a.x, y: a.y, angle: a.angle, from: 'player', kind: 'arrow' })), ...(sim.eArrows || []).filter((a) => a.active).map((a) => ({ x: a.x, y: a.y, angle: a.angle, from: 'enemy', kind: 'arrow' }))],
+    props: sim.rules2 ? propsFrame(sim) : [],
+    hud: { heldName: held ? held.name : '', heldDurability: held ? held.durability : 0, heldCrack: held ? held.crack : 0, prompt: prompt ? prompt.text : '', promptProp: prompt ? prompt.propId : null },
     pickups: (sim.pickups || []).map((k) => ({ id: k.id, x: k.x, y: k.y, kind: k.kind, taken: k.taken })),
     obstacles: (sim.world.obstacles || []).map((o) => ({ x: o.x, y: o.y, w: o.w, d: o.d, kind: o.kind })),
     events: fx,

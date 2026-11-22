@@ -391,8 +391,8 @@ test('third-person camera: stick is relative to the camera, boom stops at walls,
   assert.ok(v.position.x < 500 && v.target.x > 500 && v.position.y > 40);
   // A wall right behind the hero pulls the camera in, but never closer than the minimum.
   const o2 = C.createOrbit(); o2.yaw = 0;
-  const v2 = C.thirdPersonView({ x: 500, y: 500 }, o2, 0.016, (x) => x < 450, true);
-  assert.ok(v2.position.x >= 450 && v2.position.x > v.position.x);
+  const v2 = C.thirdPersonView({ x: 500, y: 500 }, o2, 0.016, (x) => x < 380, true);
+  assert.ok(v2.position.x >= 380 && v2.position.x > v.position.x, 'a wall behind pulls the boom in');
   const o3 = C.createOrbit(); o3.yaw = 0;
   const v3 = C.thirdPersonView({ x: 500, y: 500 }, o3, 0.016, () => true, true);
   assert.ok(500 - v3.position.x >= C.TPCAM.minDistance * Math.cos(o3.pitch) - 1e-6);
@@ -410,13 +410,14 @@ import { registerPhase1 } from './phase1.mjs'; registerPhase1(test);
 import { registerSangam } from './sangam.mjs'; registerSangam(test);
 import { registerPhase2 } from './phase2.mjs'; await registerPhase2(test);
 import { registerCombat2 } from './combat2.mjs'; await registerCombat2(test);
+import { registerProps } from './props.mjs'; registerProps(test);
 import { registerChakra } from './chakra.mjs'; registerChakra(test);
 import { registerMonetize } from './monetize.mjs'; registerMonetize(test);
 // ================= UI rework: controls, HUD, menus, chakra rings =================
 import { stickVector, createInput, STICK_DEAD } from '../input.js';
 import { chipText, splitCaption, needFor, tipText, TIPS, createHud } from '../hud.js';
 import { shortLine } from '../screens.js';
-import { ringLayout, easeInOut, clunkMain, clunkKnock, SETTLE, alignRot, segAt, thetaOf, visibleRange, clampPos, nearestSlot, slotAngle, slotAlpha, ringCap, hitTest, wrapLines, drawScene, coreRadius, TAU, norm } from '../chakra/scene.js';
+import { ringLayout, layoutFrom, dialGeom, alignRot, segAt, thetaOf, visibleRange, clampPos, nearestSlot, slotAngle, slotAlpha, ringCap, hitTest, wrapLines, drawScene, coreRadius, TAU, norm } from '../chakra/scene.js';
 import { groupEras, compactYear, yugaProgress, statusOf as chStatusOf, spineMap as chSpineMap, YUGAS as CH_YUGAS } from '../chakra/model.js';
 import { dialSvg, dialLabel } from '../chakra/dial.js';
 import { createClick } from '../chakra/click.js';
@@ -604,14 +605,11 @@ test('chakra rings: exactly one ring is thick at each level, rings never overlap
   assert.equal(ringLayout(0)[0].outer, 1);
 });
 
-test('chakra rings: the vault turn eases, clunks into alignment exactly, and settles with a small knock', () => {
-  assert.equal(easeInOut(0), 0); assert.equal(easeInOut(1), 1); assert.ok(easeInOut(0.25) < 0.25 && easeInOut(0.75) > 0.75);
-  assert.equal(clunkMain(0), 0); assert.ok(Math.abs(clunkMain(SETTLE) - 1) < 1e-12); assert.equal(clunkMain(1), 1);
-  let prev = -1; for (let u = 0; u <= 1; u += 0.02) { const v = clunkMain(u); assert.ok(v >= prev - 1e-12, 'never turns back before the lock'); prev = v; }
-  assert.equal(clunkKnock(0.5), 0); assert.ok(Math.abs(clunkKnock(1)) < 1e-9); let peak = 0; for (let u = SETTLE; u <= 1; u += 0.01) peak = Math.max(peak, Math.abs(clunkKnock(u))); assert.ok(peak > 0.005 && peak < 0.05, `knock ${peak}`);
+test('chakra rings: segments line up at the top, angles run clockwise, the dial fills the width below the floating bar', () => {
   for (const n of [1, 2, 5, 6]) for (let i = 0; i < n; i++) assert.equal(segAt(0, n, alignRot(i, n)), i, `segment ${i} of ${n} lines up at the top`);
   assert.ok(Math.abs(norm(7 * Math.PI) - Math.PI) < 1e-9 || Math.abs(norm(7 * Math.PI) + Math.PI) < 1e-9);
   assert.ok(Math.abs(thetaOf(0, -10)) < 1e-9 && Math.abs(thetaOf(10, 0) - Math.PI / 2) < 1e-9, 'angles run clockwise from the top');
+  const g = dialGeom(360, 680, 56, 0); assert.ok(g.R * 2 >= 360 * 0.95 && g.R * 2 <= 360, 'the dial is as wide as the screen'); assert.ok(g.cy - g.R - 17 >= 56 - 1 || g.cy > 56 + g.R * 0.9, 'it is centred below the bar'); assert.equal(layoutFrom([0.3, 0.085, 0.085])[0].inner, ringLayout(0)[0].inner);
 });
 
 test('chakra rings: an event ring pages through any number of events with a bounded window and fades at the bottom', () => {
@@ -703,7 +701,8 @@ function fakePage({ reduced = true, synth = 0, click = null, sound = () => true,
   const store = createEventStore({ synth, fetchFn: async (url) => { try { const j = await read(url); return { ok: true, status: 200, json: async () => j }; } catch { return { ok: false, status: 404 }; } } });
   const played = []; const chakra = createChakra({ doc, store, getProgress: () => ({ completed: Object.fromEntries(progressDone.map((m) => [m, { best: 1 }])) }), reach: { getReachCounts: async () => null }, reducedMotion: () => reduced, onPlay: (e) => played.push(e), click: clicker, soundOn: sound });
   const frame = (ms) => { const cbs = rafq.splice(0); for (const f of cbs) f(performance.now() + ms); };
-  return { els, press, chakra, plays, played, frame, rafq, doc, restore() { globalThis.ResizeObserver = prevRO; globalThis.requestAnimationFrame = prevRAF; } };
+  let vt = null; const run = (sec) => { vt ??= performance.now(); for (let k = 0, n = Math.round(sec * 60); k < n; k++) { vt += 1000 / 60; const cbs = rafq.splice(0); for (const f of cbs) f(vt); } }; // a virtual 60 Hz clock
+  return { els, press, chakra, plays, played, frame, run, rafq, doc, restore() { globalThis.ResizeObserver = prevRO; globalThis.requestAnimationFrame = prevRAF; } };
 }
 
 test('chakra view: rings open and close like a vault (instant with reduced motion), Enter opens, Escape and Back close, and the hierarchy is a list too', async () => {
@@ -756,20 +755,73 @@ test('chakra view: thousands of events page by rotation, with Prev and Next, Pag
   } finally { p.restore(); }
 });
 
-test('chakra view: with motion on, the vault turn animates, clunks once with a caption, and stops; idle turning pauses when the tab is hidden; sound off is silent', async () => {
-  const p = fakePage({ reduced: false });
+test('chakra view: a ring turn is spring-driven, swells, locks once with a clunk, can be interrupted and reversed without a jump, and sound off is silent', async () => {
+  const n = { play: 0, swell: 0 }; const p = fakePage({ reduced: false, click: { play() { n.play++; return true; }, swell() { n.swell++; return true; } } });
   try {
-    await p.chakra.open(); p.frame(0); const idle0 = p.chakra._state().idle.slice(); p.frame(500); p.frame(1000); const idle1 = p.chakra._state().idle;
+    await p.chakra.open(); p.run(0.1); const idle0 = p.chakra._state().idle.slice(); p.run(1); const idle1 = p.chakra._state().idle;
     assert.ok(idle1[0] !== idle0[0] && idle1[1] !== idle0[1], 'the rings turn slowly on their own'); assert.ok(Math.sign(idle1[0] - idle0[0]) !== Math.sign(idle1[1] - idle0[1]), 'in opposite directions');
-    p.chakra._go.openYuga(0); await new Promise((r) => setTimeout(r, 30)); assert.equal(p.chakra._state().anim, true, 'a turn is under way'); assert.equal(p.plays.n, 0, 'the clunk comes at the end, not the start');
-    p.frame(700); assert.equal(p.chakra._state().anim, true); p.frame(900); assert.equal(p.plays.n, 1, 'one clunk when the rings lock'); assert.equal(p.els['ch-cue'].textContent, '[Clunk]', 'and a caption for it');
-    p.frame(2000); assert.equal(p.chakra._state().anim, false); assert.equal(p.chakra._state().level, 1); assert.equal(p.plays.n, 1, 'never twice');
-    const before = p.rafq.length; p.doc.hidden = true; p.frame(100); p.frame(100); assert.equal(p.rafq.length, 0, 'no frames are scheduled while the tab is hidden'); void before;
+    p.chakra._go.openYuga(0); await new Promise((r) => setTimeout(r, 30)); assert.equal(p.chakra._state().anim, true, 'a turn is under way'); assert.equal(n.play, 0, 'the clunk comes at the lock, not the start'); assert.equal(n.swell, 1, 'the swell starts with the turn'); assert.equal(p.els['ch-cue'].textContent, '[Deep swell]', 'and has a caption');
+    const th = [], rot = []; for (let i = 0; i < 180; i++) { p.run(1 / 60); const st = p.chakra._state(); th.push(st.th[1]); rot.push(st.idle[1]); }
+    for (let i = 1; i < th.length; i++) { assert.ok(Math.abs(th[i] - th[i - 1]) < 0.02, `ring thickness steps ${th[i] - th[i - 1]} at frame ${i}`); const d1 = norm(rot[i] - rot[i - 1]); assert.ok(Math.abs(d1) < 0.4, `ring turn steps at frame ${i}`); if (i > 1) assert.ok(Math.abs(d1 - norm(rot[i - 1] - rot[i - 2])) < 0.09, `ring turn speed jumps at frame ${i}`); }
+    assert.ok(th[10] > th[0] && th[179] > 0.29, 'the opened ring grows to full thickness'); assert.equal(p.chakra._state().anim, false); assert.equal(p.chakra._state().level, 1); assert.equal(n.play, 1, 'one clunk when the rings lock'); assert.equal(p.els['ch-cue'].textContent, '[Clunk]');
+    assert.equal(p.chakra._state().idle[1], 0, 'the opened ring comes to rest exactly at zero, locked'); assert.equal(p.chakra._state().th[1], 0.3);
+    // interrupt: open an era, then go back 0.25 s in. The thickness must carry on from where it was (no jump), then reverse and settle.
+    p.chakra._go.openEra(0); p.run(0.25); const mid = p.chakra._state(); assert.equal(mid.anim, true); assert.ok(mid.th[2] > 0.09 && mid.th[2] < 0.3, `mid-turn thickness ${mid.th[2]}`);
+    p.chakra._go.closeRing(); p.run(1 / 60); const after = p.chakra._state(); assert.ok(Math.abs(after.th[2] - mid.th[2]) < 0.02, 'reversing mid-turn does not jump'); assert.ok(Math.abs(after.th[1] - mid.th[1]) < 0.02);
+    p.run(3); const end = p.chakra._state(); assert.equal(end.level, 1); assert.equal(end.anim, false); assert.equal(end.th[1], 0.3); assert.equal(end.th[2], 0.085); assert.ok(n.play >= 2 && n.play <= 3, `clunks ${n.play}`); assert.equal(end.bloom, 0);
+    p.doc.hidden = true; p.run(0.1); assert.equal(p.rafq.length, 0, 'no frames are scheduled while the tab is hidden');
   } finally { p.restore(); }
-  const q = fakePage({ reduced: false, sound: () => false });
-  try { await q.chakra.open(); q.chakra._go.openYuga(1); await new Promise((r) => setTimeout(r, 30)); q.frame(1100); q.frame(1100); assert.equal(q.plays.n, 0, 'sound off: no click'); assert.ok(!q.els['ch-cue']?.textContent, 'and no caption for a sound that did not play'); } finally { q.restore(); }
+  const q = fakePage({ reduced: false, sound: () => false, click: { play() { n.play += 100; return true; }, swell() { n.swell += 100; return true; } } });
+  try { await q.chakra.open(); q.chakra._go.openYuga(1); await new Promise((r) => setTimeout(r, 30)); q.run(2); assert.ok(n.play < 100 && n.swell < 100, 'sound off: no click and no swell'); assert.ok(!q.els['ch-cue']?.textContent, 'and no caption for a sound that did not play'); } finally { q.restore(); }
   const r = fakePage({ reduced: true });
-  try { await r.chakra.open(); r.frame(0); r.frame(2000); assert.deepEqual(r.chakra._state().idle, [0, 0, 0, 0], 'reduced motion: no idle turning at all'); } finally { r.restore(); }
+  try { await r.chakra.open(); r.run(2); assert.deepEqual(r.chakra._state().idle, [0, 0, 0, 0], 'reduced motion: no idle turning at all'); r.chakra._go.openYuga(1); await new Promise((x) => setTimeout(x, 30)); assert.equal(r.chakra._state().anim, false); assert.equal(r.chakra._state().th[1], 0.3, 'and the change is instant'); } finally { r.restore(); }
+});
+
+test('chakra view: the keyboard focus ring is drawn on the dial only while the keyboard is in use, never after a tap', async () => {
+  const p = fakePage({ reduced: true });
+  try {
+    await p.chakra.open(); p.doc.documentElement = { dataset: {} }; p.els['ch-stage'].focus();
+    assert.equal(p.chakra._state().kbdRing, false, 'focused by script, no key pressed: no ring'); p.doc.documentElement.dataset.input = 'pointer'; assert.equal(p.chakra._state().kbdRing, false, 'after a tap: no ring');
+    p.doc.documentElement.dataset.input = 'kbd'; assert.equal(p.chakra._state().kbdRing, true, 'keyboard in use and the dial focused: ring'); p.doc.activeElement = null; assert.equal(p.chakra._state().kbdRing, false, 'dial not focused: no ring');
+  } finally { p.restore(); }
+  const ops = []; const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { ops.push(k); return k === 'createRadialGradient' ? { addColorStop() {} } : k === 'measureText' ? { width: 10 } : undefined; }), set: (t, k, v) => { t[k] = v; return true; } });
+  const base = () => ({ W: 360, H: 680, dpr: 1, top: 56, layout: ringLayout(0), rot: [0, 0, 0, 0], alpha: [1, 0, 0], glow: [1, 0, 0], L: 0, pos: 0, cap: 14, focus: 0, rings: [{ n: 5, labels: ['a', 'b', 'c', 'd', 'e'], sel: 1, chosen: -1, cur: -1, progress: null }, { n: 0 }], list: { events: [], idx: [], status: () => ({}) } });
+  const count = (kbd) => { ops.length = 0; drawScene(ctx, { ...base(), kbd }); return ops.length; };
+  assert.ok(count(true) > count(false), 'the halo strokes are extra work, drawn only with kbd on');
+});
+
+test('chakra motion: springs keep position and velocity continuous through a retarget, settle exactly, and are stable at any frame time', async () => {
+  const S = await import('../chakra/spring.js');
+  for (const z of [1, 0.8, 0.5]) {
+    const s = S.spring(0, 1); s.v = 3; let px = s.x, pv = s.v, maxDx = 0, maxDv = 0;
+    for (let i = 0; i < 360; i++) { if (i === 100) S.retarget(s, -2); const vBefore = s.v, xBefore = s.x; S.step(s, 1 / 60, 6, z); maxDx = Math.max(maxDx, Math.abs(s.x - xBefore)); maxDv = Math.max(maxDv, Math.abs(s.v - vBefore)); if (i === 100) { assert.ok(Math.abs(s.x - xBefore) < 0.1, 'retarget does not move the position'); assert.ok(Math.abs(s.v - vBefore) < 2, 'retarget does not jump the velocity'); } px = s.x; pv = s.v; }
+    assert.ok(maxDx < 0.2 && maxDv < 2.5, `zeta ${z}: step ${maxDx}, velocity step ${maxDv}`); assert.ok(Math.abs(px + 2) < 1e-3 && Math.abs(pv) < 1e-3, 'comes to rest on the target'); void pv;
+  }
+  const a = S.spring(0, 1), b = S.spring(0, 1); S.step(a, 0.5, 6, 0.8); for (let i = 0; i < 50; i++) S.step(b, 0.01, 6, 0.8); assert.ok(Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.v - b.v) < 1e-9, 'one long step equals many short ones');
+  const c = S.spring(0, 1); S.step(c, 5, 6, 1); assert.ok(Number.isFinite(c.x) && Math.abs(c.x - 1) < 1e-6, 'a 5 s frame (tab was hidden) does not explode');
+  const o = S.spring(0, 1); let peak = 0; for (let i = 0; i < 300; i++) { S.step(o, 1 / 60, 5, 0.8); peak = Math.max(peak, o.x); } assert.ok(peak > 1.001 && peak < 1.05, `a soft settle overshoots a little (${peak})`);
+  const k = S.spring(0, 1); peak = 0; for (let i = 0; i < 300; i++) { S.step(k, 1 / 60, 6, 1); peak = Math.max(peak, k.x); } assert.ok(peak <= 1 + 1e-9, 'critical damping never overshoots');
+  assert.equal(S.bloomEase(0), 0); assert.ok(Math.abs(S.bloomEase(1) - 1) < 1e-12); assert.equal(S.smooth(0), 0); assert.equal(S.smooth(1), 1);
+  const P = S.createParticles(28); for (let i = 0; i < 100; i++) S.emit(P, 10, 10, 1, 0); assert.equal(P.life.filter((v) => v > 0).length, 28, 'the pool is fixed at 28'); for (let i = 0; i < 200; i++) S.stepParticles(P, 1 / 60); assert.equal(P.life.filter((v) => v > 0).length, 0, 'every particle fades out');
+});
+
+test('chakra sound: the swell is synthesized, one at a time, silent with sound off, and tolerates no audio', async () => {
+  const { createClick } = await import('../chakra/click.js'); const made = []; let t = 0;
+  const node = (n) => new Proxy({ frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }, { get: (o, k) => (k in o ? o[k] : (...a) => { if (k === 'start') made.push(n); }), set: (o, k, v) => { o[k] = v; return true; } });
+  const ac = { get currentTime() { return t; }, state: 'running', destination: {}, createOscillator: () => node('osc'), createGain: () => node('gain'), createBiquadFilter: () => node('filter') };
+  let on = true; const c = createClick({ enabled: () => on, ctxFactory: () => ac });
+  assert.equal(c.swell(), true); assert.ok(made.includes('osc')); assert.equal(c.swell(), false, 'a second swell does not stack on the first'); t = 5; assert.equal(c.swell(), true, 'and one can follow once it is over');
+  on = false; assert.equal(c.swell(), false); assert.equal(createClick({ ctxFactory: () => { throw new Error('no audio'); } }).swell(), false);
+});
+
+test('focus: no boxy outline after a tap. Rings show only for the keyboard, follow the control shape, and the dial draws its own', async () => {
+  const { initModality, usingKeyboard } = await import('../modality.js'); const lis = {}; const root = { dataset: {} }; const doc = { documentElement: root, addEventListener: (t, f) => { (lis[t] ||= []).push(f); } };
+  initModality(doc); assert.equal(usingKeyboard(doc), false, 'nothing is shown before a key press'); lis.keydown[0]({ key: 'Shift' }); assert.equal(usingKeyboard(doc), false, 'a modifier alone is not keyboard use');
+  lis.keydown[0]({ key: 'Tab' }); assert.equal(root.dataset.input, 'kbd'); lis.pointerdown[0]({}); assert.equal(root.dataset.input, 'pointer', 'a tap or click hides rings'); lis.touchstart[0]({}); assert.equal(root.dataset.input, 'pointer');
+  const css = cssText; assert.ok(!/(^|\n):focus-visible \{/.test(css), 'the global ring is only for html[data-input="kbd"]'); assert.match(css, /html\[data-input="kbd"\] :focus-visible/); assert.match(css, /html:not\(\[data-input="kbd"\]\) :focus-visible \{ outline: none/);
+  assert.match(rule('.ch-stage'), /outline: none/); assert.ok(/\.ch-stage:focus,[^{]*\{ outline: none/.test(css) || /\.ch-stage:focus-visible \{ outline: none/.test(css), 'no box around the dial'); assert.ok(!/\.ch-stage:focus-visible \{ outline: 3px/.test(css));
+  assert.match(css, /#ch-card-title:focus \{ outline: none/); assert.match(css, /html\[data-input="kbd"\] #ch-card-title:focus \{[^}]*border-radius/); assert.match(css, /-webkit-tap-highlight-color: transparent/);
+  assert.match(htmlText, /src\/main\.js/); const main = await readFile(new URL('src/main.js', ROOT2), 'utf8'); assert.match(main, /initModality\(/);
 });
 
 test('chakra screen: no zoom, pan or pinch is left anywhere, controls are 44 px, and the page fills with the wheel', async () => {
@@ -783,6 +835,83 @@ test('chakra screen: no zoom, pan or pinch is left anywhere, controls are 44 px,
   assert.ok(/\.ch-stage canvas \{[^}]*width: 100%; height: 100%/.test(cssText));
   assert.ok(!/animation/.test(cssText.slice(cssText.indexOf('/* ---------- Chakra home'))), 'no CSS animation in the chakra screen');
   assert.ok(!view.includes('prompt(') && !/https?:\/\//.test(view), 'no network call to a third party');
+});
+
+test('camera reset: an eased 0.35 s swing behind the hero (instant under reduced motion), cancelled by look input, continuous in position and speed', async () => {
+  const C = await import('../camera.js'); const T = C.TPCAM;
+  const o = C.createOrbit(); o.yaw = 0; o.pitch = 0.35; const facing = 2.0; const yaws = [];
+  C.updateOrbit(o, 1 / 60, { dx: 0, dy: 0, key: 0, reset: true }, { mx: 0, my: 0 }, false, T, { facing });
+  yaws.push(o.yaw); let t = 1 / 60; while (t < 0.5) { C.updateOrbit(o, 1 / 60, { dx: 0, dy: 0, key: 0 }, { mx: 0, my: 0 }, false, T, { facing }); yaws.push(o.yaw); t += 1 / 60; }
+  assert.ok(Math.abs(C.angleDelta(o.yaw, facing)) < 1e-9 && Math.abs(o.pitch - T.pitch) < 1e-9 && o.swing === null, 'ends exactly behind the hero at the default pitch');
+  const at = (sec) => yaws[Math.round(sec * 60) - 1]; assert.ok(Math.abs(C.angleDelta(at(0.2), facing)) > 0.05 && Math.abs(C.angleDelta(at(0.2), facing)) < 1.9, 'a swing, not a jump'); assert.ok(Math.abs(at(0.35) - facing) < 0.02, 'done in about 0.35 s');
+  const d = yaws.map((y, i) => (i ? y - yaws[i - 1] : 0)); assert.ok(Math.max(...d.map(Math.abs)) < 0.25, 'no single-frame jump'); for (let i = 3; i < 20; i++) assert.ok(Math.abs(d[i] - d[i - 1]) < 0.09, 'the speed changes smoothly (no sudden start or stop)'); assert.ok(d[1] < d[8] && d[1] >= 0, 'it eases in');
+  const r = C.createOrbit(); r.yaw = 0; C.updateOrbit(r, 1 / 60, { dx: 0, dy: 0, key: 0, reset: true }, { mx: 0, my: 0 }, true, T, { facing }); assert.equal(r.yaw, facing, 'reduced motion: an instant snap'); assert.equal(r.swing, null);
+  const x = C.createOrbit(); x.yaw = 0; C.updateOrbit(x, 1 / 60, { reset: true }, { mx: 0, my: 0 }, false, T, { facing }); assert.ok(x.swing); C.updateOrbit(x, 1 / 60, { dx: 10, dy: 0, key: 0 }, { mx: 0, my: 0 }, false, T, { facing }); assert.equal(x.swing, null, 'a look drag takes over');
+  assert.deepEqual(C.CAMERA_RESET_KEYS, ['KeyG', 'Home'], 'C stays Crouch');
+});
+
+test('auto-centre: after about a second of running forward with no look input the camera drifts behind the hero, smoothly; off, looking, or reduced motion stop it', async () => {
+  const C = await import('../camera.js'); const T = C.TPCAM; const fwd = { mx: 0, my: -1 }; const run = (o, secs, look, ext, reduced = false, mv = fwd) => { for (let i = 0; i < secs * 60; i++) C.updateOrbit(o, 1 / 60, look || { dx: 0, dy: 0, key: 0 }, mv, reduced, T, ext); return o; };
+  const o = C.createOrbit(); o.yaw = 0; run(o, 1, null, { facing: 0.6, autoCentre: true }); assert.equal(o.yaw, 0, 'nothing in the first second');
+  const o2 = C.createOrbit(); o2.yaw = 0; let prev = 0, maxStep = 0; for (let i = 0; i < 360; i++) { C.updateOrbit(o2, 1 / 60, { dx: 0, dy: 0, key: 0 }, fwd, false, T, { facing: 0.6, autoCentre: true }); maxStep = Math.max(maxStep, Math.abs(o2.yaw - prev)); assert.ok(o2.yaw >= prev - 1e-12, 'only ever towards the hero'); prev = o2.yaw; }
+  assert.ok(Math.abs(o2.yaw - 0.6) < 0.05, `drifts back (${o2.yaw})`); assert.ok(maxStep < 0.02, `gentle (${maxStep} rad per frame)`);
+  const off = C.createOrbit(); off.yaw = 0; run(off, 5, null, { facing: 0.6, autoCentre: false }); assert.equal(off.yaw, 0, 'the setting turns it off');
+  const rm = C.createOrbit(); rm.yaw = 0; run(rm, 5, null, { facing: 0.6, autoCentre: true }, true); assert.equal(rm.yaw, 0, 'reduced motion: the camera stays where the player put it');
+  const lk = C.createOrbit(); lk.yaw = 0; run(lk, 3, null, { facing: 0.6, autoCentre: true }); const y1 = lk.yaw; C.updateOrbit(lk, 1 / 60, { dx: 1, dy: 0, key: 0 }, fwd, false, T, { facing: 0.6, autoCentre: true }); assert.equal(lk.fwdT, 0, 'look input restarts the wait'); assert.ok(y1 > 0);
+  const still = C.createOrbit(); still.yaw = 0; run(still, 5, null, { facing: 0.6, autoCentre: true }, false, { mx: 0, my: 0 }); assert.equal(still.yaw, 0, 'standing still does not move the camera');
+  assert.equal(loadSettings(null, { matchMedia: () => ({ matches: false }), document: null }).autoCentre, true, 'Auto-centre camera is on by default'); assert.equal(loadSettings({ getItem: () => '{"autoCentre":false}' }, { matchMedia: () => ({ matches: false }), document: null }).autoCentre, false);
+  for (const id of ['set-centre']) assert.match(htmlText, new RegExp(`<input id="${id}" type="checkbox" checked><label for="${id}">Auto-centre camera</label>`));
+  assert.match(await readFile(new URL('src/screens.js', ROOT2), 'utf8'), /autoCentre: \$\('set-centre'\)/);
+});
+
+test('third-person camera tuning: the hero is clearly visible, closer than before, also with a wall behind or beside, at every pitch, in portrait and landscape', async () => {
+  const C = await import('../camera.js'); const T = C.TPCAM; const hero = { x: 500, y: 500 };
+  assert.ok(T.distance <= 190 && T.height <= 70, 'tuned close (it was 250 back and 105 up)'); assert.ok(T.pitchMin >= -0.2 && T.pitchMax <= 0.45, 'pitch limits keep the camera off the ground and off the sky');
+  const cases = { open: null, 'wall behind': (x) => x < 495, 'wall behind, everywhere': () => true, 'wall to the right': (x, z) => z > 515, 'wall to the left': (x, z) => z < 485, corridor: (x, z) => Math.abs(z - 500) > 30 };
+  for (const [name, blocked] of Object.entries(cases)) for (const pitch of [T.pitchMin, T.pitch, T.pitchMax]) for (const yaw of [0, 1.1, -2.4]) {
+    const o = C.createOrbit(); o.yaw = yaw; o.pitch = pitch; const rotated = blocked && ((x, z) => { const dx = x - 500, dz = z - 500; const c = Math.cos(-yaw), s = Math.sin(-yaw); return blocked(500 + dx * c - dz * s, 500 + dx * s + dz * c); });
+    const v = C.thirdPersonView(hero, o, 0.016, rotated, true);
+    for (const [fov, aspect, label] of [[62, 360 / 740, 'portrait'], [46, 1280 / 800, 'landscape']]) { const f = C.heroFraming(v, hero, fov, aspect);
+      assert.ok(Math.abs(f.x) < 0.7 && Math.abs(f.y) < 0.95, `${name} pitch ${pitch} yaw ${yaw} ${label}: hero at ${f.x.toFixed(2)}, ${f.y.toFixed(2)}`); assert.ok(f.size >= 0.25 && f.size <= 1.05, `${name} ${label}: hero is ${(f.size * 100).toFixed(0)}% of the screen height`); }
+    assert.ok(v.position.y < 140, `${name}: the camera never climbs far above the hero (${v.position.y.toFixed(0)})`); assert.ok(o.dist >= T.minDistance - 1e-9, 'never closer than the minimum');
+  }
+  const o = C.createOrbit(); o.yaw = 0; C.thirdPersonView(hero, o, 0.016, (x, z) => z > 515, true); assert.ok(o.side < T.shoulder, 'a wall at the shoulder slides the camera over instead of collapsing the boom'); assert.equal(o.dist, T.distance);
+  const w = C.createOrbit(); w.yaw = 0; C.thirdPersonView(hero, w, 0.016, () => true, true); assert.equal(w.dist, T.minDistance, 'spawning against a wall: the boom stops at the minimum, it does not vanish');
+  const e = C.createOrbit(); e.yaw = 0; C.thirdPersonView(hero, e, 0.016, (x) => x < 495, true); let last = e.dist; for (let i = 0; i < 120; i++) { C.thirdPersonView(hero, e, 1 / 60, null, false); assert.ok(e.dist >= last - 1e-9 && e.dist - last < 6, 'the boom eases back out without popping'); last = e.dist; } assert.ok(e.dist > T.distance - 3);
+});
+
+test('camera reset controls: keys G and Home, the round button and the Button-controls button all fire one reset; C is still Crouch', () => withWindow((wl) => {
+  const mkBtn = (control) => { const b = mkPointerEl(); b.dataset = { control }; return b; }; const reset1 = mkBtn('camreset'), reset2 = mkBtn('camreset'), crouch = mkBtn('crouch');
+  const input = createInput({ stage: mkPointerEl(), buttons: [reset1, reset2, crouch], onPause() {} }); input.state.enabled = true; input.state.cameraLook = true;
+  const key = (code, repeat = false) => wl.keydown.forEach((f) => f({ code, repeat, defaultPrevented: false, target: { tagName: 'BODY' }, preventDefault() {} }));
+  assert.equal(input.read().look.reset, false); key('KeyG'); assert.equal(input.read().look.reset, true, 'G'); assert.equal(input.read().look.reset, false, 'one press, one reset'); key('Home'); assert.equal(input.read().look.reset, true, 'Home'); key('KeyG', true); assert.equal(input.read().look.reset, false, 'holding the key does not repeat');
+  fire(reset1, 'pointerdown', {}); assert.equal(input.read().look.reset, true, 'the round button'); fire(reset2, 'pointerdown', {}); assert.equal(input.read().look.reset, true, 'the Button-controls button');
+  key('KeyC'); const a = input.read(); assert.equal(a.action.crouch, true, 'C still crouches'); assert.equal(a.look.reset, false);
+  input.state.enabled = false; key('KeyG'); input.state.enabled = true; assert.equal(input.read().look.reset, false, 'not while paused');
+  assert.match(htmlText, /id="cam-reset"[^>]*aria-label="Reset camera behind you \(G\)"/); assert.ok((htmlText.match(/data-control="camreset"/g) || []).length === 2, 'one round button and one in the Button-controls cluster');
+  assert.match(cssText, /\.cam-reset \{[^}]*bottom:/); assert.match(cssText, /data-controls="buttons"\]\)? \.cam-reset|:not\(\[data-controls="buttons"\]\) \.cam-reset/);
+}));
+
+test('prop HUD: prompt, held chip, Throw/Drop only while held, Block unavailable with two hands, keys T and H, prop minimap icons', async () => {
+  const mkBtn = (control) => ({ dataset: { control }, hidden: true, attrs: {}, classList: { toggle(c, on) { this.on = on; }, add() {}, remove() {} }, setAttribute(k, v) { this.attrs[k] = v; } });
+  const btns = ['attack', 'block', 'do', 'swap', 'throw', 'drop'].map(mkBtn); const by = Object.fromEntries(btns.map((b) => [b.dataset.control, b]));
+  const mkEl = () => ({ hidden: true, textContent: '', dataset: {}, style: {}, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, replaceChildren() {}, append() {} });
+  const els = {}; const doc = { getElementById: (id) => (els[id] ||= mkEl()), createElement: mkEl, querySelector: (q) => btns.find((b) => q.includes(`"${b.dataset.control}"`)) || null, querySelectorAll: (q) => btns.filter((b) => q.includes(`"${b.dataset.control}"`)) };
+  let now = 0; const hud = createHud(doc, { now: () => now });
+  hud.setAbilities({ abilities: ['walk', 'staff', 'sword'], weapon: 'staff' }); assert.equal(by.swap.hidden, false); assert.equal(by.throw.hidden, true); assert.equal(by.drop.hidden, true);
+  hud.setProps({ hud: { prompt: 'Take club' }, player: { held: null } }); assert.equal(els['prop-prompt'].hidden, false); assert.equal(els['prop-prompt-text'].textContent, 'Take club'); assert.match(by.do.attrs['aria-label'], /^Take club/); assert.ok(els['prop-prompt-text'].textContent.split(' ').length <= 3);
+  const held = { id: 'p1', name: 'Club', durability: 0.7, crack: 1, canThrow: false, twoHands: true };
+  now += 5; hud.setProps({ hud: { prompt: '' }, player: { held } });
+  assert.equal(els['stat-held'].hidden, false); assert.equal(els['held-fill'].style.width, '70%'); assert.match(els['held-name'].textContent, /Club: Cracked/); assert.equal(els['prop-prompt'].hidden, true);
+  assert.equal(by.drop.hidden, false); assert.equal(by.throw.hidden, true, 'Throw only if it can be thrown'); assert.equal(by.swap.hidden, true, 'Drop takes the Swap slot');
+  assert.equal(by.block.attrs['aria-disabled'], 'true'); assert.match(by.block.attrs['aria-label'], /unavailable/);
+  now += 5; hud.setProps({ hud: { prompt: '' }, player: { held: { ...held, canThrow: true, twoHands: false } } }); assert.equal(by.throw.hidden, false); assert.equal(by.block.attrs['aria-disabled'], 'false');
+  now += 5; hud.setProps({ hud: { prompt: '' }, player: { held: null } }); assert.equal(by.drop.hidden, true); assert.equal(by.throw.hidden, true); assert.equal(by.swap.hidden, false); assert.equal(els['stat-held'].hidden, true);
+  const { ACTION_NAMES } = await import('../input.js'); assert.ok(ACTION_NAMES.includes('throw') && ACTION_NAMES.includes('drop'));
+  const inSrc = await readFile(new URL('src/input.js', ROOT2), 'utf8'); assert.match(inSrc, /KeyT: 'throw', KeyH: 'drop'/);
+  const mm = await readFile(new URL('src/minimap.js', ROOT2), 'utf8'); assert.match(mm, /frame\.props/);
+  for (const c of ['throw', 'drop']) assert.match(htmlText, new RegExp(`data-control="${c}" aria-label="[A-Z][a-z]+ \\(${c === 'throw' ? 'T' : 'H'}\\)" hidden`));
+  assert.match(htmlText, /id="stat-held"/); assert.match(htmlText, /id="prop-prompt"/);
 });
 
 for (const run of queue) await run(); // run in order, awaiting async tests

@@ -6,7 +6,7 @@ import { createLoop } from './loop.js';
 import { createMinimap } from './minimap.js';
 import { loadProgress, saveProgress, recordCompletion } from './progress.js';
 import { bestWeapon } from './abilities.js';
-import { createOrbit, updateOrbit, relativeMove, FORWARD_UP } from './camera.js';
+import { createOrbit, updateOrbit, relativeMove, FORWARD_UP, TPCAM } from './camera.js';
 
 const hashSeed = (id) => [...String(id)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
@@ -58,7 +58,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
       onObjective: (o) => { if (o) { hud.setObjective(o.text); hud.announce(`Objective: ${o.text}`); } },
       onSay: (line) => { lastSay[line.trigger] = line; if (line.trigger !== 'win' && line.trigger !== 'fail') hud.showCaption(line); },
     });
-    orbit.yaw = sim.chariot.angle ?? FORWARD_UP; orbit.pitch = createOrbit().pitch;
+    orbit.yaw = sim.chariot.angle ?? FORWARD_UP; orbit.pitch = createOrbit().pitch; orbit.swing = null; orbit.fwdT = 0;
     syncCamera();
     runner.start();
     refreshHud();
@@ -99,7 +99,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const inp = input.read();
     let controls = inp;
     if (sim.foot) {
-      if (usesOrbit()) updateOrbit(orbit, dt, inp.look, inp, settings.reduceMotion);
+      if (usesOrbit()) { updateOrbit(orbit, dt, inp.look, inp, settings.reduceMotion, TPCAM, { facing: sim.chariot.angle, autoCentre: settings.autoCentre !== false }); if (inp.look.reset) hud.announce('Camera behind you.'); }
       const m = relativeMove(inp.mx, inp.my, camera().yaw); // the stick is relative to the camera, like a GTA-style game
       controls = { ...inp, mx: m.mx, my: m.my };
     }
@@ -158,6 +158,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const frame = makeFrame(sim, effects, settings.reduceMotion, camera(), { blood: settings.blood !== false });
     renderer.render(frame);
     minimap.draw(frame);
+    hud.setProps?.(frame);
   }
 
   function pause() {

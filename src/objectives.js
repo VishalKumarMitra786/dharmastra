@@ -5,7 +5,7 @@
 import { ENEMY_KINDS } from './combat.js';
 export const OBJECTIVE_TYPES = ['reach', 'collect', 'evade', 'do', 'defeat', 'waves', 'arena', 'defeat-captain'];
 const MAX_WAVES = 8; const MAX_PER_WAVE = 8;
-const DO_EVENTS = ['dodge', 'shove', 'shove-hit', 'climb', 'swing', 'heavy', 'blocked', 'parry', 'shot', 'target-hit', 'hit-enemy', 'enemy-fell', 'vault', 'weapon'];
+const DO_EVENTS = ['dodge', 'shove', 'shove-hit', 'climb', 'swing', 'heavy', 'blocked', 'parry', 'shot', 'target-hit', 'hit-enemy', 'enemy-fell', 'vault', 'weapon', 'prop-pickup', 'prop-throw', 'prop-break', 'prop-shatter', 'disarm'];
 
 const cpIndex = (t) => (typeof t === 'number' ? t : /^cp(\d+)$/.test(t || '') ? Number(t.slice(2)) : NaN);
 

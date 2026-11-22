@@ -1,7 +1,7 @@
 // Simulation: pure game rules, no DOM. step() advances one fixed tick and returns the events that happened.
 import { resolveWalls } from './world.js';
 import { START_ABILITIES, COMBAT_BASICS, WEAPONS, WEAPON_ORDER, HURDLES, hasAbility, grantAbility, closeAbilities, bestWeapon, findCross, solidObstacles, underBeam, PREREQ } from './abilities.js';
-import { COMBAT, createEnemies, createTargets, spawnEnemy, startAttack, stepAttack, lungeStep, stepFinisher, resolveSwing, stepEnemies, regenStamina, tryDodge, stepDodge, updateGuard, updateAim, stepArrows, stepEnemyArrows } from './combat.js';
+import { COMBAT, createProps, stepProps, tryPickupProp, dropHeld, startThrow, throwContext, twoHandCue, carryScale, createEnemies, createTargets, spawnEnemy, startAttack, stepAttack, lungeStep, stepFinisher, resolveSwing, stepEnemies, regenStamina, tryDodge, stepDodge, updateGuard, updateAim, stepArrows, stepEnemyArrows } from './combat.js';
 import { createObjectives, updateObjectives, objectivesStatus, tickWaves } from './objectives.js';
 
 export const TUNING = {
@@ -42,9 +42,9 @@ export function createSim(world, { timerMode = 'standard', tuning = {}, abilitie
   sim.abilities = sim.rules2 ? [...new Set([...START_ABILITIES, ...COMBAT_BASICS, ...(Array.isArray(abilities) ? abilities : [])])] : [...START_ABILITIES];
   sim.player = { hp: sim.health, state: 'idle', stateT: 0, weapon: 'none', cooldown: 0, crouching: false, swingHit: true, attackAngle: 0, vault: null,
     atk: 'none', spec: null, combo: -1, comboT: 0, queued: null, queueT: 0, hurtFor: 0, kx: 0, ky: 0, kbT: 0, finTarget: null,
-    stamina: COMBAT.stamina.max, stamDelay: 0, dodgeCd: 0, dodgeAngle: 0, draw: 0, drawFull: false, aimAngle: 0, aimHeld: false, arrows: 0 };
+    stamina: COMBAT.stamina.max, stamDelay: 0, dodgeCd: 0, dodgeAngle: 0, draw: 0, drawFull: false, aimAngle: 0, aimHeld: false, arrows: 0, held: null, twoHandCd: 0 };
   sim.rng = createRng(seed);
-  sim.enemies = []; sim.pickups = []; sim.targets = []; sim.arrows = []; sim.eArrows = []; sim.arrowSeq = 0; sim.objectives = null; sim.fx = []; sim.nav = null;
+  sim.enemies = []; sim.props = []; sim.propSeq = 0; sim.pickups = []; sim.targets = []; sim.arrows = []; sim.eArrows = []; sim.arrowSeq = 0; sim.objectives = null; sim.fx = []; sim.nav = null;
   if (sim.rules2) {
     sim.abilities = closeAbilities(sim.abilities); // known ids only, a weapon never without the one it builds on
     for (let i = 0; i < 16; i++) sim.arrows.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, left: 0, dmg: 1, angle: 0 }); // fixed pools: no allocation per shot
@@ -54,6 +54,7 @@ export function createSim(world, { timerMode = 'standard', tuning = {}, abilitie
     if (hasAbility(sim, 'bow')) sim.player.arrows = COMBAT.bow.startArrows;
     sim.enemies = createEnemies(world, sim.rng);
     sim.targets = createTargets(world);
+    sim.props = createProps(world);
     sim.pickups = world.pickups.map((k) => ({ ...k, taken: false }));
     sim.objectives = createObjectives(objectives ?? world.objectiveDefs, world.checkpoints.length);
   }
@@ -78,7 +79,7 @@ export function setReduceMotion(sim, on) {
   if (on) { sim.hitstop = 0; sim.slow.left = 0; sim.slow.scale = 1; } // no hit-stop and no slow motion under reduced motion
 }
 
-const ACTION_KEYS = ['attack', 'jump', 'crouch', 'interact', 'dodge', 'push', 'heavy', 'swap', 'w1', 'w2', 'w3'];
+const ACTION_KEYS = ['attack', 'jump', 'crouch', 'interact', 'dodge', 'push', 'heavy', 'swap', 'w1', 'w2', 'w3', 'throw', 'drop'];
 const mergeActions = (a, b) => { const out = {}; for (const k of ACTION_KEYS) out[k] = !!(a?.[k] || b?.[k]); return out; };
 
 export function step(sim, dt, controls) {
@@ -109,7 +110,7 @@ function advance(sim, dt, controls, events) {
   sim.invuln = Math.max(0, sim.invuln - dt);
   if (sim.rules2) playerStep(sim, dt, controls, events);
   else if (sim.foot) walk(sim, dt, controls); else driveChariot(sim, dt, controls);
-  if (sim.rules2) { stepEnemies(sim, dt, events); stepArrows(sim, dt, events); stepEnemyArrows(sim, dt, events); for (const t of sim.targets) t.flash = Math.max(0, t.flash - dt); }
+  if (sim.rules2) { stepEnemies(sim, dt, events); stepArrows(sim, dt, events); stepEnemyArrows(sim, dt, events); stepProps(sim, dt, events); for (const t of sim.targets) t.flash = Math.max(0, t.flash - dt); }
   wallHits(sim, events);
   checkpoints(sim, events);
   if (sim.rules2) settleObjectives(sim, dt, events);
@@ -212,7 +213,7 @@ function settleObjectives(sim, dt, events) {
   else if (st === 'failed') finish(sim, events, 'failed', 'seen');
 }
 
-const FX_TYPES = new Set(['hit-enemy', 'enemy-down', 'enemy-fell', 'hurt', 'vault', 'pickup', 'dodge', 'climb', 'shove-hit', 'parry', 'blocked', 'target-hit', 'shot', 'stagger', 'shield-block', 'shield-break', 'finisher', 'windup', 'enemy-swing', 'enemy-arrow', 'arrow-hit', 'call', 'phase', 'whiff', 'opened', 'retreat', 'wave-start', 'wave-clear', 'captain-down', 'swing', 'guard-break']);
+const FX_TYPES = new Set(['hit-enemy', 'enemy-down', 'enemy-fell', 'hurt', 'vault', 'pickup', 'dodge', 'climb', 'shove-hit', 'parry', 'blocked', 'target-hit', 'shot', 'stagger', 'shield-block', 'shield-break', 'finisher', 'windup', 'enemy-swing', 'enemy-arrow', 'arrow-hit', 'call', 'phase', 'whiff', 'opened', 'retreat', 'wave-start', 'wave-clear', 'captain-down', 'swing', 'guard-break', 'prop-pickup', 'prop-drop', 'prop-throw', 'prop-break', 'prop-shatter', 'prop-land', 'disarm', 'enemy-rearm', 'enemy-pickup']);
 function queueFx(sim, e) {
   if (!FX_TYPES.has(e.type) || sim.fx.length >= 48) return;
   const c = sim.chariot;
@@ -244,15 +245,20 @@ function playerStep(sim, dt, controls, events) {
       if (!p.crouching) p.crouching = true;
       else if (!underBeam(sim.world, c.x, c.y, c.radius + 2)) p.crouching = false; // cannot stand up under a beam
     }
+    if (act.drop && p.state !== 'hurt') dropHeld(sim, events);
     if (act.dodge) tryDodge(sim, controls, events);
     if (p.state !== 'dodge' && p.state !== 'hurt') {
       if (act.push) startAttack(sim, 'shove', events);
       if (act.attack) startAttack(sim, 'auto', events);
       if (act.heavy) startAttack(sim, 'heavy', events);
-      updateGuard(sim, !!hold.block);
+      if (act.throw) startThrow(sim, events);
+      updateGuard(sim, !!hold.block); twoHandCue(sim, !!hold.block, events);
       updateAim(sim, dt, !!hold.aim, events);
       const doIt = act.interact || act.jump;
-      if (doIt && !(act.interact && tryPickup(sim, events)) && !tryVault(sim, events)) tryClimb(sim, events);
+      if (doIt) { // Do: take a lesson token or a prop, else vault, else climb, else throw what you hold at the enemy in front (the HUD says "Throw" only then)
+        const took = act.interact && (tryPickup(sim, events) || tryPickupProp(sim, events));
+        if (!took && !tryVault(sim, events) && !tryClimb(sim, events) && act.interact) throwContext(sim, events);
+      }
     }
   }
   if (p.kbT > 0) { c.x += p.kx * dt; c.y += p.ky * dt; p.kbT -= dt; } // the push of a blow
@@ -260,7 +266,7 @@ function playerStep(sim, dt, controls, events) {
     let run = false;
     if (p.state === 'hurt') c.speed = 0;
     else {
-      const slow = p.state === 'block' ? COMBAT.block.moveScale : p.state === 'aim' ? COMBAT.bow.aimMoveScale : p.state === 'shove' || p.state === 'attack' ? 0.5 : 1;
+      const slow = (p.state === 'block' ? COMBAT.block.moveScale : p.state === 'aim' ? COMBAT.bow.aimMoveScale : p.state === 'shove' || p.state === 'attack' ? 0.5 : 1) * carryScale(p);
       run = !!controls.run && hasAbility(sim, 'run') && !p.crouching && slow === 1;
       walk(sim, dt, { mx: controls.mx, my: controls.my, run }, (p.crouching ? HURDLES.crouchSpeed : 1) * slow);
     }
@@ -277,6 +283,7 @@ function playerStep(sim, dt, controls, events) {
 function swapWeapon(sim, act, events) {
   const p = sim.player;
   if (!(act.swap || act.w1 || act.w2 || act.w3)) return;
+  if (p.held && (p.state === 'idle' || p.state === 'walk' || p.state === 'run' || p.state === 'crouch')) { dropHeld(sim, events, 'swap'); if (act.swap) return; } // the held prop is put down; the weapons keys then equip as usual
   if (!(p.state === 'idle' || p.state === 'walk' || p.state === 'run' || p.state === 'crouch' || p.state === 'block')) return;
   const owned = WEAPON_ORDER.filter((w) => hasAbility(sim, w));
   if (!owned.length) return;
@@ -329,6 +336,9 @@ export function stateHash(sim) {
   const f = (n) => n.toFixed(4);
   const parts = [f(c.x), f(c.y), f(c.angle), f(c.speed), f(sim.health), f(sim.elapsed), f(sim.clock), sim.status, sim.checkpoint, p.state, f(p.stateT), p.weapon, f(p.cooldown), p.crouching ? 1 : 0, sim.abilities.join(','), sim.rng.state(), f(p.stamina), f(p.draw), p.arrows, p.atk, p.combo, f(p.comboT), f(p.dodgeCd), f(sim.hitstop), f(sim.slow.left), f(sim.invuln)];
   for (const e of sim.enemies) parts.push(e.id, f(e.x), f(e.y), f(e.angle), e.hp, e.state, f(e.stateT), f(e.kbT), e.fell ? 1 : 0, e.open ? 1 : 0, e.phaseNo, e.atk ? `${e.atk.name}${e.atk.idx}${e.atk.phase}${f(e.atk.t)}` : '-');
+  parts.push(p.held ? p.held.id : '-');
+  for (const e of sim.enemies) parts.push(e.carry ?? '-', e.carryUses, e.rearm ? e.rearm.t.toFixed(2) : '-');
+  for (const q of sim.props) parts.push(q.id, q.state, f(q.x), f(q.y), q.uses);
   for (const k of sim.pickups) parts.push(k.id, k.taken ? 1 : 0, f(k.x), f(k.y));
   for (const a of sim.arrows) if (a.active) parts.push('ar', f(a.x), f(a.y), a.dmg);
   for (const a of sim.eArrows) if (a.active) parts.push('ea', f(a.x), f(a.y));

@@ -15,6 +15,7 @@ export const CAPTIONS = {
   'enemy-swing': '[Swish: an enemy strikes]', arrow: '[Twang: an arrow is loosed]', 'arrow-hit': '[Thock: an arrow lands]', finisher: '[Crash: finishing blow]',
   horn: '[Horn: a call for help]', gong: '[Gong]', down: '[Fall: a soldier yields]', rest: '[Chime: a moment to breathe]', ping: '[Ping: an opening]',
   checkpoint: '[Chime: checkpoint]', win: '[Rising notes: mission complete]', fail: '[Falling notes: mission failed]', bump: '[Knock: a wall]',
+  grab: '[Rustle: you take an item]', drop: '[Clunk: an item is put down]', throw: '[Whoosh: a throw]', crack: '[Crack: an item breaks]', shatter: '[Crash: it shatters]', clatter: '[Clatter: a weapon is knocked away]',
 };
 
 // sim event -> cue name (or null for silence)
@@ -41,6 +42,12 @@ export function cueFor(e) {
     case 'rest': case 'wave-clear': return 'rest';
     case 'checkpoint': return 'checkpoint';
     case 'wall': return 'bump';
+    case 'prop-pickup': case 'enemy-pickup': return 'grab';
+    case 'prop-drop': return 'drop';
+    case 'prop-throw': return 'throw';
+    case 'prop-break': return 'crack';
+    case 'prop-shatter': return 'shatter';
+    case 'disarm': return 'clatter';
     case 'win': return 'win';
     case 'fail': return 'fail';
     default: return null;
@@ -48,6 +55,12 @@ export function cueFor(e) {
 }
 
 export function captionFor(e) {
+  if (e?.type === 'prop-pickup') return `[Rustle: you ${e.swap ? 'swap to' : 'take'} the ${(e.name || 'item').toLowerCase()}]`;
+  if (e?.type === 'enemy-pickup') return `[Rustle: a ${kindName(e.kind)} arms itself]`;
+  if (e?.type === 'enemy-rearm') return `[Tick: a ${kindName(e.kind)} goes for a weapon]`;
+  if (e?.type === 'prop-break') return `[Crack: the ${(e.name || 'item').toLowerCase()} breaks]`;
+  if (e?.type === 'prop-twohands') return `[Both hands are on the ${(e.name || 'item').toLowerCase()}: no blocking]`;
+  if (e?.type === 'prop-nothrow') return `[The ${(e.name || 'item').toLowerCase()} cannot be thrown]`;
   if (e?.type === 'windup') return `[Tick tick: ${kindName(e.kind)} winds up${e.unblockable ? ', cannot be blocked' : ''}]`;
   if (e?.type === 'phase') return `[Gong: the captain changes stance, phase ${e.n}]`;
   if (e?.type === 'wave-start') return `[Horn: wave ${e.n} of ${e.total}]`;
@@ -74,6 +87,13 @@ export function announceFor(e) {
     case 'wave-start': return `Wave ${e.n} of ${e.total}.`;
     case 'wave-clear': return `Wave ${e.n} cleared.${e.heal ? ' You catch your breath.' : ''}`;
     case 'enemy-arrow': return 'An archer looses an arrow.';
+    case 'prop-pickup': return `${e.swap ? 'Swapped to' : 'Picked up'} ${(e.name || 'item').toLowerCase()}.`;
+    case 'prop-drop': return e.by === 'player' ? null : `${kindName(e.by)} drops a weapon.`;
+    case 'prop-break': return `Your ${(e.name || 'item').toLowerCase()} breaks.`;
+    case 'disarm': return 'You knock the weapon from its hand.';
+    case 'enemy-rearm': return `${kindName(e.kind)} goes for a weapon on the ground.`;
+    case 'enemy-pickup': return `${kindName(e.kind)} picks up a weapon.`;
+    case 'prop-twohands': return 'Both hands are on the prop: you cannot block.';
     default: return null;
   }
 }
@@ -117,6 +137,12 @@ export const VOICES = {
   win: (c, o, t) => { [523, 659, 784, 1047].forEach((f, i) => tone(c, o, t + i * 0.13, { f0: f, dur: 0.35, gain: 0.2 })); },
   fail: (c, o, t) => { [392, 330, 262, 196].forEach((f, i) => tone(c, o, t + i * 0.16, { type: 'triangle', f0: f, dur: 0.4, gain: 0.2 })); },
   bump: (c, o, t) => tone(c, o, t, { f0: 120, f1: 60, dur: 0.09, gain: 0.3 }),
+  grab: (c, o, t, b) => noise(c, o, t, b, { f0: 1800, f1: 900, q: 0.8, dur: 0.1, gain: 0.16 }),
+  drop: (c, o, t) => tone(c, o, t, { f0: 150, f1: 70, dur: 0.1, gain: 0.3 }),
+  throw: (c, o, t, b) => noise(c, o, t, b, { f0: 500, f1: 2200, q: 1, dur: 0.18, gain: 0.2 }),
+  crack: (c, o, t, b) => { tone(c, o, t, { type: 'square', f0: 300, f1: 90, dur: 0.1, gain: 0.2 }); noise(c, o, t, b, { filter: 'highpass', f0: 2500, dur: 0.07, gain: 0.25 }); },
+  shatter: (c, o, t, b) => { noise(c, o, t, b, { filter: 'highpass', f0: 1800, dur: 0.25, gain: 0.3 }); tone(c, o, t, { type: 'triangle', f0: 900, f1: 300, dur: 0.15, gain: 0.12 }); },
+  clatter: (c, o, t) => { tone(c, o, t, { type: 'square', f0: 520, f1: 260, dur: 0.1, gain: 0.12 }); tone(c, o, t + 0.07, { type: 'square', f0: 400, f1: 200, dur: 0.1, gain: 0.1 }); },
 };
 
 const MAX_VOICES = 10; const REPEAT_GAP = 0.04; // seconds: the same cue is not restarted inside this gap, so a flurry does not stack into noise

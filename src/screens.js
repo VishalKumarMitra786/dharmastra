@@ -39,9 +39,9 @@ export function createScreens(doc = document) {
   }
 
   function bindSettings(settings, onChange) {
-    const f = { timer: $('set-timer'), autoDrive: $('set-auto'), reduceMotion: $('set-motion'), side: $('set-side'), graphics: $('set-graphics'), buttonControls: $('set-buttons'), sound: $('set-sound') };
+    const f = { timer: $('set-timer'), autoDrive: $('set-auto'), reduceMotion: $('set-motion'), side: $('set-side'), graphics: $('set-graphics'), buttonControls: $('set-buttons'), sound: $('set-sound'), autoCentre: $('set-centre') };
     f.timer.value = settings.timer; f.autoDrive.checked = settings.autoDrive;
-    f.reduceMotion.checked = settings.reduceMotion; f.side.value = settings.side; f.graphics.value = settings.graphics; f.buttonControls.checked = settings.buttonControls; f.sound.checked = settings.sound;
+    f.reduceMotion.checked = settings.reduceMotion; f.side.value = settings.side; f.graphics.value = settings.graphics; f.buttonControls.checked = settings.buttonControls; f.sound.checked = settings.sound; f.autoCentre.checked = settings.autoCentre !== false;
     f.timer.addEventListener('change', () => onChange({ timer: f.timer.value }));
     f.autoDrive.addEventListener('change', () => onChange({ autoDrive: f.autoDrive.checked }));
     f.reduceMotion.addEventListener('change', () => onChange({ reduceMotion: f.reduceMotion.checked }));
@@ -49,6 +49,7 @@ export function createScreens(doc = document) {
     f.graphics.addEventListener('change', () => onChange({ graphics: f.graphics.value }));
     f.buttonControls.addEventListener('change', () => onChange({ buttonControls: f.buttonControls.checked }));
     f.sound.addEventListener('change', () => onChange({ sound: f.sound.checked }));
+    f.autoCentre.addEventListener('change', () => onChange({ autoCentre: f.autoCentre.checked }));
   }
 
   function showWin(stats, events, line) {

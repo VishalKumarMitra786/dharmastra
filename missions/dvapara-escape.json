@@ -113,6 +113,12 @@
    "speaker": "Bhadra",
    "text": "Good, you turned his own strength aside. Now strike while he is open.",
    "trigger": "parry"
+  },
+  {
+   "id": "pr1",
+   "speaker": "Suvrata",
+   "text": "Anything in your hand is better than nothing, {name}. It will not last, so strike when it counts.",
+   "trigger": "prop-pickup"
   }
  ],
  "events": [

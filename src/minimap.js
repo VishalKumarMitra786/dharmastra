@@ -28,6 +28,12 @@ export function createMinimap(canvas, world) {
         else if (hunting) ctx.fillRect(x - 4, y - 4, 8, 8);
         else { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
       }
+      // Props on the ground: a small hollow triangle (a shape no other mark uses); the one that can be taken now is larger.
+      ctx.strokeStyle = '#ffe9b0'; ctx.lineWidth = 1.5;
+      for (const q of frame.props || []) {
+        if (q.state !== 'idle') continue; const r = q.id === frame.hud?.promptProp ? 6 : 4; const x = X(q.x), y = Y(q.y);
+        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.8); ctx.lineTo(x - r, y + r * 0.8); ctx.closePath(); ctx.stroke();
+      }
       const c = frame.chariot;
       ctx.save(); ctx.translate(X(c.x), Y(c.y)); ctx.rotate(c.angle);
       ctx.fillStyle = '#ffb42e'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;

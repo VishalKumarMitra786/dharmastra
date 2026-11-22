@@ -1,11 +1,14 @@
 // The chakra screen: three concentric rings (yugas, eras, events) drawn on a canvas, opened like a vault by tapping, with real DOM controls,
 // a keyboard path and a plain list of the same hierarchy. No zoom and no pan: a ring turns (drag around it, Prev/Next, arrow keys) and opens.
 import { YUGAS, statusOf, currentYuga, spineMap, filterEvents, isFiltering, regionsOf, accessibleName, kindYear, windowRange, isDone, groupEras, yugaProgress, compactYear } from './model.js';
-import { ringLayout, lerpLayout, easeInOut, clunkMain, clunkKnock, SETTLE, alignRot, norm, TAU, thetaOf, ringCap, clampPos, nearestSlot, drawScene, hitTest } from './scene.js';
+import { ringLayout, layoutFrom, alignRot, norm, TAU, THIN, THICK, thetaOf, ringCap, clampPos, nearestSlot, drawScene, hitTest, dialGeom } from './scene.js';
+import * as S from './spring.js';
+import { usingKeyboard } from '../modality.js';
 import { reachText } from './reach.js';
 
 const ROW_H = 68;
-const DUR = 950; // ms for a vault turn
+const SWEEP_SECS = 1.1; // the glow's trip round the opened ring
+const PERF_MAX = 600;
 const NAMES = ['Yugas', 'Eras', 'Events'];
 const ICON = {
   open: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="#ffb42e"/><path d="M8 6l6 4-6 4z" fill="#1a0f05"/></svg>',
@@ -25,11 +28,20 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
   let L = 0, yi = -1, ei = -1; // open ring, chosen yuga, chosen era
   let events = [], eras = [], ringIdx = [], loadToken = 0, curYuga = 0;
   let hi = [0, 0]; // highlighted segment on the yuga ring and on the era ring
-  let focus = 0, pos = 0, posGoal = 0, cap = 14, rotGoal = null;
+  let focus = 0, pos = 0, posGoal = 0, posV = 0, cap = 14, top = 0;
   let filter = { text: '', kind: '', region: '', from: null, to: null };
   let W = 300, H = 300, dpr = 1, running = false, dirty = true, last = 0, lastDraw = 0, openOpen = false, counts = null, trigger = null, dragging = false;
-  const view = { layout: ringLayout(0), rot: [0, 0, 0, 0], alpha: [1, 0, 0], glow: [1, 0, 0] };
-  let anim = null;
+  // Everything that moves is a spring (see spring.js): ring turn, ring thickness, fades, glow, parallax and the event bloom. A new target never resets
+  // a position or a velocity, so a tap in the middle of a turn bends the motion towards the new goal instead of jumping.
+  const sp = {
+    th: [0, 1, 2].map((i) => S.spring(i === 0 ? THICK : THIN)), rot: [0, 1, 2, 3].map(() => S.spring(0)), alpha: [S.spring(1), S.spring(0), S.spring(0)], glow: [S.spring(1), S.spring(0), S.spring(0)],
+    par: [0, 1, 2].map(() => S.spring(0)), dim: [S.spring(1), S.spring(0.8), S.spring(0.8)], bloom: S.spring(0),
+  };
+  const view = { layout: ringLayout(0), rot: [0, 0, 0, 0], alpha: [1, 0, 0], glow: [1, 0, 0], dim: [1, 0.8, 0.8], par: [0, 0, 0], bloom: 0, sweep: null };
+  let animating = false, sweepT = -1, sweepRing = 0, clunkPending = false, sweepAcc = 0, dragOmega = 0;
+  const parts = S.createParticles(28);
+  const perf = { on: false, dt: [], draw: [] };
+  const kbdOn = () => usingKeyboard(doc) && doc.activeElement === stage;
   const statusCache = new Map();
   const c = () => ({ completed: progress.completed, spineById: spine });
   const status = (e) => { let s = statusCache.get(e.id); if (!s) { s = statusOf(e, c()); statusCache.set(e.id, s); } return s; };
@@ -49,7 +61,7 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     const focusEv = L === 2 ? events[ringIdx[focus]] : null;
     const readout = L === 1 ? [YUGAS[yi].name, `${events.length} events`] : L === 2 && focusEv ? [focusEv.label, `${focusEv.kind} · ${compactYear(focusEv.year)}`] : null;
     return {
-      W, H, dpr, motion: motion(), layout: view.layout, rot: view.rot, alpha: view.alpha, glow: view.glow, L, pos, cap, focus, readout,
+      W, H, dpr, top, bottom: 0, motion: motion(), layout: view.layout, rot: view.rot, alpha: view.alpha, glow: view.glow, dim: view.dim, par: view.par, bloom: view.bloom, sweep: view.sweep, parts: motion() ? parts : null, kbd: kbdOn(), L, pos, cap, focus, readout,
       rings: [
         { n: YUGAS.length, labels: YUGAS.map((y) => y.short), sel: hi[0], chosen: yi, cur: curYuga, progress: yp.map((y) => (y.levels ? y.done / y.levels : 0)) },
         { n: L >= 1 ? nEras() : 0, labels: eras.map((g) => g.label), sel: hi[1], chosen: ei, cur: -1, progress: L >= 1 ? eraFracs() : null },
@@ -58,72 +70,94 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     };
   }
   let draw = {};
-  function render() { draw = scene(); drawScene(ctx2d, draw); }
+  function render() { const t0 = perf.on ? performance.now() : 0; draw = scene(); drawScene(ctx2d, draw); if (perf.on && perf.draw.length < PERF_MAX) perf.draw.push(performance.now() - t0); }
 
   // ---------- sizing ----------
   function resize() {
     const r = stage.getBoundingClientRect(); const w = Math.max(100, Math.round(r.width)), h = Math.max(100, Math.round(r.height));
     dpr = Math.min(2, globalThis.devicePixelRatio || 1);
-    if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
+    const bar = $('ch-bar'); const bb = bar?.getBoundingClientRect?.(); let t = bb ? Math.round(bb.bottom - r.top) : 0; if (!(t >= 0 && t < h * 0.35)) t = 0; // the top bar floats over the stage: the dial is centred below it
+    if (w === W && h === H && t === top && canvas.width === Math.round(w * dpr)) return;
+    top = t;
     W = w; H = h; canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); updateCap(); dirty = true; start();
   }
-  function updateCap() { const R = Math.min(W, H) * 0.47; cap = ringCap(R, ringLayout(2)[2]); if (L === 2) { pos = clampPos(ringIdx.length, cap, pos); posGoal = pos; } }
+  function updateCap() { const { R } = dialGeom(W, H, top, 0); cap = ringCap(R, ringLayout(2)[2]); if (L === 2) { pos = clampPos(ringIdx.length, cap, pos); posGoal = pos; posV = 0; } }
 
   // ---------- the vault turn ----------
-  const clone = () => ({ layout: view.layout.map((x) => ({ ...x })), rot: view.rot.slice(), alpha: view.alpha.slice(), glow: view.glow.slice() });
-  // Moves the open ring from the current level to newL. Outer rings turn to line the chosen segment up at the top; the inner rings spin the other way and lock.
-  function turnTo(newL, instant) {
-    const oldL = L; L = newL; rotGoal = null;
-    const from = clone(); const to = { layout: ringLayout(newL), alpha: [1, newL >= 1 ? 1 : 0, newL >= 2 ? 1 : 0], glow: [0, 0, 0], rot: view.rot.map(norm) };
-    to.glow[newL] = 1;
-    const dir = newL > oldL ? 1 : -1;
-    const sel = [yi, ei]; const ns = [YUGAS.length, nEras()];
-    for (let j = 0; j < 4; j++) {
-      const rs = norm(from.rot[j]); from.rot[j] = rs;
-      if (j < newL && sel[j] >= 0) to.rot[j] = rs + norm(alignRot(sel[j], ns[j]) - rs); // shortest way to the lock
-      else if (j === newL && j > 0) to.rot[j] = (j % 2 ? -1 : 1) * dir * TAU; // the ring that opens spins one full turn and stops at zero
-      else if (j === newL) to.rot[j] = rs; // the yuga ring opening again keeps its place
-      else to.rot[j] = rs + ((j % 2 ? 1 : -1) * dir * TAU * (j === 3 ? 1 : 1.25)); // decorative rings spin the other way
-    }
-    if (instant || !motion()) { Object.assign(view, { layout: to.layout, alpha: to.alpha, glow: to.glow, rot: to.rot.map(norm) }); anim = null; if (click && soundOn()) { click.play(); cue('[Clunk]'); } }
-    else { anim = { t0: performance.now(), from, to, clicked: false }; }
-    root.dataset.level = String(newL); dirty = true; start(); renderList(); syncChrome();
+  const springs = () => [...sp.th.map((x) => [x, S.TUNE.thick, 0.0004, 0.01]), ...sp.rot.map((x, j) => [x, S.TUNE.rot[j], 0.0006, 0.01]), ...sp.alpha.map((x) => [x, S.TUNE.alpha, 0.002, 0.02]),
+    ...sp.glow.map((x) => [x, S.TUNE.glow, 0.002, 0.02]), ...sp.par.map((x) => [x, S.TUNE.depth, 0.0005, 0.01]), ...sp.dim.map((x) => [x, S.TUNE.dim, 0.002, 0.02]), [sp.bloom, S.TUNE.bloom, 0.001, 0.01]];
+  const ALL = springs(); const ROT = new Set(sp.rot);
+  function syncView() {
+    view.layout = layoutFrom(sp.th.map((x) => clamp(x.x, 0.04, 0.4)));
+    for (let j = 0; j < 4; j++) view.rot[j] = sp.rot[j].x;
+    for (let j = 0; j < 3; j++) { view.alpha[j] = clamp(sp.alpha[j].x, 0, 1); view.glow[j] = clamp(sp.glow[j].x, 0, 1); view.dim[j] = clamp(sp.dim[j].x, 0, 1); view.par[j] = sp.par[j].x; }
+    view.bloom = clamp(sp.bloom.x, 0, 1);
   }
-  // A tap during a turn does not wait for it: the turn jumps to its end (the lock still clicks once) and the new one starts.
-  function finish() { if (!anim) return; if (!anim.clicked && click && soundOn()) { click.play(); cue('[Clunk]'); } Object.assign(view, { layout: anim.to.layout, alpha: anim.to.alpha, glow: anim.to.glow, rot: anim.to.rot.slice() }); anim = null; root.dataset.anim = '0'; }
-  function sample(now) {
-    const u = clamp((now - anim.t0) / DUR, 0, 1); const { from, to } = anim;
-    const lt = easeInOut(clamp(u / SETTLE, 0, 1));
-    view.layout = lerpLayout(from.layout, to.layout, lt);
-    const m = clunkMain(u), k = clunkKnock(u);
-    for (let j = 0; j < 4; j++) view.rot[j] = from.rot[j] + (to.rot[j] - from.rot[j]) * m + (j <= L && j < 3 ? Math.sign(to.rot[j] - from.rot[j] || 1) * k : 0);
-    const at = easeInOut(clamp((u - 0.25) / 0.5, 0, 1));
-    for (let j = 0; j < 3; j++) { view.alpha[j] = from.alpha[j] + (to.alpha[j] - from.alpha[j]) * at; view.glow[j] = to.glow[j] ? clamp((u - SETTLE) / (1 - SETTLE), 0, 1) : from.glow[j] * (1 - clamp(u / 0.3, 0, 1)); }
-    if (!anim.clicked && u >= SETTLE) { anim.clicked = true; if (click && soundOn()) { click.play(); cue('[Clunk]'); } }
-    if (u >= 1) { Object.assign(view, { layout: to.layout, alpha: to.alpha, glow: to.glow, rot: to.rot.slice() }); anim = null; root.dataset.anim = '0'; }
-    else root.dataset.anim = '1';
+  function snapAll() { for (const [x] of ALL) S.snap(x); sweepT = -1; view.sweep = null; S.clearParticles(parts); animating = false; for (let j = 0; j < 4; j++) { const x = sp.rot[j]; const w = norm(x.x); x.x = x.t = w; } syncView(); root.dataset.anim = '0'; }
+  const lockSound = () => { if (click && soundOn()) { click.play(); cue('[Clunk]'); } };
+  // Moves the open ring from the current level to newL. Outer rings turn to line the chosen segment up at the top; the inner rings spin the other way and lock.
+  // Every value is retargeted, never reset, so calling this in the middle of a turn (a tap, Back) bends the motion from where it is, with the speed it has.
+  function turnTo(newL, instant) {
+    const oldL = L; L = newL; const dir = newL > oldL ? 1 : -1; const sel = [yi, ei]; const ns = [YUGAS.length, nEras()];
+    sp.th.forEach((x, i) => S.retarget(x, i === newL ? THICK : THIN));
+    sp.alpha.forEach((x, i) => S.retarget(x, i <= newL ? 1 : 0)); sp.glow.forEach((x, i) => S.retarget(x, i === newL ? 1 : 0)); sp.dim.forEach((x, i) => S.retarget(x, i === newL ? 1 : 0.8));
+    S.retarget(sp.bloom, newL === 2 ? 1 : 0);
+    for (let j = 0; j < 4; j++) {
+      const x = sp.rot[j]; const w = norm(x.x) - x.x; x.x += w; x.t += w; // same picture, smaller numbers
+      if (j < newL && sel[j] >= 0) x.t = x.x + norm(alignRot(sel[j], ns[j]) - x.x); // the shortest way to the lock
+      else if (j === newL && j > 0) x.t = (j % 2 ? -1 : 1) * dir * TAU; // the ring that opens spins one full turn and stops at zero
+      else if (j === newL) x.t = x.x; // the yuga ring opening again keeps its place
+      else x.t = x.x + (j % 2 ? 1 : -1) * dir * TAU * 1.25; // decorative rings spin the other way
+    }
+    root.dataset.level = String(newL); dirty = true; renderList(); syncChrome();
+    if (instant || !motion()) { snapAll(); lockSound(); return; }
+    sp.par.forEach((x, j) => { x.v += dir * (0.34 - 0.08 * j); }); // layered parallax: each ring is nudged a different amount and settles back
+    sweepT = 0; sweepRing = newL; sweepAcc = 0; clunkPending = true; animating = true;
+    if (soundOn() && click?.swell?.()) cue('[Deep swell]');
+    start();
+  }
+  // Keyboard highlight: the ring glides to line the segment up at the top.
+  function aim(j, goal) { const x = sp.rot[j]; x.t = x.x + norm(goal - x.x); if (!motion()) { S.snap(x); syncView(); } dirty = true; start(); }
+  function tick(dt) {
+    let moving = false;
+    for (const [x, tn, ex, ev] of ALL) { if (x.x === x.t && x.v === 0) continue; S.step(x, dt, tn.w, tn.z); if (S.settled(x, ex, ev)) { S.snap(x); if (ROT.has(x)) { const w = norm(x.x); x.x = x.t = Math.abs(w) < 1e-9 ? 0 : w; } } else moving = true; } // a ring that stops is stored as an angle in (-pi, pi]: a full turn ends at exactly zero
+    if (posGoal !== pos || posV !== 0) { const o = { x: pos, v: posV, t: posGoal }; S.step(o, dt, S.TUNE.pos.w, S.TUNE.pos.z); if (S.settled(o, 0.002, 0.02)) { pos = posGoal; posV = 0; } else { pos = o.x; posV = o.v; moving = true; } }
+    if (sweepT >= 0) {
+      sweepT += dt / SWEEP_SECS; moving = true;
+      if (sweepT >= 1) { sweepT = -1; view.sweep = null; }
+      else {
+        const head = S.smooth(sweepT); view.sweep = { ring: sweepRing, head, k: Math.sin(Math.PI * sweepT) };
+        const lay = view.layout[sweepRing]; const rm = ((lay.outer + lay.inner) / 2) * (draw.R || 150); const a = head * TAU - Math.PI / 2; sweepAcc += dt * 80;
+        while (sweepAcc >= 1) { sweepAcc -= 1; S.emit(parts, (draw.cx || W / 2) + Math.cos(a) * rm, (draw.cy || H / 2) + Math.sin(a) * rm, Math.cos(a), Math.sin(a)); }
+      }
+    }
+    if (S.stepParticles(parts, dt) > 0) moving = true;
+    if (clunkPending) { const r = sp.rot[L], t = sp.th[L]; if (Math.abs(r.x - r.t) < 0.05 && Math.abs(t.x - t.t) < 0.012) { clunkPending = false; lockSound(); } } // the lock: once, when the open ring is nearly home
+    syncView(); animating = moving; root.dataset.anim = moving ? '1' : '0';
+    return moving;
   }
 
   // ---------- frame loop ----------
   function start() { if (!running && openOpen && !doc.hidden) { running = true; last = performance.now(); requestAnimationFrame(frame); } }
   function frame(now) {
-    if (!openOpen || doc.hidden) { running = false; return; }
-    const dt = Math.min(0.1, (now - last) / 1000); last = now; let busy = false;
-    if (anim) { sample(now); busy = true; dirty = true; }
-    else {
-      if (rotGoal != null) { const d = norm(rotGoal - view.rot[L]); if (Math.abs(d) > 0.002) { view.rot[L] += d * (1 - Math.exp(-dt * 14)); busy = true; dirty = true; } else { view.rot[L] = rotGoal; rotGoal = null; dirty = true; } }
-      if (Math.abs(posGoal - pos) > 0.002) { pos += (posGoal - pos) * (1 - Math.exp(-dt * 14)); busy = true; dirty = true; } else if (pos !== posGoal) { pos = posGoal; dirty = true; }
-      if (motion() && !dragging) { // idle: slow turning, in opposite directions. Rings that are open for reading stay still.
-        const kbd = stage.matches?.(':focus-visible');
-        if (L === 0 && !kbd) { view.rot[0] += 0.02 * dt; view.rot[1] -= 0.035 * dt; view.rot[2] += 0.05 * dt; }
-        else if (L === 1) view.rot[2] += 0.05 * dt;
-        view.rot[3] -= 0.03 * dt; dirty = true;
+    if (!openOpen || doc.hidden) { running = false; return; } // nothing is scheduled while the tab is hidden
+    const raw = now - last; const dt = Math.min(0.05, Math.max(0, raw / 1000)); last = now;
+    if (perf.on && perf.dt.length < PERF_MAX && raw > 0) perf.dt.push(raw);
+    if (!motion() && (animating || sp.th.some((x) => x.x !== x.t))) { snapAll(); dirty = true; }
+    let busy = false;
+    if (motion()) {
+      busy = tick(dt); if (busy) dirty = true;
+      if (!busy && !dragging) { // idle: slow turning, in opposite directions. Rings that are open for reading stay still.
+        const drift = (j, v) => { const x = sp.rot[j]; x.x += v * dt; x.t += v * dt; };
+        if (L === 0 && !kbdOn()) { drift(0, 0.02); drift(1, -0.035); drift(2, 0.05); } else if (L === 1) drift(2, 0.05);
+        drift(3, -0.03); syncView(); dirty = true;
       }
-    }
+    } else if (Math.abs(posGoal - pos) > 0.002) { pos = posGoal; posV = 0; dirty = true; }
     if (dirty && (busy || dragging || now - lastDraw > 30)) { render(); lastDraw = now; dirty = false; }
     if (busy || (motion() && !doc.hidden) || dirty) requestAnimationFrame(frame); else running = false;
   }
   doc.addEventListener('visibilitychange', () => { if (!doc.hidden) start(); });
+  stage.addEventListener('focus', () => { dirty = true; start(); }); stage.addEventListener('blur', () => { dirty = true; start(); });
 
   // ---------- list (virtualised rows for events; plain buttons for yugas and eras) ----------
   const posOf = (idx) => idx; // ringIdx is the list: a row's position is its index
@@ -167,7 +201,7 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     ringIdx = g ? base.filter((i) => i >= g.from && i < g.to) : [];
   }
   async function openYuga(i) {
-    finish(); const token = ++loadToken; $('ch-error').hidden = true; $('ch-loading').hidden = false;
+    const token = ++loadToken; $('ch-error').hidden = true; $('ch-loading').hidden = false;
     try {
       const list = await store.loadShard(YUGAS[i].id); if (token !== loadToken) return;
       $('ch-loading').hidden = true; yi = i; ei = -1; hi[0] = i; events = list; eras = groupEras(list); hi[1] = 0; ringIdx = [];
@@ -179,13 +213,13 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     }
   }
   function openEra(i) {
-    finish(); if (i < 0 || i >= eras.length) return; ei = i; hi[1] = i; computeRing();
+    if (i < 0 || i >= eras.length) return; ei = i; hi[1] = i; computeRing();
     const firstOpen = ringIdx.findIndex((k) => status(events[k]).code === 'open'); focus = firstOpen >= 0 ? firstOpen : 0;
-    updateCap(); pos = posGoal = clampPos(ringIdx.length, cap, focus);
+    updateCap(); pos = posGoal = clampPos(ringIdx.length, cap, focus); posV = 0;
     turnTo(2); say(`${eras[i].label} opened. ${ringIdx.length} events.`);
   }
   function closeRing() {
-    finish(); if (L === 0) return false;
+    if (L === 0) return false;
     if (card && !card.hidden) closeCard();
     if (L === 2) { ei = -1; turnTo(1); say(`Back to ${YUGAS[yi].name} eras.`); }
     else { yi = -1; turnTo(0); say('Back to the yugas.'); }
@@ -199,13 +233,12 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
   // moving the highlight with keys, Prev/Next, or the list
   function highlight(ring, i) {
     const n = ring === 0 ? YUGAS.length : nEras(); i = ((i % n) + n) % n; hi[ring] = i;
-    rotGoal = alignRot(i, n); if (!motion()) { view.rot[ring] = rotGoal; rotGoal = null; }
-    dirty = true; start();
+    aim(ring, alignRot(i, n));
     say(ring === 0 ? `${YUGAS[i].name}, ${i + 1} of ${n}${i === curYuga ? ', you are here' : ''}. Enter opens.` : `${eras[i].label}, ${i + 1} of ${n}, ${eras[i].count} events. Enter opens.`);
   }
   function setFocus(p, { announce = true } = {}) {
     const n = ringIdx.length; if (!n) return; focus = clamp(p, 0, n - 1); if (n > cap) posGoal = focus; else posGoal = (n - 1) / 2;
-    if (!motion()) pos = posGoal;
+    if (!motion()) { pos = posGoal; posV = 0; }
     dirty = true; start(); renderRows(); ensureVisible(focus); renderRows();
     if (announce) { const e = events[ringIdx[focus]]; say(`${focus + 1} of ${n}. ${accessibleName(e, status(e))}`); }
   }
@@ -226,7 +259,7 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     const yr = (inp, era) => { const v = Number($(inp).value); if (!$(inp).value || !Number.isFinite(v) || v < 0) return null; return $(era).value === 'BCE' ? -v : v; };
     filter = { text: $('ch-q').value, kind: $('ch-kind').value, region: $('ch-region').value, from: yr('ch-from', 'ch-from-era'), to: yr('ch-to', 'ch-to-era') };
     if (filter.from != null && filter.to != null && filter.from > filter.to) [filter.from, filter.to] = [filter.to, filter.from];
-    if (L !== 2) return; computeRing(); focus = 0; scroll.scrollTop = 0; updateCap(); pos = posGoal = clampPos(ringIdx.length, cap, 0); updateCount(); renderRows(); dirty = true; start();
+    if (L !== 2) return; computeRing(); focus = 0; scroll.scrollTop = 0; updateCap(); pos = posGoal = clampPos(ringIdx.length, cap, 0); posV = 0; updateCount(); renderRows(); dirty = true; start();
   }
   for (const id of ['ch-q', 'ch-kind', 'ch-region', 'ch-from', 'ch-to', 'ch-from-era', 'ch-to-era']) {
     let tm = 0; $(id).addEventListener(id === 'ch-q' || id.includes('from') || id.includes('to') ? 'input' : 'change', () => { clearTimeout(tm); tm = setTimeout(readFilter, 160); });
@@ -295,7 +328,7 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
   const local = (ev) => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
   canvas.addEventListener('pointerdown', (ev) => {
     if (ptr) return; canvas.setPointerCapture?.(ev.pointerId); const [x, y] = local(ev); stage.focus({ preventScroll: true });
-    ptr = { id: ev.pointerId, x, y, th: thetaOf(x - draw.cx, y - draw.cy), moved: 0 };
+    ptr = { id: ev.pointerId, x, y, th: thetaOf(x - draw.cx, y - draw.cy), moved: 0, t: ev.timeStamp || 0 }; dragOmega = 0; dirty = true; start();
   });
   canvas.addEventListener('pointermove', (ev) => {
     if (!ptr || ev.pointerId !== ptr.id) return; const [x, y] = local(ev);
@@ -303,19 +336,24 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     if (ptr.moved < 8) return; dragging = true;
     const th = thetaOf(x - draw.cx, y - draw.cy); const d = norm(th - ptr.th); ptr.th = th;
     if (Math.hypot(x - draw.cx, y - draw.cy) < 24) return;
-    rotGoal = null;
-    if (L < 2) view.rot[L] += d;
-    else if (ringIdx.length > cap) { pos = clampPos(ringIdx.length, cap, pos - (d * cap) / TAU); posGoal = pos; }
+    const dts = Math.max(0.004, ((ev.timeStamp || 0) - ptr.t) / 1000); ptr.t = ev.timeStamp || 0; dragOmega = dragOmega * 0.6 + (d / dts) * 0.4; // angular speed of the finger, kept for the glide on release
+    if (L < 2) { const x2 = sp.rot[L]; x2.x += d; x2.t = x2.x; x2.v = 0; syncView(); }
+    else if (ringIdx.length > cap) { pos = clampPos(ringIdx.length, cap, pos - (d * cap) / TAU); posGoal = pos; posV = 0; }
     dirty = true;
   });
   const endPtr = (ev) => {
     if (!ptr || ev.pointerId !== ptr.id) return; const p = ptr; ptr = null;
-    if (dragging) { dragging = false; if (L === 2 && ringIdx.length > cap) { posGoal = nearestSlot(pos, ringIdx.length); focus = posGoal; renderRows(); } dirty = true; start(); return; }
+    if (dragging) { // let go: the ring glides on with the speed of the finger and settles (inertia), the event ring settles on the nearest slot
+      dragging = false; const w = clamp(dragOmega, -7, 7);
+      if (L === 2 && ringIdx.length > cap) { posV = motion() ? (-w * cap) / TAU : 0; posGoal = nearestSlot(pos + posV * 0.25, ringIdx.length); focus = posGoal; renderRows(); }
+      else if (L < 2 && motion()) { const x2 = sp.rot[L]; x2.v = w; x2.t = x2.x + w * 0.25; }
+      dirty = true; start(); return;
+    }
     if (ev.type === 'pointerup') tap(p.x, p.y);
   };
   canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
   function tap(x, y) {
-    finish(); const h = hitTest(draw, x, y);
+    const h = hitTest(draw, x, y);
     if (h.kind === 'hub') closeRing();
     else if (h.kind === 'segment') { hi[h.ring] = h.index; if (h.ring < L || h.ring === L) { if (h.ring === 0) openYuga(h.index); else openEra(h.index); } }
     else if (h.kind === 'node') { setFocus(h.index, { announce: false }); openCard(h.index, stage); }
@@ -329,7 +367,7 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
     catch { $('ch-error').hidden = false; $('ch-error-text').textContent = 'Could not load the chakra data. Check your connection.'; $('ch-retry').dataset.y = '0'; return; }
     $('ch-error').hidden = true;
     curYuga = Math.max(0, YUGAS.findIndex((y) => y.id === currentYuga(index.spine, c())));
-    if (L === 0 && !anim) hi[0] = curYuga;
+    if (L === 0 && !animating) hi[0] = curYuga;
     syncChrome(); renderList(); dirty = true; start(); stage.focus({ preventScroll: true });
   }
   function refresh() { progress = getProgress(); statusCache.clear(); if (index) { curYuga = Math.max(0, YUGAS.findIndex((y) => y.id === currentYuga(index.spine, c()))); syncChrome(); renderList(); dirty = true; } }
@@ -340,7 +378,8 @@ export function createChakra({ doc = document, store, getProgress, reach, reduce
   return {
     open, close, hideTemp, showAgain, refresh, get isOpen() { return openOpen; }, say,
     // test and tool hooks: where the rings are
-    _state: () => ({ level: L, yuga: yi, era: ei, eras: eras.length, events: events.length, ring: ringIdx.length, focus, pos, cap, anim: Boolean(anim), rows: rowsEl.children.length, idle: view.rot.slice() }),
+    _state: () => ({ level: L, yuga: yi, era: ei, eras: eras.length, events: events.length, ring: ringIdx.length, focus, pos, cap, anim: animating, rows: rowsEl.children.length, idle: view.rot.slice(), th: sp.th.map((x) => x.x), bloom: view.bloom, kbdRing: kbdOn(), top, particles: parts.life.filter((v) => v > 0).length }),
+    _perf: { start() { perf.on = true; perf.dt = []; perf.draw = []; }, stop() { perf.on = false; return { dt: perf.dt.slice(), draw: perf.draw.slice() }; } },
     _go: { openYuga, openEra, closeRing, step, setFocus },
   };
 }

@@ -1,4 +1,5 @@
 // World: parses an ASCII layout into walls, checkpoints and guard paths, and resolves circle-vs-wall collisions.
+import { PROPS } from './abilities.js';
 const SOLID = new Set(['#', 'o']);
 
 export function parseLayout(layout) {
@@ -16,12 +17,13 @@ export function parseLayout(layout) {
   if (!start) throw new Error('Layout has no start tile (S)');
   if (checkpoints.length === 0 || checkpoints.includes(undefined)) throw new Error('Checkpoints must be numbered 1..n without gaps');
   const guards = (layout.guards || []).map((g) => ({
-    speed: g.speed, kind: typeof g.kind === 'string' ? g.kind : undefined, hp: Number.isFinite(g.hp) ? g.hp : undefined, // armed patrol: the sim turns it into an enemy of this kind
+    speed: g.speed, carry: g.carry, kind: typeof g.kind === 'string' ? g.kind : undefined, hp: Number.isFinite(g.hp) ? g.hp : undefined, // armed patrol: the sim turns it into an enemy of this kind
     path: g.path.map(([x, y]) => ({ x: x * ts, y: y * ts })),
   }));
   const extras = parseExtras(layout, rows, ts);
+  const props = parseProps(layout, rows, ts);
   return {
-    ...extras,
+    ...extras, props,
     rules: layout.rules === 2 ? 2 : 1, objectiveDefs: Array.isArray(layout.objectives) ? layout.objectives : null,
     tileSize: ts, cols, rows: rows.length, width: cols * ts, height: rows.length * ts,
     solid, walls: mergeWalls(solid, ts), start, checkpoints, guards, timeLimit: layout.timeLimit,
@@ -58,7 +60,7 @@ function parseExtras(layout, rows, ts) {
           const hp = Number.isFinite(def.hp) ? Math.max(1, Math.min(20, Math.floor(def.hp))) : 3;
           const patrol = Array.isArray(def.patrol) ? def.patrol.filter((q) => Array.isArray(q) && q.every(Number.isFinite)).map(([x, y]) => ({ x: x * ts, y: y * ts })) : [];
           const k = safeKind(def.kind, 'raider');
-          spawns.push({ ...pos, id: `a${++na}`, kind: k, hp: Number.isFinite(def.hp) ? hp : undefined, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
+          spawns.push({ ...pos, id: `a${++na}`, kind: k, carry: def.carry === null || typeof def.carry === 'string' ? def.carry : undefined, hp: Number.isFinite(def.hp) ? hp : undefined, angle: Number.isFinite(def.angle) ? def.angle : 0, patrol });
         }
       }
     }
@@ -149,4 +151,19 @@ export function reachable(world, from, to) {
     }
   }
   return -1;
+}
+
+// layout.props: [{ kind, at: [col, row] }] in tile units (fractions allowed), kinds from abilities.js PROPS. Mistakes throw, so a typo in a mission cannot ship: unknown kind, outside the map, or inside a wall.
+function parseProps(layout, rows, ts) {
+  const out = []; const list = layout.props ?? [];
+  if (!Array.isArray(list)) throw new Error('layout.props must be an array');
+  list.forEach((q, i) => {
+    if (!q || !PROPS[q.kind]) throw new Error(`props[${i}] has an unknown kind "${q?.kind}"`);
+    if (!Array.isArray(q.at) || q.at.length !== 2 || !q.at.every(Number.isFinite)) throw new Error(`props[${i}] needs at:[col,row]`);
+    const [c, r] = q.at;
+    if (c < 0 || r < 0 || c >= rows[0].length || r >= rows.length) throw new Error(`props[${i}] (${q.kind}) is outside the map`);
+    if (SOLID.has(rows[Math.floor(r)][Math.floor(c)])) throw new Error(`props[${i}] (${q.kind}) is inside a wall`);
+    out.push({ id: `pr${i + 1}`, kind: q.kind, x: c * ts, y: r * ts, angle: Number.isFinite(q.angle) ? q.angle : 0 });
+  });
+  return out;
 }

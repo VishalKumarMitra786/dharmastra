@@ -20,7 +20,9 @@ import { dialSvg, dialLabel } from './chakra/dial.js';
 import { YUGAS, yugaProgress, currentYuga, spineMap } from './chakra/model.js';
 import { createEventStore } from './chakra/data.js';
 import { createStaticReachProvider } from './chakra/reach.js';
+import { initModality } from './modality.js';
 
+initModality(); // focus rings only for the keyboard
 const MISSION_ID = pickMissionId(location.search);
 const PARAMS = new URLSearchParams(location.search);
 const CHAKRA_FIRST = !PARAMS.has('mission'); // the chakra is the first screen; a ?mission= link goes straight to that mission

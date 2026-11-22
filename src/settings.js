@@ -11,7 +11,8 @@ export function defaultSettings(win = window) {
     blood: true, // brief small blood spatter on hits; off gives neutral sparks with the same timing
     graphics: '3d', // '3d' | '2d' (3d falls back to 2d automatically when WebGL is unavailable)
     buttonControls: false, // true: single-press arrow and look buttons instead of the stick and touch drags (WCAG 2.5.7)
-    sound: true, // the chakra's lock click (the game has no sound files yet)
+    sound: true, // the chakra's lock click and swell (the game has no sound files yet)
+    autoCentre: true, // the third-person camera drifts back behind the hero after a while of running with no look input
   };
 }
 
@@ -28,6 +29,7 @@ export function loadSettings(storage = safeStorage(), win = window) {
       blood: typeof saved.blood === 'boolean' ? saved.blood : base.blood,
       buttonControls: typeof saved.buttonControls === 'boolean' ? saved.buttonControls : base.buttonControls,
       sound: typeof saved.sound === 'boolean' ? saved.sound : base.sound,
+      autoCentre: typeof saved.autoCentre === 'boolean' ? saved.autoCentre : base.autoCentre,
     }, win, storage);
   } catch { return wireBloodToggle(base, win, storage); }
 }

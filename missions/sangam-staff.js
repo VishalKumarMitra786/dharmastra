@@ -7,6 +7,12 @@ export const layout = {
   rules: 2, // hurdles, objectives and the staff are on
   theme: 'pataliputra', // placeholder look: a Sangam harbour theme is still to be made
   tileSize: 72,
+  // Props (docs/review/prop-hooks.md; tile units): the staff is lent, so the road offers other tools: a market pole, a rope, sacks to swing, stones and pots to throw, a torch, a bench and a crate at the scales.
+  props: [
+    { kind: 'market-pole', at: [14.5, 4.5] }, { kind: 'rope', at: [2.5, 9.5] }, { kind: 'grain-sack', at: [17.5, 8.5] }, { kind: 'grain-sack', at: [6.5, 2.5] },
+    { kind: 'stone', at: [3.5, 8.5] }, { kind: 'stone', at: [10.5, 6.5] }, { kind: 'clay-pot', at: [24.5, 5.5] }, { kind: 'clay-pot', at: [25.5, 8.5] },
+    { kind: 'bench', at: [23.5, 10.5] }, { kind: 'crate', at: [21.5, 6.5] }, { kind: 'torch', at: [9.5, 2.5] },
+  ],
   startAngle: 0,
   timeLimit: 240,
   rows: [

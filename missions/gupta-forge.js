@@ -10,6 +10,13 @@ export const layout = {
   rules: 2,
   theme: 'pataliputra', // placeholder look, like the Pepper Road
   tileSize: 72,
+  // Props (docs/review/prop-hooks.md; tile units): the lesson yards are safe and nearly bare (a practice stick); the road yard has a bench on each flank, a crate, pots and stones to throw, and one spear
+  // by the entrance. The test is still the test: the weapons that matter are the ones you earned.
+  props: [
+    { kind: 'stick', at: [3.5, 2.5] }, { kind: 'clay-pot', at: [33.5, 2.5] }, { kind: 'clay-pot', at: [33.5, 10.5] },
+    { kind: 'spear', at: [43.5, 6.5] }, { kind: 'bench', at: [44.5, 2.5] }, { kind: 'bench', at: [44.5, 10.5] }, { kind: 'crate', at: [47.5, 6.5] },
+    { kind: 'clay-pot', at: [48.5, 3.5] }, { kind: 'clay-pot', at: [48.5, 9.5] }, { kind: 'stone', at: [45.5, 4.5] }, { kind: 'stone', at: [45.5, 8.5] },
+  ],
   startAngle: 0,
   timeLimit: 600,
   rows: [

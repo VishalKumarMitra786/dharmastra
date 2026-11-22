@@ -13,7 +13,11 @@
 html, body { height: 100%; overflow: hidden; margin: 0; background: var(--bg); color: var(--text); font: var(--m)/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overscroll-behavior: none; }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px #000; }
+/* Focus rings are for the keyboard (src/modality.js sets html[data-input]). After a tap or a click nothing is outlined, and the ring follows each control's own rounded shape. */
+* { -webkit-tap-highlight-color: transparent; }
+html[data-input="kbd"] :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px #000; }
+html:not([data-input="kbd"]) :focus-visible { outline: none; box-shadow: none; }
+summary, .ch-row, .ch-item { border-radius: 12px; }
 .i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .i .fill, .i path.fill { fill: currentColor; stroke: none; }
 .note { margin: var(--sp1) 0 0; font-size: var(--s); color: var(--muted); }
@@ -44,14 +48,15 @@ select { border-radius: 12px; background: #1d1448; }
 .chip #obj-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip .count { flex: none; padding: 0 var(--sp2); border-radius: 999px; background: var(--accent); color: #1a0f05; font-size: var(--xs); font-weight: 800; }
 .minimap { grid-column: 3; grid-row: 1 / span 2; width: 84px; height: 54px; border: 1.5px solid var(--line); border-radius: 12px; background: rgba(10, 7, 38, 0.75); }
-.vitals { grid-column: 1 / 3; grid-row: 2; display: flex; align-items: center; gap: var(--sp3); padding-left: var(--sp1); }
+.vitals { grid-column: 1 / 3; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp1) var(--sp3); padding-left: var(--sp1); }
 .vital { display: flex; align-items: center; gap: var(--sp1); font-size: var(--xs); font-weight: 800; font-variant-numeric: tabular-nums; }
 .vital .i { width: 18px; height: 18px; }
 .vital.hp .i { color: var(--danger); } .vital.st .i { color: var(--teal); } .vital.ar .i, .vital.tm .i { color: var(--accent); }
 .bar { width: 88px; height: 10px; border: 1.5px solid var(--text); border-radius: 6px; overflow: hidden; background: #0a0726; }
-#health-fill, #stamina-fill { display: block; height: 100%; width: 100%; transition: width 0.2s; }
+#health-fill, #stamina-fill, #held-fill { display: block; height: 100%; width: 100%; transition: width 0.2s; }
 #health-fill { background: linear-gradient(90deg, #ff5a48, #ffb42e); }
 #stamina-fill { background: linear-gradient(90deg, #2fb8a8, #9be8d8); }
+#held-fill { background: linear-gradient(90deg, #ffb42e, #ffe9b0); }
 
 /* Hit flash and mission title card. */
 #fx { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 90px 24px rgba(255, 70, 50, 0.85); }
@@ -86,7 +91,13 @@ select { border-radius: 12px; background: #1d1448; }
 .dpad { display: none; grid-template-columns: repeat(3, 52px); grid-auto-rows: 52px; gap: var(--sp1); }
 #game[data-controls="buttons"] .joy { display: none; }
 #game[data-controls="buttons"] .dpad { display: grid; }
-#game:not([data-cam="orbit"]) .pad.look { visibility: hidden; } /* look buttons matter only with the third-person camera */
+#game:not([data-cam="orbit"]) .pad.look { visibility: hidden; }
+.cam-reset { position: absolute; bottom: calc(var(--sp3) + var(--safe-b) + 196px + var(--sp3)); display: none; touch-action: none; }
+#game[data-side="right"] .cam-reset { right: calc(var(--sp3) + var(--safe-r)); }
+#game[data-side="left"] .cam-reset { left: calc(var(--sp3) + var(--safe-l)); }
+#game[data-cam="orbit"]:not([data-controls="buttons"]) .cam-reset { display: inline-flex; }
+.cam-reset.active { background: linear-gradient(135deg, #ffe08a, #ffa51f 55%, #ff7a3d); color: #1a0f05; }
+@media (min-width: 821px) and (pointer: fine) { .cam-reset { display: none !important; } } /* look buttons matter only with the third-person camera */
 .pad { font: inherit; color: var(--text); width: 52px; height: 52px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--line); border-radius: 16px; background: rgba(22, 15, 58, 0.85); touch-action: none; cursor: pointer; }
 .pad.active, .pad[aria-pressed="true"] { background: linear-gradient(135deg, #ffe08a, #ffa51f 55%, #ff7a3d); border-color: #ffe9b0; color: #1a0f05; }
 .pad[aria-pressed="true"] { border-style: double; border-width: 4px; } /* a toggle that is on has a different edge, not just a different colour */
@@ -102,16 +113,25 @@ select { border-radius: 12px; background: #1d1448; }
 .pad.act.sm { width: 46px; height: 46px; }
 [data-control="dodge"] { --x: 82px; --b: 4px; } [data-control="heavy"] { --x: 148px; --b: 4px; }
 [data-control="do"] { --x: 8px; --b: 82px; border-color: var(--teal); } [data-control="block"] { --x: 72px; --b: 82px; } [data-control="push"] { --x: 138px; --b: 86px; }
-[data-control="swap"] { --x: 8px; --b: 148px; } [data-control="crouch"] { --x: 62px; --b: 148px; } [data-control="runtoggle"] { --x: 116px; --b: 148px; }
+[data-control="swap"], [data-control="drop"] { --x: 8px; --b: 148px; } [data-control="throw"] { --x: 162px; --b: 148px; } [data-control="crouch"] { --x: 62px; --b: 148px; } [data-control="runtoggle"] { --x: 116px; --b: 148px; }
 #game[data-armed="0"] .pad.act[data-control="do"] { width: 72px; height: 72px; --x: 0px; --b: 0px; }
 #game[data-armed="0"] .pad.act[data-control="do"] .i { width: 32px; height: 32px; }
 #game[data-autorun="1"] .pad.act[data-control="runtoggle"] { display: none; }
+.prop-prompt { position: absolute; bottom: calc(var(--sp3) + var(--safe-b) + 196px + var(--sp3)); margin: 0; display: inline-flex; align-items: center; gap: var(--sp1); min-height: 44px; padding: 0 var(--sp3); max-width: 55vw; background: rgba(22, 15, 58, 0.94); border: 2px solid var(--teal); border-radius: 999px; font-size: var(--s); font-weight: 800; pointer-events: none; }
+#game[data-side="right"] .prop-prompt { right: calc(var(--sp3) + var(--safe-r) + 60px); } #game[data-side="left"] .prop-prompt { left: calc(var(--sp3) + var(--safe-l) + 60px); }
+@media (min-width: 821px) and (pointer: fine) { .prop-prompt { bottom: calc(var(--sp3) + var(--safe-b)); } }
+.pad.unavail { opacity: 0.55; border-style: dashed; background: repeating-linear-gradient(135deg, rgba(22, 15, 58, 0.85) 0 6px, rgba(60, 40, 110, 0.85) 6px 12px); } /* unavailable: dashed edge and stripes, not only dimmer */
+.vital.hold { gap: var(--sp1); } .vital.hold .hcol { display: flex; flex-direction: column; gap: 2px; max-width: 120px; } .vital.hold #held-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vital.hold .bar { width: 64px; } .vital.hold[data-crack="1"] .bar, .vital.hold[data-crack="2"] .bar { border-style: dashed; } /* a cracked prop has a broken edge, and its state is also in the name */
 .pad.act[data-control="block"].active, .pad.act[data-control="aim"].active { border-style: double; border-width: 4px; }
 @media (orientation: landscape) and (max-height: 520px) {
   .actions-pad { width: 300px; height: 140px; }
+  .cam-reset { bottom: calc(var(--sp3) + var(--safe-b) + 140px + var(--sp3)); }
   [data-control="push"] { --x: 208px; --b: 8px; }
   [data-control="do"] { --x: 8px; --b: 82px; } [data-control="block"] { --x: 72px; --b: 82px; }
-  [data-control="swap"] { --x: 136px; --b: 86px; } [data-control="crouch"] { --x: 190px; --b: 86px; } [data-control="runtoggle"] { --x: 244px; --b: 86px; }
+  [data-control="swap"], [data-control="drop"] { --x: 136px; --b: 86px; } [data-control="throw"] { --x: 254px; --b: 8px; }
+  .prop-prompt { bottom: calc(var(--sp3) + var(--safe-b) + 140px + var(--sp3)); }
+  [data-control="crouch"] { --x: 190px; --b: 86px; } [data-control="runtoggle"] { --x: 244px; --b: 86px; }
   #hud { padding-bottom: var(--sp2); }
   .captions { top: calc(70px + var(--safe-t)); }
 }
@@ -190,6 +210,7 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 .opt label { display: inline-flex; align-items: center; gap: var(--sp2); min-height: 44px; padding: var(--sp2) var(--sp4); border: 2px solid rgba(255, 180, 46, 0.55); border-radius: 999px; background: var(--btn); cursor: pointer; }
 .opt input:checked + label { background: linear-gradient(135deg, #ffe08a, #ffa51f 55%, #ff7a3d); color: #1a0f05; font-weight: 800; border-color: #ffe9b0; }
 .opt input:focus-visible + label, .look input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px #000; }
+html:not([data-input="kbd"]) .opt input:focus-visible + label, html:not([data-input="kbd"]) .look input:focus-visible + label { outline: none; box-shadow: none; }
 .swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; }
 .looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--sp2); }
 .look label { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--sp1); padding: var(--sp2); height: 100%; min-height: 44px; border: 2px solid rgba(255, 180, 46, 0.4); border-radius: 16px; background: rgba(255, 243, 220, 0.06); cursor: pointer; }
@@ -200,24 +221,29 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 .look-blurb { display: none; }
 .field input[type="text"] { font: inherit; color: var(--text); background: #1d1448; border: 2px solid var(--line); border-radius: 12px; min-height: 44px; padding: var(--sp2) var(--sp3); }
 
-/* ---------- Chakra home: concentric rings fill the page ---------- */
-.chakra { z-index: 12; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; padding: calc(var(--sp2) + var(--safe-t)) calc(var(--sp2) + var(--safe-r)) calc(var(--sp2) + var(--safe-b)) calc(var(--sp2) + var(--safe-l)); overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #3c1d70 0%, #1c1050 55%, #0a0726 100%); }
-.ch-bar { display: flex; align-items: center; gap: var(--sp2); flex: none; }
-.ch-chip { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; gap: var(--sp2); font-weight: 700; font-size: var(--s); }
+/* ---------- Chakra home: the dial fills the screen, the top bar floats over it ---------- */
+.chakra { z-index: 12; display: block; padding: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #3c1d70 0%, #1c1050 55%, #0a0726 100%); }
+.ch-bar { position: absolute; z-index: 4; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: var(--sp2); padding: calc(var(--sp2) + var(--safe-t)) calc(var(--sp2) + var(--safe-r)) var(--sp2) calc(var(--sp2) + var(--safe-l)); background: linear-gradient(rgba(10, 7, 38, 0.72), rgba(10, 7, 38, 0)); pointer-events: none; }
+.ch-bar > * { pointer-events: auto; }
+.ch-bar .ch-chip { pointer-events: none; }
+.ch-chip { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; gap: var(--sp2); font-weight: 700; font-size: var(--s); text-shadow: 0 1px 8px #000; }
 .chakra:not([data-level="0"]) .ch-chip .dial { display: none; }
 .ch-chip #ch-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; grid-template-areas: "stage" "panel" "nav"; position: relative; }
+.ch-main { position: absolute; inset: 0; padding: 0 var(--safe-r) var(--safe-b) var(--safe-l); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; grid-template-areas: "stage" "panel" "nav"; }
 .ch-stage-wrap { grid-area: stage; position: relative; min-height: 0; }
-.ch-stage { position: absolute; inset: 0; touch-action: none; border-radius: 16px; }
+.ch-stage { position: absolute; inset: 0; touch-action: none; outline: none; }
 .ch-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.ch-stage:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; box-shadow: none; }
+html .ch-stage:focus, html .ch-stage:focus-visible { outline: none; box-shadow: none; } /* no box: the keyboard ring is drawn on the dial itself, in the canvas */
+#ch-card-title:focus { outline: none; box-shadow: none; }
+html[data-input="kbd"] #ch-card-title:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
+.chakra[data-list="1"] .ch-stage { top: 0; }
 .ch-cue { position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--sp2); }
 .ch-toast { position: absolute; left: 50%; top: var(--sp2); transform: translateX(-50%); margin: 0; padding: var(--sp1) var(--sp3); border-radius: 999px; background: rgba(22, 15, 58, 0.94); border: 1.5px solid var(--line); font-size: var(--s); }
 .ch-error { position: absolute; left: var(--sp2); right: var(--sp2); top: var(--sp2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp2); padding: var(--sp2); background: rgba(22, 15, 58, 0.97); border: 2px solid var(--danger); border-radius: 12px; }
 .ch-error p { margin: 0; flex: 1 1 10rem; }
-.ch-nav { grid-area: nav; display: flex; justify-content: center; align-items: center; gap: var(--sp4); padding-top: var(--sp2); }
+.ch-nav { grid-area: nav; display: flex; justify-content: center; align-items: center; gap: var(--sp4); padding: var(--sp2) 0; }
 .ch-nav .btn:not(.round) { min-width: 8rem; }
-.ch-panel { grid-area: panel; display: flex; flex-direction: column; gap: var(--sp2); min-height: 0; height: 44dvh; padding-top: var(--sp2); }
+.ch-panel { grid-area: panel; display: flex; flex-direction: column; gap: var(--sp2); min-height: 0; height: 44dvh; padding: var(--sp2) var(--sp2) 0; }
 .ch-listhead { display: flex; align-items: center; justify-content: space-between; gap: var(--sp2); flex: none; }
 .ch-listhead h2 { margin: 0; font-family: var(--display); font-size: var(--l); }
 .ch-items { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: var(--sp2); overflow: auto; align-content: start; }
@@ -248,7 +274,7 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 .ch-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .ch-t { font-weight: 700; font-size: var(--s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-s { font-size: var(--xs); color: var(--muted); }
-.ch-card { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; justify-content: center; padding: var(--sp3); background: rgba(5, 3, 20, 0.65); overflow: auto; }
+.ch-card { position: absolute; inset: 0; z-index: 6; display: flex; align-items: flex-end; justify-content: center; padding: var(--sp3); background: rgba(5, 3, 20, 0.65); overflow: auto; }
 .ch-card-in { width: min(30rem, 100%); max-height: 100%; margin: 0 auto; background: #1a1148; padding: var(--sp4); text-align: left; }
 .ch-meta { margin: 0 0 var(--sp1); color: var(--accent); font-weight: 700; font-size: var(--s); }
 .ch-intro { margin: 0 0 var(--sp2); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -259,5 +285,5 @@ code { background: #000; padding: 1px 5px; border-radius: 4px; }
 #ch-play.is-locked { background: var(--btn); color: var(--text); border-style: dashed; }
 @media (min-width: 860px) {
   .ch-main[data-wide], .chakra[data-list="1"] .ch-main { grid-template-columns: minmax(0, 1fr) 26rem; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "stage panel" "nav panel"; column-gap: var(--sp4); }
-  .ch-panel { height: auto; }
+  .ch-panel { height: auto; padding-top: calc(60px + var(--safe-t)); }
 }

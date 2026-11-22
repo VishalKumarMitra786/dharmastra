@@ -67,6 +67,7 @@ for (const [w, h, mobile] of [[360, 740, true], [1280, 800, false]]) {
     await t.shot(join(OUT, `${l}.png`));
     if (!(await t.ev(`!!document.getElementById('hud') && !document.getElementById('hud').hidden`))) fail(l, 'HUD is not visible after starting');
     await audit(t, l);
+    if ((await t.ev(`document.getElementById('game').dataset.cam`)) === 'orbit') { const vis = await t.ev(`(() => { const b = document.getElementById('cam-reset'); const r = b.getBoundingClientRect(); return getComputedStyle(b).display !== 'none' && r.width >= 44 && r.height >= 44; })()`); if (mobile && !vis) fail(l, 'the camera reset button is not shown on a phone in third-person view'); await t.key('g', 'KeyG'); await t.sleep(300); if (!/Camera behind you/.test(await t.ev(`document.getElementById('announcer').textContent`))) notes.push(`${l}: pressing G did not announce the camera reset (the key event may not reach the page in headless mode)`); await t.shot(join(OUT, `${l}-after-reset.png`)); }
   });
 }
 await pass('picker-360', { w: 360, h: 740, mobile: true }, async (t, l) => {
@@ -96,7 +97,7 @@ const waitItems = async (t, ms = 20000) => { for (let i = 0; i < ms / 200; i++) 
 const st = async (t) => JSON.parse(await t.ev(`JSON.stringify(window.__chakra._state())`));
 const waitLevel = async (t, lv, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { const s = await st(t); if (s.level === lv && !s.anim) return s; await t.sleep(100); } return null; };
 const tapWheel = async (t, ring, theta) => { // a real mouse tap on the canvas at a ring (0 outer, 1 middle, 2 inner) and angle (radians clockwise from the top)
-  const p = JSON.parse(await t.ev(`(() => { const c = document.getElementById('ch-canvas').getBoundingClientRect(); const R = Math.min(c.width, c.height) * 0.47; return JSON.stringify({ x: c.left + c.width / 2, y: c.top + c.height / 2, R }); })()`));
+  const p = JSON.parse(await t.ev(`(() => { const c = document.getElementById('ch-canvas').getBoundingClientRect(); const top = window.__chakra._state().top || 0; const avail = Math.max(60, c.height - top); const R = Math.min(c.width, avail) * 0.48; return JSON.stringify({ x: c.left + c.width / 2, y: c.top + top + avail / 2, R }); })()`)); // mirrors dialGeom() in src/chakra/scene.js: the dial is centred below the floating bar
   const L = Number(await t.ev(`document.getElementById('screen-chakra').dataset.level`));
   const bands = L === 0 ? [[1, 0.7], [0.68, 0.595], [0.575, 0.49]] : L === 1 ? [[1, 0.915], [0.895, 0.625], [0.605, 0.52]] : [[1, 0.915], [0.895, 0.81], [0.79, 0.49]]; // mirrors ringLayout() in src/chakra/scene.js
   const r = ((bands[ring][0] + bands[ring][1]) / 2) * p.R; const x = p.x + Math.sin(theta) * r, y = p.y - Math.cos(theta) * r;
@@ -162,6 +163,58 @@ await pass('chakra-locked', { w: 390, h: 844, mobile: true }, async (t, l) => {
   await t.ev(`document.getElementById('ch-play').click()`); await t.sleep(3500);
   if (!(await t.ev(`location.search.includes('mission=mauryan-spy')`))) fail(l, 'Play on level 14 did not go to its mission');
   if (await t.ev(`document.getElementById('start-btn').disabled`)) fail(l, 'level 14 start button is disabled');
+});
+// ---- Smoothness: per-frame deltas during a ring turn, compared with an idle baseline; an interrupted and reversed turn must not jump either. ----
+const RECORD = `(async (ms, action) => { const out = { dt: [], th: [] }; let last = performance.now(); const t0 = last; let n = 0; window.__chakra._perf.start();
+  await new Promise((r) => { const f = (now) => { out.dt.push(now - last); last = now; out.th.push(window.__chakra._state().th[1]); if (++n === 6 && action) action(); if (now - t0 < ms) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); });
+  out.perf = window.__chakra._perf.stop(); return JSON.stringify(out); })`;
+const pct = (a, p) => { const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * p))]; };
+const speed = (r) => { let worst = 0; for (let i = 1; i < r.th.length; i++) worst = Math.max(worst, Math.abs(r.th[i] - r.th[i - 1]) / Math.max(0.004, r.dt[i] / 1000)); return worst; };
+await pass('chakra-smooth', { w: 390, h: 844, mobile: true }, async (t, l) => {
+  await seed(t); await t.send('Page.navigate', { url: `${process.env.GAME_URL}?dev=1` }); await waitItems(t); await t.sleep(800);
+  // Timing in a shared headless box is noisy, so the frame test gets up to three tries and the notes say how many it took. Each try measures its own idle baseline first.
+  // Pass: 90% of the turn's frames within 4x the baseline median, and no single gap over max(8x the baseline median, 250 ms) (a freeze).
+  let run = null, tries = 0, ok = false, why = '';
+  while (tries < 3 && !ok) {
+    tries++; if ((await st(t)).level !== 0) { await t.ev(`window.__chakra._go.closeRing()`); await waitLevel(t, 0, 4000); }
+    const base = JSON.parse(await t.ev(`${RECORD}(1200, null)`)); const bd = base.dt.slice(3); const med = pct(bd, 0.5), p95 = pct(bd, 0.95);
+    run = JSON.parse(await t.ev(`${RECORD}(1800, () => window.__chakra._go.openYuga(2))`)); const rd = run.dt.slice(3);
+    const gap = Math.max(...rd), p90 = pct(rd, 0.9), gapLimit = Math.max(8 * med, 250), p90Limit = 4 * med; const drawMed = pct(run.perf.draw, 0.5), drawMax = Math.max(...run.perf.draw);
+    ok = gap <= gapLimit && p90 <= p90Limit; why = `p90 ${p90.toFixed(1)} ms (limit ${p90Limit.toFixed(1)}), worst gap ${gap.toFixed(1)} ms (limit ${gapLimit.toFixed(1)})`;
+    notes.push(`chakra turn at 390x844 (headless Chrome, software GL, try ${tries}): baseline ${med.toFixed(1)} ms median / ${p95.toFixed(1)} ms p95; turn ${pct(rd, 0.5).toFixed(1)} ms median, ${why}; draw ${drawMed.toFixed(2)} ms median, ${drawMax.toFixed(2)} ms max; ${rd.length} frames`);
+  }
+  if (!ok) fail(l, `frame times during the ring turn were not smooth in 3 tries: ${why}`);
+  if (run.th[run.th.length - 1] < 0.299 || run.th[0] > 0.1) fail(l, `ring did not grow from thin to thick (${run.th[0]} to ${run.th[run.th.length - 1]})`);
+  if (speed(run) > 0.9) fail(l, `ring thickness jumps (${speed(run).toFixed(2)} per second)`);
+  for (let i = 3; i < run.th.length; i++) if (run.th[i] < run.th[i - 1] - 0.002) { fail(l, 'ring thickness goes backwards during an opening turn'); break; }
+  // interrupt: open, then reverse 250 ms in. No jump, and it ends closed.
+  const rev = JSON.parse(await t.ev(`${RECORD}(2200, () => { window.__chakra._go.openEra(0); setTimeout(() => window.__chakra._go.closeRing(), 250); })`));
+  if (speed(rev) > 1.2) fail(l, `an interrupted turn jumps (${speed(rev).toFixed(2)} per second)`);
+  const s = await waitLevel(t, 1, 4000); if (!s) fail(l, 'the reversed turn did not settle back on the era ring');
+  else if (Math.abs(s.th[1] - 0.3) > 1e-6 || Math.abs(s.th[2] - 0.085) > 1e-6 || s.bloom !== 0) fail(l, `reversed turn did not settle cleanly: ${JSON.stringify(s.th)}`);
+  await t.shot(join(OUT, `${l}.png`));
+});
+// ---- Focus: no outline after a tap or click anywhere; a ring only for the keyboard, drawn on the dial ----
+const outlineOf = (t) => t.ev(`(() => { const e = document.activeElement; const s = getComputedStyle(e); return JSON.stringify({ id: e.id || e.tagName, style: s.outlineStyle, width: s.outlineWidth, shadow: s.boxShadow, input: document.documentElement.dataset.input || '' }); })()`).then(JSON.parse);
+const clickAt = async (t, sel) => { const p = JSON.parse(await t.ev(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); })()`)); await t.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', clickCount: 1 }); await t.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', clickCount: 1 }); };
+await pass('focus-rings', { w: 360, h: 740, mobile: false }, async (t, l) => {
+  await seed(t); await t.send('Page.navigate', { url: `${process.env.GAME_URL}?dev=1` }); await waitItems(t); await t.sleep(800);
+  let o = await outlineOf(t); if (o.style !== 'none') fail(l, `the dial is outlined on load before any key (${JSON.stringify(o)})`);
+  await tapWheel(t, 0, 0.9); await waitLevel(t, 1); await t.sleep(300); o = await outlineOf(t);
+  if (o.style !== 'none' || o.shadow !== 'none') fail(l, `a box is drawn around the dial after a tap: ${JSON.stringify(o)}`);
+  if ((await st(t)).kbdRing) fail(l, 'the keyboard ring is drawn after a tap');
+  await t.shot(join(OUT, `${l}-after-tap.png`));
+  await t.key('ArrowRight', 'ArrowRight'); await t.sleep(200); o = await outlineOf(t);
+  if (o.input !== 'kbd') fail(l, 'a key press did not switch to keyboard mode'); if (o.style !== 'none') fail(l, `the dial gets a box outline for the keyboard (${JSON.stringify(o)}); the ring must be drawn on the dial`);
+  if (!(await st(t)).kbdRing) fail(l, 'no keyboard ring on the dial while using the keyboard'); await t.shot(join(OUT, `${l}-keyboard.png`));
+  await t.ev(`window.__chakra._go.openEra(0)`); await waitLevel(t, 2); await t.ev(`window.__chakra._go.setFocus(2, { announce: false })`); await t.sleep(300); await t.shot(join(OUT, `${l}-keyboard-events.png`));
+  await keyTo(t, 'Enter'); await t.sleep(400); o = await outlineOf(t); if (o.id !== 'ch-card-title') fail(l, `focus is on ${o.id}, not the card title`);
+  await t.shot(join(OUT, `${l}-card-keyboard.png`));
+  await clickAt(t, '#ch-card-close'); await t.sleep(300);
+  await tapWheel(t, 0, 0.9); await t.sleep(300); o = await outlineOf(t); if (o.style !== 'none') fail(l, `outline after a mouse tap following keyboard use: ${JSON.stringify(o)}`);
+  // other screens: a mouse click on their buttons leaves no outline
+  await t.ev(`document.querySelector('[data-action=chakra-skip]').click()`); await t.sleep(1500);
+  for (const sel of ['#start-btn', '[data-action=settings]']) { if (!(await t.ev(`!!document.querySelector(${JSON.stringify(sel)}) && document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect().width > 0`))) continue; await t.ev(`document.querySelector(${JSON.stringify(sel)}).focus()`); await clickAt(t, sel); await t.sleep(300); o = await outlineOf(t); if (o.style !== 'none') fail(l, `outline after clicking ${sel}: ${JSON.stringify(o)}`); break; }
 });
 await pass('chakra-reduced-motion', { w: 390, h: 844, mobile: true, reduced: true }, async (t, l) => {
   await seed(t, { traveller: false }); await t.send('Page.navigate', { url: `${process.env.GAME_URL}?dev=1` }); await waitItems(t); await t.sleep(600);

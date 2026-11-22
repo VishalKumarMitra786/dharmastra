@@ -174,6 +174,45 @@ export function createRenderer2D(canvas) {
     ctx.lineCap = 'butt';
   }
 
+
+  // ---- props (docs/review/prop-hooks.md): placeholder shapes, one silhouette per kind, drawn at the origin and about 40 units long. A crack shows as jagged lines, never as colour alone.
+  const PROP_COL = { wood: '#9a6a34', light: '#c9a063', iron: '#aeb6bf', clay: '#b4562c', stone: '#8d8a84', cloth: '#d8c690', fire: '#ff8a1c' };
+  function propShape(kind, crack) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = C.outline; ctx.lineWidth = 2.5;
+    const bar = (len, w, col) => { ctx.strokeStyle = C.outline; ctx.lineWidth = w + 4; ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
+    const blob = (path, col) => { ctx.fillStyle = col; ctx.beginPath(); path(); ctx.closePath(); ctx.fill(); ctx.strokeStyle = C.outline; ctx.lineWidth = 2.5; ctx.stroke(); };
+    if (kind === 'stick') bar(36, 5, PROP_COL.wood);
+    else if (kind === 'bamboo-staff') { bar(56, 5, PROP_COL.light); ctx.strokeStyle = C.outline; ctx.lineWidth = 2; for (const x of [-14, 4, 20]) { ctx.beginPath(); ctx.moveTo(x, -3.5); ctx.lineTo(x, 3.5); ctx.stroke(); } }
+    else if (kind === 'market-pole') { bar(70, 6, PROP_COL.wood); blob(() => ctx.rect(26, -7, 10, 14), PROP_COL.cloth); }
+    else if (kind === 'club') { ctx.strokeStyle = C.outline; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(14, 0); ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = PROP_COL.wood; ctx.stroke(); blob(() => ctx.ellipse(16, 0, 9, 7, 0, 0, 7), PROP_COL.wood); }
+    else if (kind === 'spear') { bar(66, 4, PROP_COL.wood); blob(() => { ctx.moveTo(33, 0); ctx.lineTo(24, -6); ctx.lineTo(24, 6); }, PROP_COL.iron); }
+    else if (kind === 'fallen-sword') { bar(40, 5, PROP_COL.iron); ctx.strokeStyle = C.outline; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-14, -8); ctx.lineTo(-14, 8); ctx.stroke(); ctx.strokeStyle = PROP_COL.wood; ctx.lineWidth = 3; ctx.stroke(); }
+    else if (kind === 'torch') { bar(36, 5, PROP_COL.wood); blob(() => ctx.ellipse(20, 0, 7, 5, 0, 0, 7), PROP_COL.fire); }
+    else if (kind === 'rope') { ctx.strokeStyle = C.outline; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(0, 0, 11, 0, 6.28); ctx.stroke(); ctx.strokeStyle = PROP_COL.cloth; ctx.lineWidth = 4; ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 5, 0, 6.28); ctx.stroke(); }
+    else if (kind === 'clay-pot') { blob(() => { ctx.moveTo(-6, -10); ctx.lineTo(6, -10); ctx.quadraticCurveTo(15, 0, 8, 10); ctx.lineTo(-8, 10); ctx.quadraticCurveTo(-15, 0, -6, -10); }, PROP_COL.clay); ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, -3); ctx.lineTo(8, -3); ctx.stroke(); }
+    else if (kind === 'stone') blob(() => { ctx.moveTo(-9, 3); ctx.lineTo(-5, -7); ctx.lineTo(6, -8); ctx.lineTo(10, 2); ctx.lineTo(2, 8); }, PROP_COL.stone);
+    else if (kind === 'oil-lamp') { blob(() => ctx.ellipse(0, 3, 9, 6, 0, 0, 7), PROP_COL.clay); blob(() => { ctx.moveTo(0, -11); ctx.lineTo(4, -3); ctx.lineTo(-4, -3); }, PROP_COL.fire); }
+    else if (kind === 'wood-shield') { blob(() => { ctx.moveTo(-12, -14); ctx.lineTo(12, -14); ctx.lineTo(12, 4); ctx.lineTo(0, 15); ctx.lineTo(-12, 4); }, PROP_COL.wood); ctx.strokeStyle = PROP_COL.iron; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, -3, 4, 0, 6.28); ctx.stroke(); }
+    else if (kind === 'bench') { blob(() => ctx.rect(-26, -8, 52, 16), PROP_COL.wood); ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.stroke(); }
+    else if (kind === 'crate') { blob(() => ctx.rect(-14, -14, 28, 28), PROP_COL.light); ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-14, -14); ctx.lineTo(14, 14); ctx.moveTo(14, -14); ctx.lineTo(-14, 14); ctx.stroke(); }
+    else if (kind === 'grain-sack') { blob(() => { ctx.moveTo(-8, -12); ctx.quadraticCurveTo(-18, 0, -11, 11); ctx.lineTo(11, 11); ctx.quadraticCurveTo(18, 0, 8, -12); ctx.lineTo(4, -15); ctx.lineTo(-4, -15); }, PROP_COL.cloth); }
+    else bar(34, 5, PROP_COL.wood);
+    if (crack >= 1 && crack < 3) { ctx.strokeStyle = C.outline; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-4, -9); ctx.lineTo(0, -2); ctx.lineTo(-5, 3); ctx.lineTo(1, 9); ctx.stroke(); if (crack >= 2) { ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(4, -1); ctx.lineTo(9, 5); ctx.stroke(); ctx.setLineDash([3, 3]); ctx.strokeStyle = C.light; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 6.28); ctx.stroke(); ctx.setLineDash([]); } }
+    ctx.lineCap = 'butt';
+  }
+  function drawProp(q, t, calm, prompted) {
+    if (q.state === 'held') return;
+    ctx.save();
+    if (q.state === 'broken') { ctx.translate(q.x, q.y); ctx.strokeStyle = C.outline; ctx.lineWidth = 3; ctx.lineCap = 'round'; for (let i = 0; i < 4; i++) { const a = i * 1.7 + 0.4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 5, Math.sin(a) * 5); ctx.lineTo(Math.cos(a + 0.5) * 13, Math.sin(a + 0.5) * 13); ctx.stroke(); } ctx.restore(); return; }
+    const lift = q.state === 'thrown' ? (q.z || 0) * 40 : 0;
+    ctx.fillStyle = 'rgba(20,11,7,0.28)'; ctx.beginPath(); ctx.ellipse(q.x, q.y + 6, 14, 7, 0, 0, 6.28); ctx.fill();
+    if (prompted) { ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(q.x, q.y, 28 + (calm ? 0 : Math.sin(t * 4) * 2), 0, 6.28); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.translate(q.x, q.y - lift); ctx.rotate(q.state === 'thrown' ? (calm ? q.angle : q.angle + t * 14) : (q.angle || 0) + 0.5);
+    propShape(q.kind, q.crack);
+    ctx.restore();
+  }
+  function drawLabel(text, x, y) { ctx.save(); ctx.font = 'bold 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = C.outline; ctx.fillStyle = C.light; ctx.strokeText(text, x, y); ctx.fillText(text, x, y); ctx.restore(); }
+
   function drawIcon(kind, x, y) {
     ctx.save(); ctx.translate(x, y - 34); ctx.lineJoin = 'round';
     ctx.fillStyle = C.icon; ctx.strokeStyle = C.outline; ctx.lineWidth = 4;
@@ -278,6 +317,7 @@ export function createRenderer2D(canvas) {
       if (frame.obstacles) for (let i = 0; i < frame.obstacles.length; i++) drawObstacle(frame.obstacles[i]);
       frame.checkpoints.forEach((p, i) => drawCheckpoint(p, i, frame.time, calm));
       if (frame.pickups) for (let i = 0; i < frame.pickups.length; i++) if (!frame.pickups[i].taken) drawPickup(frame.pickups[i], frame.time, calm);
+      if (frame.props) { const pid = frame.hud ? frame.hud.promptProp : null; for (let i = 0; i < frame.props.length; i++) { const q = frame.props[i]; drawProp(q, frame.time, calm, q.id === pid && q.state === 'idle'); if (q.id === pid && q.state === 'idle' && frame.hud.prompt) drawLabel(frame.hud.prompt, q.x, q.y + 46); } }
       frame.guards.forEach(drawGuard);
       if (frame.targets) for (let i = 0; i < frame.targets.length; i++) drawTarget(frame.targets[i], calm);
       processEvents(frame, calm);
@@ -287,6 +327,11 @@ export function createRenderer2D(canvas) {
           const fl = flashes.get(e.id) || 0; if (fl > 0) flashes.set(e.id, fl - dt);
           drawRaider(e, calm ? 0 : fl);
         }
+      }
+      if (frame.enemies && frame.props) for (let i = 0; i < frame.enemies.length; i++) { // an unarmed enemy going for a loose weapon: a dashed line to it and a word, so the player can get there first or stop it
+        const e = frame.enemies[i]; if (!e.rearm) continue; const q = frame.props.find((x) => x.id === e.rearm.propId); if (!q) continue;
+        ctx.save(); ctx.strokeStyle = C.light; ctx.lineWidth = 3; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+        drawLabel(e.rearm.grabbing ? 'Grabbing' : 'Going for it', e.x, e.y - 40);
       }
       const P = frame.player; const A = frame.attack; const pc = frame.chariot;
       if (A && A.active) { // swing arc: a wedge whose size is the weapon's reach, fading as the swing ends. A heavy cut shows an outline first (its wind-up), then fills at the moment of impact.
@@ -310,7 +355,10 @@ export function createRenderer2D(canvas) {
         }
         drawPerson(pc);
         const wa = (pc.angle || 0);
-        if (P && P.weapon === 'staff') { ctx.translate(pc.x, pc.y); ctx.rotate(wa + (A && A.active ? -1 + 2 * (A.progress || 0) : 0.5)); ctx.translate(pc.radius * 0.6, 0); drawStaffShape(48); }
+        if (P && P.held) { // a held prop is drawn in the hand and swung with the attack; it replaces the weapon
+          ctx.translate(pc.x, pc.y); const sw = A && A.active && A.kind !== 'shove'; const raise = A && A.kind === 'heavy' && (A.progress || 0) < (A.hit || 0.575) ? -1.6 : -1 + 2 * (A ? A.progress || 0 : 0);
+          ctx.rotate(wa + (P.state === 'block' ? Math.PI / 2 : sw ? raise : 0.5)); ctx.translate(pc.radius * 0.6 + 10, 0); propShape(P.held.kind, P.held.crack);
+        } else if (P && P.weapon === 'staff') { ctx.translate(pc.x, pc.y); ctx.rotate(wa + (A && A.active ? -1 + 2 * (A.progress || 0) : 0.5)); ctx.translate(pc.radius * 0.6, 0); drawStaffShape(48); }
         else if (P && P.weapon === 'sword') {
           ctx.translate(pc.x, pc.y);
           const swing = A && A.active && A.kind !== 'shove';

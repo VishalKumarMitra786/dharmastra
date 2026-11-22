@@ -8,7 +8,8 @@ const CUE_MS = 2200;
 const ABILITY_NAMES = { walk: 'walk', run: 'run', crouch: 'crouch', vault: 'vault', staff: 'staff', dodge: 'dodge roll', push: 'shove', climb: 'climb', sword: 'sword', bow: 'bow' };
 const WEAPON_NAMES = { none: 'Bare hands', staff: 'Staff', sword: 'Sword', bow: 'Bow' };
 const ATTACK_LABEL = { none: 'Punch (J)', staff: 'Attack with staff (J)', sword: 'Light cut with sword (J)', bow: 'Strike with fists (J)' };
-const VIA_CUE = { fists: '[Fist strike]', staff: '[Staff strike]', sword: '[Sword cut]', arrow: '[Arrow hits]' };
+const VIA_CUE = { fists: '[Fist strike]', staff: '[Staff strike]', sword: '[Sword cut]', arrow: '[Arrow hits]', prop: '[Prop strike]' };
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 const nm = (id) => ABILITY_NAMES[id] || String(id);
 
 // The objective chip holds at most six words. A mission may give its own short text (o.short); otherwise the first clause is used.
@@ -76,6 +77,7 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
     health: $('stat-health'), healthFill: $('health-fill'), timerItem: $('stat-timer'), timerText: $('timer-text'), caption: $('caption'), announcer: $('announcer'),
     staminaItem: $('stat-stamina'), staminaFill: $('stamina-fill'), arrows: $('arrows-text'), arrowsItem: $('stat-arrows'),
     objList: $('objectives'), cue: $('cue'), fx: $('fx'), chapter: $('chapter'), chapterEra: $('chapter-era'), chapterTitle: $('chapter-title'),
+    held: $('stat-held'), heldName: $('held-name'), heldFill: $('held-fill'), prompt: $('prop-prompt'), promptText: $('prop-prompt-text'),
     tip: $('tip'), tipText: $('tip-text'), tipIcon: doc.querySelector?.('#tip use'),
   };
   let captionTimer = 0;
@@ -83,6 +85,7 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
   let cueTimer = 0;
   let objectives = [];
   let kit = null; // last {abilities, weapon, crouch}
+  let propKey = ''; let holding = false; // props: last drawn state of the held chip, prompt and contextual buttons
   let tipTimer = 0; let tipQueue = []; let capQueue = []; let capGen = 0;
   const seen = new Set(); const KEY = 'dharmastra.tips.v1';
   try { for (const t of JSON.parse((storage || globalThis.localStorage)?.getItem(KEY) || '[]')) seen.add(t); } catch { /* no storage: tips repeat each visit */ }
@@ -139,7 +142,7 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
       const show = (control, on) => { for (const b of doc.querySelectorAll?.(`[data-control="${control}"]`) || []) b.hidden = !on; };
       // Fists are always there: attack (light), heavy, block, dodge and shove show from the start; only the bow adds Draw.
       show('attack', true); show('heavy', true); show('block', true); show('aim', weapon === 'bow'); show('dodge', true); show('push', true); show('crouch', abilities.includes('crouch')); show('runtoggle', abilities.includes('run'));
-      show('swap', ['staff', 'sword', 'bow'].filter((w) => abilities.includes(w)).length >= 2);
+      show('swap', !holding && ['staff', 'sword', 'bow'].filter((w) => abilities.includes(w)).length >= 2); // while a prop is held its Drop button takes the Swap slot
       show('do', true);
       const game = doc.getElementById?.('game'); if (game?.dataset) game.dataset.armed = '1';
       const al = ATTACK_LABEL[weapon];
@@ -195,6 +198,38 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
         if (!line || !gate(e.type + (e.id ?? ''), gap)) continue;
         say(line); if (c) cue(c);
       }
+    },
+    // Props (docs/review/prop-hooks.md). Reads frame.hud and frame.player.held; touches the page only when something changed.
+    // Pick-up prompt (3 words at most) beside the thumb cluster and in the live region; the Do button is named after it. Throw and Drop appear only while a prop is held
+    // (Throw only if it can be thrown); Drop takes the Swap slot. Block is shown unavailable, not hidden, while a two-handed prop is held. The held chip has text for its state, not colour only.
+    setProps(frame) {
+      const h = frame?.hud; if (!h) return;
+      const held = frame.player?.held || null; const prompt = h.prompt || '';
+      const pct = held ? Math.round(clampN(held.durability ?? h.heldDurability ?? 1, 0, 1) * 100) : 0; const crack = held ? (held.crack ?? h.heldCrack ?? 0) : 0;
+      const key = `${held ? held.id : ''}|${held ? held.name : ''}|${pct}|${crack}|${held?.canThrow ? 1 : 0}|${held?.twoHands ? 1 : 0}|${prompt}`;
+      if (key === propKey) return; const prevPrompt = propKey.split('|')[6] || ''; propKey = key;
+      const was = holding; holding = !!held;
+      const CRACK = ['', 'Cracked', 'Nearly broken', 'Broken'];
+      if (el.held) {
+        el.held.hidden = !held;
+        if (held) {
+          el.heldName.textContent = CRACK[crack] ? `${held.name}: ${CRACK[crack]}` : held.name;
+          el.heldFill.style.width = `${pct}%`; el.held.dataset.crack = String(crack);
+          el.held.setAttribute('aria-label', `Holding ${held.name}, durability ${pct} percent${CRACK[crack] ? `, ${CRACK[crack].toLowerCase()}` : ''}`);
+        }
+      }
+      if (el.prompt) { el.prompt.hidden = !prompt; if (el.promptText) el.promptText.textContent = prompt; }
+      if (prompt && prompt !== prevPrompt && gate('prompt', 0.6)) say(prompt);
+      const q = (c) => doc.querySelectorAll?.(`[data-control="${c}"]`) || [];
+      for (const b of q('do')) b.setAttribute('aria-label', prompt ? `${prompt} (Space or F)` : 'Do: pick up, vault or climb (Space or F)');
+      for (const b of q('throw')) b.hidden = !(held && held.canThrow);
+      for (const b of q('drop')) b.hidden = !held;
+      for (const b of q('block')) {
+        const two = !!(held && held.twoHands); b.setAttribute('aria-disabled', String(two)); b.classList.toggle('unavail', two);
+        b.setAttribute('aria-label', two ? `Block unavailable: both hands on ${held.name} (B)` : 'Block: hold (B)');
+      }
+      for (const b of q('attack')) { if (held) b.setAttribute('aria-label', `Swing ${held.name} (J)`); else if (was && kit) b.setAttribute('aria-label', ATTACK_LABEL[kit.weapon] || 'Punch (J)'); }
+      if (was !== holding && kit) { const sw = ['staff', 'sword', 'bow'].filter((w) => kit.abilities.includes(w)).length >= 2; for (const b of q('swap')) b.hidden = holding || !sw; }
     },
     cue,
     setObjective(text, short) {

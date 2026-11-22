@@ -1,6 +1,7 @@
 // Input: keyboard, on-screen stick and buttons, and drag-to-look merged into one reading {steer, throttle, mx, my, run, look, action, hold}.
 // Touch layout: a stick bottom-left moves (relative to the camera), dragging the free half of the screen looks, round buttons act. With "Button controls" on
 // (state.buttonMode) the stick and touch drags are replaced by single-press arrow and look buttons, so nothing needs a drag (WCAG 2.5.7).
+import { CAMERA_RESET_KEYS } from './camera.js';
 const KEYS = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ShiftLeft: 'run', ShiftRight: 'run',
@@ -9,10 +10,10 @@ const KEYS = {
 };
 const BUTTON_FLAG = { left: 'left', right: 'right', go: 'up', brake: 'down', up: 'up', down: 'down', run: 'run', lookleft: 'lookLeft', lookright: 'lookRight', block: 'block', aim: 'aim' };
 // One-shot actions: attack, jump and interact fire once per press; crouch is a toggle edge. A press waits up to BUFFER_MS for the next read().
-// Keys: Space jump/vault/climb, J attack, K heavy cut, X dodge, V shove, C crouch, F interact, R swap weapon, 1/2/3 staff/sword/bow. Held: B block, Z draw bow.
-const ACTION_KEYS = { Space: 'jump', KeyJ: 'attack', KeyC: 'crouch', KeyF: 'interact', KeyX: 'dodge', KeyV: 'push', KeyK: 'heavy', KeyR: 'swap', Digit1: 'w1', Digit2: 'w2', Digit3: 'w3' };
-const ACTION_BUTTONS = { attack: ['attack'], jump: ['jump'], crouch: ['crouch'], interact: ['interact'], do: ['jump', 'interact'], dodge: ['dodge'], push: ['push'], heavy: ['heavy'], swap: ['swap'] }; // 'Do' is the context button: the sim picks up, vaults or climbs, whichever is in front
-export const ACTION_NAMES = ['attack', 'jump', 'crouch', 'interact', 'dodge', 'push', 'heavy', 'swap', 'w1', 'w2', 'w3'];
+// Keys: Space jump/vault/climb, J attack, K heavy cut, X dodge, V shove, C crouch, F interact, R swap weapon, T throw and H drop (only while a prop is held), 1/2/3 staff/sword/bow. Held: B block, Z draw bow.
+const ACTION_KEYS = { Space: 'jump', KeyJ: 'attack', KeyC: 'crouch', KeyF: 'interact', KeyX: 'dodge', KeyV: 'push', KeyK: 'heavy', KeyR: 'swap', KeyT: 'throw', KeyH: 'drop', Digit1: 'w1', Digit2: 'w2', Digit3: 'w3' };
+const ACTION_BUTTONS = { attack: ['attack'], jump: ['jump'], crouch: ['crouch'], interact: ['interact'], do: ['jump', 'interact'], dodge: ['dodge'], push: ['push'], heavy: ['heavy'], swap: ['swap'], throw: ['throw'], drop: ['drop'] }; // 'Do' is the context button: the sim picks up, vaults or climbs, whichever is in front
+export const ACTION_NAMES = ['attack', 'jump', 'crouch', 'interact', 'dodge', 'push', 'heavy', 'swap', 'throw', 'drop', 'w1', 'w2', 'w3'];
 export const BUFFER_MS = 150;
 export function createActionBuffer(now = () => performance.now()) {
   const at = Object.fromEntries(ACTION_NAMES.map((n) => [n, -Infinity]));
@@ -46,7 +47,7 @@ export function createInput({ stage, buttons, onPause, now, joystick = null, kno
   const actions = createActionBuffer(now);
   const act = (names) => { if (state.enabled) names.forEach((n) => actions.press(n)); };
   const down = { left: new Set(), right: new Set(), up: new Set(), down: new Set(), run: new Set(), lookLeft: new Set(), lookRight: new Set(), block: new Set(), aim: new Set() };
-  const latch = { block: false, aim: false }; // a press shorter than one tick still counts once
+  const latch = { block: false, aim: false, reset: false }; // a press shorter than one tick still counts once (reset: the camera-reset control)
   let drag = null; // the finger or mouse steering the walker (chariot mode) or the left-thumb stick
   let look = null; // the finger or mouse turning the camera
   let lookAcc = { dx: 0, dy: 0 };
@@ -60,6 +61,10 @@ export function createInput({ stage, buttons, onPause, now, joystick = null, kno
 
   window.addEventListener('keydown', (e) => {
     if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { onPause(); return; }
+    if (CAMERA_RESET_KEYS.includes(e.code)) { // G or Home: swing the camera behind the hero (C is Crouch)
+      if (state.enabled) { if (!e.repeat) latch.reset = true; e.preventDefault(); }
+      return;
+    }
     const aname = ACTION_KEYS[e.code];
     if (aname) {
       const native = e.code === 'Space' && /^(BUTTON|A|SELECT|INPUT|TEXTAREA)$/.test(e.target?.tagName || '') && e.target?.id !== 'pause-btn'; // a focused control keeps its own Space; the pause button holds focus during play, so Space there is Jump (Pause stays on Esc, P and Enter)
@@ -76,6 +81,14 @@ export function createInput({ stage, buttons, onPause, now, joystick = null, kno
   window.addEventListener('blur', reset);
 
   buttons.forEach((btn) => {
+    if (btn.dataset.control === 'camreset') { // a single press, no drag: the round camera-reset button (also in Button controls mode)
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (state.enabled) latch.reset = true; btn.classList.add('active'); });
+      ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'].forEach((ev) => btn.addEventListener(ev, () => btn.classList.remove('active')));
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+      btn.addEventListener('keydown', (e) => { if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); if (state.enabled) latch.reset = true; btn.classList.add('active'); } });
+      btn.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'Enter') btn.classList.remove('active'); });
+      return;
+    }
     if (btn.dataset.control === 'runtoggle') { // a toggle: press to run, press again to walk
       const flip = () => { state.runOn = !state.runOn; btn.setAttribute?.('aria-pressed', String(state.runOn)); btn.classList.toggle?.('on', state.runOn); };
       btn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (state.enabled) flip(); });
@@ -150,14 +163,14 @@ export function createInput({ stage, buttons, onPause, now, joystick = null, kno
     Object.values(down).forEach((s) => s.clear());
     drag = null; look = null; lookAcc = { dx: 0, dy: 0 }; dragSteer = 0; dragVec = { x: 0, y: 0 }; joy = null; joyVec = { x: 0, y: 0 }; setKnob(0, 0);
     buttons.forEach((b) => b.classList.remove('active'));
-    actions.clear(); latch.block = false; latch.aim = false;
+    actions.clear(); latch.block = false; latch.aim = false; latch.reset = false;
   }
 
   return {
     state,
     reset,
     read() {
-      if (!state.enabled) { actions.clear(); return { steer: 0, throttle: 0, mx: 0, my: 0, run: false, look: { dx: 0, dy: 0, key: 0 }, action: { ...NO_ACTION }, hold: { ...NO_HOLD } }; }
+      if (!state.enabled) { actions.clear(); return { steer: 0, throttle: 0, mx: 0, my: 0, run: false, look: { dx: 0, dy: 0, key: 0, reset: false }, action: { ...NO_ACTION }, hold: { ...NO_HOLD } }; }
       const has = (f) => down[f].size > 0;
       const steer = clamp((has('right') ? 1 : 0) - (has('left') ? 1 : 0) + dragSteer);
       const forward = has('up') || state.autoDrive;
@@ -168,7 +181,8 @@ export function createInput({ stage, buttons, onPause, now, joystick = null, kno
       const dv = Math.hypot(dragVec.x, dragVec.y) > 0.15 ? dragVec : { x: 0, y: 0 };
       const stick = Math.hypot(joyVec.x, joyVec.y) >= Math.hypot(dv.x, dv.y) ? joyVec : dv; // the stick or a mouse drag, whichever pushes harder
       const mx = kx || stick.x; const my = ky || stick.y;
-      const lk = state.cameraLook ? { dx: lookAcc.dx, dy: lookAcc.dy, key: (has('lookRight') ? 1 : 0) - (has('lookLeft') ? 1 : 0) } : { dx: 0, dy: 0, key: 0 };
+      const lk = state.cameraLook ? { dx: lookAcc.dx, dy: lookAcc.dy, key: (has('lookRight') ? 1 : 0) - (has('lookLeft') ? 1 : 0), reset: latch.reset } : { dx: 0, dy: 0, key: 0, reset: false };
+      latch.reset = false;
       lookAcc = { dx: 0, dy: 0 };
       const hold = { block: has('block') || latch.block, aim: has('aim') || latch.aim }; latch.block = false; latch.aim = false;
       return { steer, throttle, mx, my, run: has('run') || state.runOn || state.autoDrive, look: lk, action: actions.take(), hold };

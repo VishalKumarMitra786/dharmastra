@@ -3,7 +3,7 @@
 // an active hit window with a real reach and arc, and a recovery. At most MAX_ATTACKERS enemies attack at once; the rest circle, flank or wait.
 // Every number a person can feel is in the tables below.
 import { resolveWalls } from './world.js';
-import { inGrass, inPit, circleHitsRect } from './abilities.js';
+import { inGrass, inPit, circleHitsRect, PROPS } from './abilities.js';
 
 export const MAX_ATTACKERS = 2;
 export const MIN_WINDUP = 0.45; // no enemy blow, first or chained, is telegraphed for less than this many seconds
@@ -96,7 +96,7 @@ export const ENEMY = {
     attacks: { stick: { windup: 0.8, active: 0.15, recover: 2.2, reach: 50, halfArc: 1.0, damage: 0, knock: 0, stun: 0, lock: 0.6 } }, main: 'stick', start: 40 },
 };
 export const ENEMY_KINDS = Object.keys(ENEMY).filter((k) => k !== 'sparrer');
-const cfg = (e) => ENEMY[e.kind] || ENEMY.raider;
+const cfg = (e) => kitOf(e);
 COMBAT.raider = ENEMY.raider; COMBAT.sparrer = ENEMY.sparrer;
 for (const R of Object.values(ENEMY)) R.windup = R.attacks[R.main].windup;
 
@@ -119,6 +119,7 @@ export function spawnEnemy(def, rng) {
     lastX: def.x, lastY: def.y, spin: 1, kx: 0, ky: 0, kbT: 0, stagDur: 0, fleeing: false, poise: 0, fell: false,
     atk: null, open: false, guarding: !!R.shield, flinch: 0, callCd: 0, lastAtk: -9, retreating: false, desperate: false, role: 'none', calling: 0,
     phaseNo: 1, invul: 0, pathT: 0, wx: def.x, wy: def.y, retreatT: 0, wave: !!def.wave, speed: def.speed || 0,
+    ...startingCarry(kind, def.carry),
   };
 }
 
@@ -222,14 +223,15 @@ function aimAssist(sim, range) {
   return best ? Math.atan2(best.y - c.y, best.x - c.x) : c.moveAngle;
 }
 
-const comboSet = (p) => COMBOS[p.weapon] || FISTS;
+const comboSet = (p) => (p.held ? PROP_SETS[p.held.kind] : COMBOS[p.weapon] || FISTS);
+export const comboSetFor = comboSet;
 
 function begin(sim, spec, events, extra = {}) {
   const p = sim.player; const c = sim.chariot;
   p.state = spec === SHOVE ? 'shove' : 'attack'; p.stateT = 0; p.spec = spec; p.atk = spec === SHOVE ? 'shove' : `${spec.via === 'fists' || !spec.via ? 'fists' : spec.via}.${spec.id}`;
   p.swingHit = false; p.crouching = false; p.draw = 0; p.queued = null; p.queueT = 0; p.cooldown = 0;
-  p.attackAngle = aimAssist(sim, spec.range); c.moveAngle = p.attackAngle;
-  events.push({ type: spec === SHOVE ? 'shove' : 'swing', heavy: !!extra.heavy, via: spec.via || 'fists', step: extra.step ?? 0, id: spec.id, x: c.x, y: c.y });
+  p.attackAngle = spec.throwProp ? throwAim(sim, PROPS[spec.prop].throw.range) : aimAssist(sim, spec.range); c.moveAngle = p.attackAngle;
+  events.push({ type: spec === SHOVE ? 'shove' : 'swing', heavy: !!extra.heavy, via: spec.via || 'fists', step: extra.step ?? 0, id: spec.id, x: c.x, y: c.y, prop: spec.prop });
 }
 
 // kind: 'auto'/'light' (the next step of the weapon's chain), 'heavy' or 'shove'. A light press next to an opened enemy is the finisher.
@@ -296,15 +298,18 @@ export function applyHit(sim, e, hit, from, events) {
   const dmg = hit.damage || 0;
   if (dmg > 0) {
     e.hp = R.immortal ? Math.max(1, e.hp - dmg) : Math.max(0, e.hp - dmg);
-    events.push({ type: 'hit-enemy', id: e.id, kind: e.kind, x: e.x, y: e.y, via: hit.via, heavy: !!hit.heavy, dmg });
+    events.push({ type: 'hit-enemy', id: e.id, kind: e.kind, x: e.x, y: e.y, via: hit.via, heavy: !!hit.heavy, dmg, prop: hit.prop, dir: from });
     juice(sim, hit.finisher ? COMBAT.juice.finisher : hit.heavy || dmg > 1 ? COMBAT.juice.heavy : COMBAT.juice.light);
   } else events.push({ type: 'shove-hit', id: e.id, x: e.x, y: e.y, via: hit.via });
-  if (hit.knock) { e.kx = (Math.cos(from) * hit.knock) / COMBAT.knockTime; e.ky = (Math.sin(from) * hit.knock) / COMBAT.knockTime; e.kbT = COMBAT.knockTime; }
+  let knock = hit.knock || 0;
+  if (knock < 0) knock = -Math.min(-knock, Math.max(0, dist(c, e) - c.radius - e.radius - 4)); // a pull (a rope) never drags an enemy through you
+  if (knock) { e.kx = (Math.cos(from) * knock) / COMBAT.knockTime; e.ky = (Math.sin(from) * knock) / COMBAT.knockTime; e.kbT = COMBAT.knockTime; }
   if (!e.aware) { e.aware = true; e.sightT = 0; }
   e.cd = Math.max(e.cd, 0.2);
   if (e.hp === 0) {
     e.state = 'down'; e.stateT = 0; e.fleeing = R.superarmor ? false : true; e.atk = null; e.open = false; e.retreating = false;
     events.push({ type: 'enemy-down', id: e.id, kind: e.kind, x: e.x, y: e.y, finisher: !!hit.finisher });
+    dropCarried(sim, e, events, 'down', from);
     if (e.kind === 'captain') { events.push({ type: 'captain-down', id: e.id, x: e.x, y: e.y }); juice(sim, 0, COMBAT.juice.slowFinisher); }
     else if (hit.finisher) juice(sim, 0, COMBAT.juice.slowFinisher);
     return 'hit';
@@ -319,6 +324,7 @@ export function applyHit(sim, e, hit, from, events) {
     e.state = 'stagger'; e.stateT = 0; e.stagDur = dur; e.fleeing = !!hit.flee; e.sightT = 0; e.atk = null; e.open = false;
     events.push({ type: 'stagger', id: e.id, x: e.x, y: e.y });
   } else e.flinch = 0.14;
+  tryDisarm(sim, e, hit, from, events);
   return 'hit';
 }
 
@@ -327,11 +333,14 @@ export function resolveSwing(sim, events) {
   const p = sim.player; const c = sim.chariot; const s = p.spec;
   if (!s || (p.state !== 'attack' && p.state !== 'shove') || p.swingHit || p.stateT < s.hitAt) return;
   p.swingHit = true;
+  if (s.throwProp) { launchThrow(sim, events); return; } // the throw leaves the hand at the moment of impact in the action
+  let touched = false;
   for (const e of sim.enemies) {
     if (e.state === 'down' || !inSector(c.x, c.y, p.attackAngle, s.range, s.halfArc, e.x, e.y, e.radius) || !attackClear(sim.world, c.x, c.y, e.x, e.y)) continue;
-    applyHit(sim, e, { ...s, flee: s.via === 'staff' && s.id === 'thrust' }, Math.atan2(e.y - c.y, e.x - c.x), events);
+    if (applyHit(sim, e, { ...s, flee: s.via === 'staff' && s.id === 'thrust' }, Math.atan2(e.y - c.y, e.x - c.x), events) !== 'miss') touched = true;
   }
-  for (const t of sim.targets) if (inSector(c.x, c.y, p.attackAngle, s.range, s.halfArc, t.x, t.y, t.radius)) hitTarget(t, s.via || 'fists', events);
+  for (const t of sim.targets) if (inSector(c.x, c.y, p.attackAngle, s.range, s.halfArc, t.x, t.y, t.radius)) { hitTarget(t, s.via || 'fists', events); touched = true; }
+  if (touched && p.held && s.prop) wearHeld(sim, events, s.heavy ? 2 : 1, !!s.shatter); // only a swing that connects wears a prop: a miss costs stamina, not wood
 }
 
 function hitTarget(t, via, events) { t.flash = 0.3; t.hits += 1; events.push({ type: 'target-hit', id: t.id, x: t.x, y: t.y, via }); }
@@ -397,7 +406,7 @@ export const dodgeInvulnerable = (p) => p.state === 'dodge' && p.stateT >= COMBA
 // ---------------------------------------------------------------- block and parry (held, any weapon)
 export function updateGuard(sim, hold) {
   const p = sim.player;
-  const can = hold && p.stamina > 0 && (FREE.has(p.state) || p.state === 'block');
+  const can = hold && p.stamina > 0 && !(p.held && PROPS[p.held.kind].twoHands) && (FREE.has(p.state) || p.state === 'block'); // both hands are on a two-handed prop
   if (can && p.state !== 'block') { p.state = 'block'; p.stateT = 0; p.crouching = false; p.comboT = 0; }
   else if (!can && p.state === 'block') { p.state = 'idle'; p.stateT = 0; }
 }
@@ -420,7 +429,7 @@ function aimAngle(sim) {
 export function updateAim(sim, dt, hold, events) {
   const p = sim.player; const B = COMBAT.bow;
   const rising = hold && !p.aimHeld; p.aimHeld = !!hold;
-  const can = p.weapon === 'bow' && sim.abilities.includes('bow') && (FREE.has(p.state) || p.state === 'aim');
+  const can = p.weapon === 'bow' && !p.held && sim.abilities.includes('bow') && (FREE.has(p.state) || p.state === 'aim'); // a held prop fills the hand the bow needs
   if (p.state !== 'aim' && p.draw > 0) p.draw = 0; // a hit or a roll cancels the draw
   if (hold && can) {
     if (p.state !== 'aim') {
@@ -605,7 +614,7 @@ function resolveBlow(sim, src, def, events, angle) {
       juice(sim, COMBAT.juice.parry, COMBAT.juice.slowParry);
       return 'parry';
     }
-    if (spend(sim, B.cost)) { events.push({ type: 'blocked', id: src.id, x: c.x, y: c.y }); return 'blocked'; }
+    if (spend(sim, p.held ? (PROPS[p.held.kind].guard?.cost ?? B.cost) : B.cost)) { events.push({ type: 'blocked', id: src.id, x: c.x, y: c.y }); if (p.held && PROPS[p.held.kind].guard) wearHeld(sim, events, 1, false); return 'blocked'; } // a shield turns blows for less stamina, and wears
     p.stamina = 0;
     events.push({ type: 'guard-break' });
     hurtPlayer(sim, Math.ceil(def.damage / 2), events, src, { stun: def.stun, knock: def.knock * 0.5 });
@@ -724,7 +733,7 @@ export function stepEnemies(sim, dt, events) {
   for (const e of sim.enemies) { e.calling = Math.max(0, e.calling - dt); e.invul = Math.max(0, e.invul - dt); e.flinch = Math.max(0, e.flinch - dt); e.callCd = Math.max(0, e.callCd - dt); }
   for (const e of order) {
     const R = cfg(e);
-    e.stateT += dt; e.cd = Math.max(0, e.cd - dt); e.poise = Math.max(0, e.poise - dt);
+    e.stateT += dt; e.cd = Math.max(0, e.cd - dt); e.poise = Math.max(0, e.poise - dt); if (!e.carry) e.disarmedT += dt;
     if (e.state !== 'down' && e.kbT > 0) knockback(sim, e, dt, events);
     const d = dist(e, c);
     if (e.state === 'down') { if (!e.fell && e.stateT < R.downFlee && e.fleeing) flee(sim, e, dt); continue; }
@@ -734,6 +743,7 @@ export function stepEnemies(sim, dt, events) {
       if (e.stateT >= e.stagDur) { e.state = 'alert'; e.stateT = 0; e.sightT = R.react; e.lastX = c.x; e.lastY = c.y; e.poise = R.poise ?? COMBAT.poise; e.open = false; e.guarding = !!R.shield; }
       continue;
     }
+    if (e.state === 'rearm') { stepRearm(sim, e, dt, events); keepApart(sim, e); continue; }
     if (e.atk) { stepAttackPhase(sim, e, dt, events); keepApart(sim, e); continue; }
     if (R.shield) e.guarding = true;
     const canSee = sees(sim, e);
@@ -768,6 +778,7 @@ export function stepEnemies(sim, dt, events) {
         if (e.lostT >= R.loseAfter) { e.state = 'alert'; e.stateT = 0; e.sightT = 0; e.spin = rngSign(sim); continue; }
       }
       if (!R.friendly && R.retreatAt > 0 && !e.desperate && e.hp / e.maxHp <= R.retreatAt && !e.retreating) { e.state = 'retreat'; e.retreating = true; e.stateT = 0; e.retreatT = 0; events.push({ type: 'retreat', id: e.id, x: e.x, y: e.y }); continue; }
+      if (wantsRearm(sim, e, d)) { startRearm(sim, e, events); keepApart(sim, e); continue; }
       const los = attackClear(sim.world, e.x, e.y, c.x, c.y);
       const name = pickAttack(sim, e, d);
       const def = R.attacks[name];
@@ -793,7 +804,7 @@ function positioning(sim, e, dt, R, d, los) {
     else turnTo(e, Math.atan2(c.y - e.y, c.x - e.x), dt, 8);
     e.state = 'chase'; return;
   }
-  if (e.kind === 'spearman' && d < R.spacing.min && los) { // a spear wants room: it steps back to its thrusting distance
+  if (R.spacing && d < R.spacing.min && los) { // a spear wants room: it steps back to its thrusting distance
     e.role = 'waiting'; moveEnemy(sim, e, dt, e.x + Math.cos(bearing) * 30, e.y + Math.sin(bearing) * 30, R.chaseSpeed * 0.8, 8); turnTo(e, bearing + Math.PI, dt, R.turn); return;
   }
   if (attackers(sim) >= MAX_ATTACKERS && d <= R.ring + 40) { // both attack slots are taken: wait on the ring, and half of the waiters work round to the player's back
@@ -828,4 +839,279 @@ export function forceAttack(sim, e, { name, phase = 'windup', t = 0, n = 1 } = {
   e.atk = { name: nm, def, idx: 0, n, phase, t, windup: Math.max(MIN_WINDUP, def.windup), angle: Math.atan2(c.y - e.y, c.x - e.x), hit: false, dash: 0, locked: true };
   e.angle = e.atk.angle;
   return e;
+}
+
+// ================================================================ props (CEO, 2026-11-22): grab things from the world and fight with them
+// Data lives in abilities.js (PROPS). Rules, all deterministic (only sim.rng, and only for a disarm roll):
+//  - A prop is idle (on the ground), held (by the player), thrown (in flight) or broken (debris, gone after DEBRIS_FOR seconds).
+//  - The held prop replaces the melee weapon until it is dropped, thrown, broken or swapped. The ability weapon underneath (staff, sword, bow) comes back with it.
+//  - Every action costs stamina (the swing's own cost, or the throw's cost) and says so with 'tired' when you have too little. Picking up and dropping are free.
+//  - A swing that connects wears the prop by 1 (a heavy blow by 2). A miss wears nothing. At 0 it breaks. Cracks show at 2/3 and 1/3 left (frame crack 1, 2; broken = 3).
+//  - A shove, any heavy blow, a rope or a shield slam can knock the weapon out of an enemy's hand (the roll uses sim.rng). A beaten enemy drops its weapon too.
+//  - An unarmed enemy that is not close to you may walk to a loose prop within REARM.range, bend for REARM.grab seconds (visible, interruptible) and arm itself. It never does so
+//    while you are next to it: then it punches (4 damage, telegraphed like every blow) instead of its old weapon's 6 to 10.
+//  - Nothing here hurts by touch: a thrown prop only hurts an enemy, and enemies never throw.
+export const PICK_RADIUS = 46; export const MAX_PROPS = 48; export const DEBRIS_FOR = 4; export const DISARM_CHANCE = 0.7;
+const THROW_CONE = 0.5; const REARM = { range: 120, grab: 0.7, delay: 0.9, reach: 22, near: 56 };
+export const NATIVE_PROP = { raider: 'club', spearman: 'spear', swordsman: 'fallen-sword', shield: 'wood-shield' }; // what each armed kind carries, and drops
+
+// What an enemy fights like with a prop in hand (movement, sight and health stay the kind's own). Numbers mirror the native kinds so a re-armed enemy is no stronger than a native one.
+const FISTS_KIT = { weapon: 'fists', attacks: { punch: { windup: 0.55, active: 0.14, recover: 1.0, reach: 34, halfArc: 0.9, damage: 4, knock: 14, stun: 0.2, lock: 0.6 } }, main: 'punch', start: 32 };
+export const ENEMY_PROPS = {
+  stick: { weapon: 'stick', attacks: { whack: { windup: 0.55, active: 0.14, recover: 1.0, reach: 44, halfArc: 0.95, damage: 6, knock: 20, stun: 0.2, lock: 0.6 } }, main: 'whack', start: 36 },
+  'bamboo-staff': { weapon: 'stick', attacks: { sweep: { windup: 0.6, active: 0.16, recover: 1.0, reach: 58, halfArc: 0.9, damage: 6, knock: 22, stun: 0.2, lock: 0.6 } }, main: 'sweep', start: 48 },
+  club: { weapon: 'club', attacks: ENEMY.raider.attacks, main: 'slash', start: 34 },
+  spear: { weapon: 'spear', attacks: ENEMY.spearman.attacks, main: 'thrust', start: 70, spacing: ENEMY.spearman.spacing },
+  'fallen-sword': { weapon: 'sword', attacks: { slash: { ...ENEMY.swordsman.attacks.slash } }, main: 'slash', start: 38 },
+  'wood-shield': { weapon: 'shield', attacks: ENEMY.shield.attacks, main: 'bash', start: 34, shield: true, shieldHalf: 1.05 },
+};
+const KITS = new Map();
+// The enemy's fighting numbers: the kind's own table while it holds its native weapon (or has no prop concept at all: archer, captain, sparrer), else a derived kit.
+export function kitOf(e) {
+  const base = ENEMY[e.kind] || ENEMY.raider; const nat = NATIVE_PROP[e.kind];
+  if (!nat || e.carry === undefined || e.carry === nat) return base;
+  const key = `${e.kind}|${e.carry}`; let k = KITS.get(key);
+  if (!k) {
+    const P = (e.carry && ENEMY_PROPS[e.carry]) || FISTS_KIT;
+    k = { ...base, ...P, shield: !!P.shield, shieldHalf: P.shieldHalf, spacing: P.spacing, maxChain: undefined }; k.windup = k.attacks[k.main].windup; KITS.set(key, k);
+  }
+  return k;
+}
+function startingCarry(kind, carry) { // carry: undefined = the kind's own weapon, null = unarmed, a prop id = that prop
+  const nat = NATIVE_PROP[kind];
+  if (!nat) return { carry: null, carryUses: 0, disarmedT: 99, rearm: null };
+  const k = carry === null ? null : typeof carry === 'string' && PROPS[carry]?.enemy ? carry : nat;
+  return { carry: k, carryUses: k ? Math.max(2, Math.ceil(PROPS[k].uses * 0.5)) : 0, disarmedT: k ? 0 : 99, rearm: null }; // an enemy's weapon is half worn when you take it
+}
+
+// The player's attack tables for each prop, built from the data: { via, steps, heavy } like the weapon sets above.
+const throwSpec = (kind) => ({ id: 'throw', via: 'prop', prop: kind, throwProp: true, hitAt: 0.14, swing: 0.4, cancel: 0.4, range: 20, halfArc: 0.5, damage: 0, stagger: 0, knock: 0, lunge: 0, stamina: PROPS[kind].throw.stamina });
+export const PROP_SETS = {};
+for (const [kind, P] of Object.entries(PROPS)) {
+  const tag = (s) => ({ ...s, via: 'prop', prop: kind });
+  PROP_SETS[kind] = { via: 'prop', steps: P.primary === 'throw' ? [throwSpec(kind)] : P.melee.steps.map(tag), heavy: { ...tag(P.melee.heavy), heavy: true, breaks: true } };
+  PROP_SETS[kind].steps.forEach((s) => { ATTACKS[`prop.${kind}.${s.id}`] = s; }); ATTACKS[`prop.${kind}.${PROP_SETS[kind].heavy.id}`] = PROP_SETS[kind].heavy;
+}
+
+// ---- state
+export function createProps(world) {
+  return (world.props || []).map((q) => ({ id: q.id, kind: q.kind, x: q.x, y: q.y, state: 'idle', uses: PROPS[q.kind].uses, holder: null, angle: q.angle || 0, vx: 0, vy: 0, left: 0, z: 0, t: 0, from: null }));
+}
+export function spawnProp(sim, kind, x, y, o = {}) {
+  if (!PROPS[kind]) return null;
+  if (sim.props.length >= MAX_PROPS) { const i = sim.props.findIndex((q) => q.state === 'broken'); if (i < 0) return null; sim.props.splice(i, 1); } // full: debris makes room, else the item is simply lost
+  const pr = { id: `d${++sim.propSeq}`, kind, x, y, state: 'idle', uses: o.uses ?? PROPS[kind].uses, holder: null, angle: o.angle ?? 0, vx: 0, vy: 0, left: 0, z: 0, t: 0, from: o.from ?? null };
+  sim.props.push(pr);
+  return pr;
+}
+export const durFrac = (pr) => (pr.state === 'broken' ? 0 : Math.max(0, Math.min(1, pr.uses / PROPS[pr.kind].uses)));
+export const crackOf = (pr) => { if (pr.state === 'broken') return 3; const f = durFrac(pr); return f > 2 / 3 ? 0 : f > 1 / 3 ? 1 : 2; };
+
+// A spot for something that lands or is dropped at (x,y): out of walls and solid obstacles, never over a pit; else where it came from.
+function freeSpot(sim, x, y, fx, fy) {
+  const w = sim.world; const q = { x, y, radius: 10 };
+  resolveWalls(w, q);
+  for (const o of w.obstacles) if (o.kind !== 'grass' && o.kind !== 'pit') pushOutOf(q, o);
+  if (inPit(w, q.x, q.y) || q.x < 8 || q.y < 8 || q.x > w.width - 8 || q.y > w.height - 8) return { x: fx, y: fy };
+  return { x: q.x, y: q.y };
+}
+
+// ---- picking up, swapping, dropping
+export function nearestProp(sim) {
+  const p = sim.player; const c = sim.chariot;
+  if (!FREE.has(p.state)) return null;
+  let best = null; let bd = PICK_RADIUS + 1;
+  for (const pr of sim.props) {
+    if (pr.state !== 'idle') continue;
+    const d = dist(c, pr);
+    if (d < bd && attackClear(sim.world, c.x, c.y, pr.x, pr.y)) { bd = d; best = pr; }
+  }
+  return best;
+}
+export function tryPickupProp(sim, events) {
+  const p = sim.player; const pr = nearestProp(sim);
+  if (!pr) return false;
+  let swapped = null;
+  if (p.held) { // swap: what you hold is put down where the new one lay
+    swapped = p.held; swapped.state = 'idle'; swapped.holder = null; swapped.x = pr.x; swapped.y = pr.y;
+    events.push({ type: 'prop-drop', id: swapped.id, kind: swapped.kind, by: 'player', reason: 'swap', x: swapped.x, y: swapped.y });
+  }
+  pr.state = 'held'; pr.holder = 'player'; pr.x = sim.chariot.x; pr.y = sim.chariot.y; p.held = pr;
+  p.cooldown = Math.max(p.cooldown, 0.2); p.combo = -1; p.comboT = 0; p.queued = null; p.draw = 0; p.drawFull = false; p.crouching = false;
+  events.push({ type: 'prop-pickup', id: pr.id, kind: pr.kind, name: PROPS[pr.kind].name, x: pr.x, y: pr.y, swap: !!swapped });
+  return true;
+}
+export function dropHeld(sim, events, reason = 'drop') {
+  const p = sim.player; const c = sim.chariot; const pr = p.held;
+  if (!pr) return false;
+  const a = c.moveAngle ?? 0; const s = freeSpot(sim, c.x + Math.cos(a) * 24, c.y + Math.sin(a) * 24, c.x, c.y);
+  pr.state = 'idle'; pr.holder = null; pr.x = s.x; pr.y = s.y; pr.angle = a; p.held = null; p.cooldown = Math.max(p.cooldown, 0.15);
+  events.push({ type: 'prop-drop', id: pr.id, kind: pr.kind, by: 'player', reason, x: pr.x, y: pr.y });
+  return true;
+}
+export function breakProp(sim, pr, events, shatter = false) {
+  const p = sim.player;
+  if (p.held === pr) p.held = null;
+  pr.state = 'broken'; pr.holder = null; pr.t = 0; pr.uses = 0;
+  events.push({ type: shatter ? 'prop-shatter' : 'prop-break', id: pr.id, kind: pr.kind, name: PROPS[pr.kind].name, x: pr.x, y: pr.y });
+}
+export function wearHeld(sim, events, n = 1, shatter = false) {
+  const pr = sim.player.held; if (!pr) return;
+  pr.uses -= n;
+  if (shatter || pr.uses <= 0) breakProp(sim, pr, events, shatter);
+}
+
+// ---- throwing
+function throwAim(sim, range) { // the nearest enemy or post in a cone in front, else straight ahead
+  const c = sim.chariot; let best = null; let bd = Infinity;
+  const consider = (o) => {
+    const d = dist(c, o); if (d > range || d < 1) return;
+    if (Math.abs(angleDiff(c.moveAngle, Math.atan2(o.y - c.y, o.x - c.x))) > THROW_CONE || !lineClear(sim.world, c.x, c.y, o.x, o.y)) return;
+    if (d < bd) { bd = d; best = o; }
+  };
+  for (const e of sim.enemies) if (e.state !== 'down' && e.kind !== 'sparrer') consider(e);
+  for (const t of sim.targets) consider(t);
+  return best ? Math.atan2(best.y - c.y, best.x - c.x) : c.moveAngle;
+}
+export function throwTarget(sim) { // the enemy the Do button would throw at, if any: the HUD shows "Throw" only when this is not null
+  const held = sim.player.held; const T = held && PROPS[held.kind].throw;
+  if (!T) return null;
+  const a = throwAim(sim, Math.min(T.range, 300)); const c = sim.chariot;
+  return sim.enemies.find((e) => e.state !== 'down' && e.kind !== 'sparrer' && Math.abs(angleDiff(a, Math.atan2(e.y - c.y, e.x - c.x))) < 0.05 && dist(c, e) <= Math.min(T.range, 300)) || null;
+}
+export function startThrow(sim, events) {
+  const p = sim.player; const held = p.held;
+  if (!held || !(FREE.has(p.state) || p.state === 'block') || p.cooldown > 0) return false;
+  const T = PROPS[held.kind].throw;
+  if (!T) { events.push({ type: 'prop-nothrow', kind: held.kind, name: PROPS[held.kind].name }); return false; }
+  if (!spend(sim, T.stamina)) { events.push({ type: 'tired', what: 'throw' }); return false; }
+  begin(sim, throwSpec(held.kind), events);
+  return true;
+}
+export function throwContext(sim, events) { return !!throwTarget(sim) && startThrow(sim, events); }
+function launchThrow(sim, events) {
+  const p = sim.player; const c = sim.chariot; const pr = p.held;
+  if (!pr) return;
+  const T = PROPS[pr.kind].throw; const a = p.attackAngle;
+  p.held = null; pr.state = 'thrown'; pr.holder = null; pr.angle = a; pr.t = 0; pr.z = 0; pr.left = T.range;
+  pr.vx = Math.cos(a) * T.speed; pr.vy = Math.sin(a) * T.speed; pr.x = c.x + Math.cos(a) * (c.radius + 6); pr.y = c.y + Math.sin(a) * (c.radius + 6);
+  events.push({ type: 'prop-throw', id: pr.id, kind: pr.kind, name: PROPS[pr.kind].name, x: pr.x, y: pr.y, angle: a, range: T.range });
+}
+
+// A thrown prop splashes: everyone near the impact (but the one it struck) is staggered and nothing more.
+function splash(sim, pr, T, x, y, skip, events) {
+  for (const e of sim.enemies) {
+    if (e === skip || e.state === 'down' || dist(e, { x, y }) > (T.radius || 0) + e.radius) continue;
+    applyHit(sim, e, { damage: 0, stagger: T.stagger * 0.6, knock: 0, via: 'prop', prop: pr.kind, thrown: true }, Math.atan2(e.y - y, e.x - x), events);
+  }
+}
+function landProp(sim, pr, x, y, hitEnemy, events) {
+  const T = PROPS[pr.kind].throw; pr.z = 0; pr.vx = 0; pr.vy = 0;
+  if (T.shatter) { pr.x = x; pr.y = y; splash(sim, pr, T, x, y, hitEnemy, events); breakProp(sim, pr, events, true); return; }
+  if (T.breaks) { pr.x = x; pr.y = y; breakProp(sim, pr, events, false); return; }
+  pr.uses -= 1; // a thrown spear or stone is dented by it
+  const s = freeSpot(sim, x, y, sim.chariot.x, sim.chariot.y); pr.x = s.x; pr.y = s.y;
+  if (pr.uses <= 0 || inPit(sim.world, s.x, s.y)) { breakProp(sim, pr, events, false); return; }
+  pr.state = 'idle';
+  events.push({ type: 'prop-land', id: pr.id, kind: pr.kind, x: pr.x, y: pr.y });
+}
+function flyProp(sim, pr, dt, events) {
+  const w = sim.world; const ts = w.tileSize; const T = PROPS[pr.kind].throw;
+  const sp = Math.hypot(pr.vx, pr.vy); const step = sp * dt; const n = Math.max(1, Math.ceil(step / 6));
+  for (let i = 0; i < n; i++) {
+    pr.x += (pr.vx * dt) / n; pr.y += (pr.vy * dt) / n; pr.left -= step / n;
+    pr.z = T.arc * Math.sin(Math.PI * Math.min(1, Math.max(0, 1 - pr.left / T.range)));
+    for (const e of sim.enemies) {
+      if (e.state === 'down' || e.kind === 'sparrer' || dist(e, pr) > e.radius + 7) continue;
+      applyHit(sim, e, { damage: T.damage, stagger: T.stagger, knock: T.knock, via: 'prop', prop: pr.kind, thrown: true, heavy: T.damage >= 2 }, pr.angle, events);
+      events.push({ type: 'prop-hit', id: pr.id, kind: pr.kind, name: PROPS[pr.kind].name, x: e.x, y: e.y, target: e.id });
+      landProp(sim, pr, e.x - Math.cos(pr.angle) * 14, e.y - Math.sin(pr.angle) * 14, e, events); return;
+    }
+    for (const t of sim.targets) if (dist(t, pr) <= t.radius + 7) { hitTarget(t, 'prop', events); landProp(sim, pr, pr.x - Math.cos(pr.angle) * 14, pr.y - Math.sin(pr.angle) * 14, null, events); return; }
+    const blocked = w.solid[Math.floor(pr.y / ts)]?.[Math.floor(pr.x / ts)] !== false || w.obstacles.some((o) => o.kind === 'ledge' && circleHitsRect(pr.x, pr.y, 2, o));
+    if (blocked || pr.left <= 0) { const back = blocked ? 12 : 0; landProp(sim, pr, pr.x - (pr.vx / sp) * back, pr.y - (pr.vy / sp) * back, null, events); return; }
+  }
+}
+// Called once per tick: the held prop follows the player, thrown props fly, debris fades.
+export function stepProps(sim, dt, events) {
+  const c = sim.chariot;
+  for (let i = sim.props.length - 1; i >= 0; i--) {
+    const pr = sim.props[i];
+    if (pr.state === 'held') { pr.x = c.x; pr.y = c.y; }
+    else if (pr.state === 'thrown') flyProp(sim, pr, dt, events);
+    else if (pr.state === 'broken') { pr.t += dt; if (pr.t >= DEBRIS_FOR) sim.props.splice(i, 1); }
+  }
+  sim.player.twoHandCd = Math.max(0, (sim.player.twoHandCd || 0) - dt);
+}
+// Block pressed with both hands on a prop: say why nothing happened, now and then.
+export function twoHandCue(sim, hold, events) {
+  const p = sim.player;
+  if (hold && p.held && PROPS[p.held.kind].twoHands && !(p.twoHandCd > 0)) { p.twoHandCd = 1.5; events.push({ type: 'prop-twohands', kind: p.held.kind, name: PROPS[p.held.kind].name }); }
+}
+// Movement scale while carrying (a bench or a crate is slow and cannot be run with).
+export const carryScale = (p) => (p.held ? PROPS[p.held.kind].move : 1);
+
+// ---- enemies: dropping, being disarmed, picking a prop up
+function dropCarried(sim, e, events, reason, from) {
+  if (!e.carry) return null;
+  const kind = e.carry; const uses = Math.max(1, e.carryUses || 1); const fling = reason === 'disarm' ? 30 : 16;
+  e.carry = null; e.carryUses = 0; e.disarmedT = 0; e.guarding = false;
+  const s = freeSpot(sim, e.x + Math.cos(from) * fling, e.y + Math.sin(from) * fling, e.x, e.y);
+  const pr = spawnProp(sim, kind, s.x, s.y, { uses, from: e.id, angle: from });
+  events.push({ type: 'prop-drop', id: pr ? pr.id : null, kind, by: e.id, reason, x: s.x, y: s.y });
+  return pr;
+}
+function tryDisarm(sim, e, hit, from, events) {
+  if (!e.carry || e.state === 'down' || hit.finisher || hit.thrown || hit.via === 'arrow' || !NATIVE_PROP[e.kind]) return false;
+  const chance = hit.disarm ?? (hit.breaks ? DISARM_CHANCE : 0);
+  if (!(chance > 0)) return false;
+  if (chance < 1 && sim.rng() >= chance) return false;
+  const kind = e.carry;
+  dropCarried(sim, e, events, 'disarm', from);
+  e.atk = null; e.rearm = null; if (e.state === 'attack' || e.state === 'rearm') { e.state = 'chase'; e.stateT = 0; }
+  events.push({ type: 'disarm', id: e.id, kind: e.kind, prop: kind, x: e.x, y: e.y });
+  return true;
+}
+function findRearmProp(sim, e) {
+  let best = null; let bd = REARM.range;
+  for (const pr of sim.props) {
+    if (pr.state !== 'idle' || !PROPS[pr.kind].enemy) continue;
+    const d = dist(e, pr);
+    if (d < bd && lineClear(sim.world, e.x, e.y, pr.x, pr.y)) { bd = d; best = pr; }
+  }
+  return best;
+}
+function wantsRearm(sim, e, d) { return !e.carry && !!NATIVE_PROP[e.kind] && e.disarmedT >= REARM.delay && d > REARM.near && !!findRearmProp(sim, e); }
+function startRearm(sim, e, events) {
+  const pr = findRearmProp(sim, e);
+  e.state = 'rearm'; e.stateT = 0; e.atk = null; e.rearm = { id: pr.id, t: 0 };
+  events.push({ type: 'enemy-rearm', id: e.id, kind: e.kind, prop: pr.kind, x: e.x, y: e.y });
+}
+function stepRearm(sim, e, dt, events) {
+  const pr = e.rearm && sim.props.find((q) => q.id === e.rearm.id); const R = cfg(e);
+  if (!pr || pr.state !== 'idle' || dist(e, sim.chariot) <= REARM.near * 0.7) { e.state = 'chase'; e.stateT = 0; e.rearm = null; e.cd = Math.max(e.cd, 0.3); return; } // gone, or you are on top of it: it fights with what it has
+  if (dist(e, pr) > REARM.reach) { e.rearm.t = 0; goTo(sim, e, dt, pr.x, pr.y, R.chaseSpeed * 0.9); return; }
+  turnTo(e, Math.atan2(pr.y - e.y, pr.x - e.x), dt, R.turn);
+  e.rearm.t += dt;
+  if (e.rearm.t < REARM.grab) return;
+  sim.props.splice(sim.props.indexOf(pr), 1);
+  e.carry = pr.kind; e.carryUses = pr.uses; e.disarmedT = 0; e.rearm = null; e.state = 'chase'; e.stateT = 0; e.cd = Math.max(e.cd, 0.5); e.guarding = !!cfg(e).shield;
+  events.push({ type: 'enemy-pickup', id: e.id, kind: e.kind, prop: pr.kind, x: e.x, y: e.y });
+}
+
+// ---- what the frame says (renderer.js makeFrame): props, the held item and the pick-up prompt (HUD request in docs/review/prop-hooks.md)
+export function propPrompt(sim) {
+  if (!sim.rules2) return null;
+  const pr = nearestProp(sim); const held = sim.player.held;
+  if (pr) return { text: `${held ? 'Swap' : 'Take'} ${PROPS[pr.kind].name.toLowerCase()}`, propId: pr.id, kind: pr.kind };
+  if (held && throwTarget(sim)) return { text: 'Throw', propId: held.id, kind: held.kind };
+  return null;
+}
+export function heldFrame(sim) {
+  const pr = sim.player.held; if (!pr) return null;
+  const P = PROPS[pr.kind];
+  return { id: pr.id, kind: pr.kind, name: P.name, cls: P.cls, uses: pr.uses, maxUses: P.uses, durability: durFrac(pr), crack: crackOf(pr), twoHands: P.twoHands, canThrow: !!P.throw, fire: !!P.fire, guard: !!P.guard };
+}
+export function propsFrame(sim) {
+  return (sim.props || []).map((pr) => ({ id: pr.id, kind: pr.kind, name: PROPS[pr.kind].name, x: pr.x, y: pr.y, state: pr.state, angle: pr.angle, z: pr.z, uses: pr.uses, maxUses: PROPS[pr.kind].uses, durability: durFrac(pr), crack: crackOf(pr), holder: pr.holder, fire: !!PROPS[pr.kind].fire }));
 }

@@ -1,7 +1,8 @@
-// Chakra rings: geometry, easing and canvas drawing. No DOM here: drawScene() takes any 2D context, so Node tests run it with a stub.
+// Chakra rings: geometry and canvas drawing. No DOM here: drawScene() takes any 2D context, so Node tests run it with a stub.
 // Three concentric rings, outside in: yugas, eras, events. The ring that is open is thick; the others are thin. A core of decorative rings sits inside.
 // Angles run clockwise from the top (12 o'clock is where the open segment aligns). World units: the outer rim has radius 1.
 import { compactYear } from './model.js';
+import { bloomEase } from './spring.js';
 
 export const TAU = Math.PI * 2;
 export const THIN = 0.085, THICK = 0.3, RING_GAP = 0.02, GAP = 0.035;
@@ -11,20 +12,17 @@ export const norm = (a) => { const t = ((a % TAU) + TAU) % TAU; return t > Math.
 
 // ---- layout ----
 // open = 0, 1 or 2: which ring is thick. Returns [{inner, outer}] for the three rings.
-export function ringLayout(open) {
+export function ringLayout(open) { return layoutFrom([0, 1, 2].map((i) => (i === open ? THICK : THIN))); }
+// The same, from three thicknesses (the view animates these, so the rings grow and shrink continuously).
+export function layoutFrom(th) {
   let r = 1; const out = [];
-  for (let i = 0; i < 3; i++) { const t = i === open ? THICK : THIN; out.push({ outer: r, inner: r - t }); r -= t + RING_GAP; }
+  for (let i = 0; i < 3; i++) { out.push({ outer: r, inner: r - th[i] }); r -= th[i] + RING_GAP; }
   return out;
 }
 export const coreRadius = (layout) => layout[2].inner - 0.03;
-export const lerpLayout = (a, b, t) => a.map((x, i) => ({ outer: x.outer + (b[i].outer - x.outer) * t, inner: x.inner + (b[i].inner - x.inner) * t }));
-
-// ---- easing ----
-export const easeInOut = (t) => { t = clamp(t, 0, 1); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
-// The vault: the rings turn hard, then lock. main() reaches 1 at u = SETTLE; a short damped knock follows (overshoot() is in radians of ring travel).
-export const SETTLE = 0.8;
-export const clunkMain = (u) => { const v = clamp(u / SETTLE, 0, 1); return 1 - Math.pow(1 - v, 4); };
-export const clunkKnock = (u) => { if (u <= SETTLE) return 0; const v = clamp((u - SETTLE) / (1 - SETTLE), 0, 1); return 0.03 * Math.sin(v * Math.PI * 2) * (1 - v); };
+// Where the dial sits. The page's top bar floats over the stage, so the dial is centred in what is left below it and fills the width.
+export function dialGeom(W, H, top = 0, bottom = 0) { const avail = Math.max(60, H - top - bottom); return { R: Math.min(W, avail) * 0.48, cx: W / 2, cy: top + avail / 2 }; }
+// Easing and springs live in spring.js: the rings are driven by springs, not by a fixed-length tween.
 
 // ---- segment rings (yugas, eras) ----
 export const segSpan = (i, n, rot) => [rot + (TAU * i) / n + GAP / 2, rot + (TAU * (i + 1)) / n - GAP / 2];
@@ -77,11 +75,15 @@ const YUGA_HUE = ['#fff3dc', '#ffb42e', '#28e0d0', '#ff6a3d', '#ffe9b0'];
 const GOLD = '#ffd36a';
 
 function band(ctx, cx, cy, ro, ri, a0, a1) { ctx.beginPath(); ctx.arc(cx, cy, ro, a0 - Math.PI / 2, a1 - Math.PI / 2); ctx.arc(cx, cy, ri, a1 - Math.PI / 2, a0 - Math.PI / 2, true); ctx.closePath(); }
+const FIT = new Map(); // text fitting measures the font many times; the answer is cached (width rounded down to 4 px so a ring that is growing still hits the cache)
 function textFit(ctx, text, size, maxW, weight = 700) {
+  const q = Math.max(8, Math.floor(maxW / 4) * 4); const key = `${weight}|${size}|${q}|${text}`; const hit = FIT.get(key);
+  if (hit) { ctx.font = hit.font; return hit.t; }
   let px = size; ctx.font = `${weight} ${px}px system-ui, sans-serif`;
   const w = (t) => { const m = ctx.measureText?.(t); return m && m.width > 0 ? m.width : t.length * px * 0.58; };
-  while (px > 9 && w(text) > maxW) { px -= 1; ctx.font = `${weight} ${px}px system-ui, sans-serif`; }
-  let t = text; while (t.length > 3 && w(t) > maxW) t = t.slice(0, -2).trimEnd() + '…';
+  while (px > 9 && w(text) > q) { px -= 1; ctx.font = `${weight} ${px}px system-ui, sans-serif`; }
+  let t = text; while (t.length > 3 && w(t) > q) t = t.slice(0, -2).trimEnd() + '…';
+  if (FIT.size > 400) FIT.clear(); FIT.set(key, { t, font: ctx.font });
   return t;
 }
 function tangentText(ctx, text, cx, cy, r, theta, size, maxW, color, weight) {
@@ -102,13 +104,30 @@ function decorRing(ctx, cx, cy, ro, ri, rot, n) {
   ctx.stroke();
 }
 
+// Keyboard focus is drawn here, on the dial's own shape: a glowing ring (never a box). The caller draws it only while the keyboard is in use.
+function haloStroke(ctx, path) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,211,106,0.35)'; ctx.lineWidth = 12; path(); ctx.stroke(); ctx.restore();
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 6.5; path(); ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.2; path(); ctx.stroke();
+}
+function haloCircle(ctx, x, y, r) { haloStroke(ctx, () => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }); }
+// The glow that travels once round the ring that has just opened: a bright head with a fading tail. head is 0..1 round the ring, k is its strength.
+function comet(ctx, cx, cy, ro, ri, head, k) {
+  if (k <= 0.01) return; const rm = (ro + ri) / 2; const w = Math.max(3, (ro - ri) * 0.55); const a1 = head * TAU - Math.PI / 2;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [len, lw, al] of [[1.5, w, 0.1], [1.0, w * 0.7, 0.18], [0.55, w * 0.42, 0.3], [0.22, w * 0.22, 0.6], [0.06, w * 0.12, 0.95]]) {
+    ctx.globalAlpha = al * k; ctx.strokeStyle = '#ffd98a'; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(cx, cy, rm, a1 - len, a1); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // Status is shown by shape and icon as well as dimming: open = solid with a play mark, done = double ring with a tick,
 // locked = dashed ring with a lock (dimmed), coming soon = dotted ring with the level number (dimmed), info = diamond.
-function drawNode(ctx, x, y, e, st, focus, alpha) {
+function drawNode(ctx, x, y, e, st, focus, alpha, kbd = false) {
   const col = KIND_COLOR[e.kind] || '#fff3dc';
   const dim = st.code === 'locked' ? 0.5 : st.code === 'planned' ? 0.7 : 1;
   ctx.globalAlpha = alpha * dim;
-  if (focus) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 20, 0, TAU); ctx.stroke(); }
+  if (focus && !kbd) { ctx.strokeStyle = GOLD; ctx.globalAlpha = alpha * dim * 0.6; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 20, 0, TAU); ctx.stroke(); ctx.globalAlpha = alpha * dim; } // the chosen event; the bright keyboard halo is drawn by haloCircle
   ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.fillStyle = 'rgba(22,15,58,0.94)';
   if (st.code === 'info') { ctx.beginPath(); ctx.moveTo(x, y - 13); ctx.lineTo(x + 13, y); ctx.lineTo(x, y + 13); ctx.lineTo(x - 13, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
   else {
@@ -121,17 +140,18 @@ function drawNode(ctx, x, y, e, st, focus, alpha) {
   ctx.globalAlpha = 1;
 }
 
-// s: { W, H, dpr, t, layout:[3], rot:[ring0, ring1, ring2, core], L (open ring), alpha:[3] (content opacity), glow:[3],
-//      rings:[{n, labels, sel, chosen, cur, progress:[0..1]}, {n, labels, sel, chosen}], list: {events, idx (indices of the ring list), status(e)}, pos, cap, focus,
-//      readout: [title, sub], motion }
+// s: { W, H, dpr, top, bottom (px under floating chrome), layout:[3], rot:[ring0, ring1, ring2, core], L (open ring), alpha:[3] (content opacity), glow:[3], dim:[3] (rings behind),
+//      par:[3] (parallax scale offsets), bloom (0..1, event nodes), sweep ({ring, head, k} or null), parts (particle pool), kbd (draw the keyboard focus),
+//      rings:[{n, labels, sel, chosen, cur, progress:[0..1]}, {n, labels, sel, chosen}], list: {events, idx (indices of the ring list), status(e)}, pos, cap, focus, readout: [title, sub], motion }
 export function drawScene(ctx, s) {
-  const W = s.W, H = s.H; const R = Math.min(W, H) * 0.47; const cx = W / 2, cy = H / 2;
+  const W = s.W, H = s.H; const { R, cx, cy } = dialGeom(W, H, s.top || 0, s.bottom || 0);
   s.R = R; s.cx = cx; s.cy = cy;
   ctx.setTransform(s.dpr || 1, 0, 0, s.dpr || 1, 0, 0); ctx.clearRect(0, 0, W, H);
   ctx.lineCap = 'round'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const g0 = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.1); g0.addColorStop(0, 'rgba(255,180,60,0.16)'); g0.addColorStop(0.7, 'rgba(120,60,200,0.1)'); g0.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g0; ctx.beginPath(); ctx.arc(cx, cy, R * 1.1, 0, TAU); ctx.fill();
   const lay = s.layout; const core = coreRadius(lay) * R; const stats = { nodes: 0, labels: 0 };
+  const par = s.par || [0, 0, 0]; const dim = s.dim || [1, 1, 1];
   // core: spokes and petals, turning with the core rotation
   ctx.globalAlpha = s.L === 2 ? 0.3 : 0.7; ctx.strokeStyle = 'rgba(255,200,90,0.55)'; ctx.lineWidth = 1.2; ctx.beginPath();
   for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU + s.rot[3] - Math.PI / 2; ctx.moveTo(cx + Math.cos(a) * core * 0.3, cy + Math.sin(a) * core * 0.3); ctx.lineTo(cx + Math.cos(a) * core * 0.95, cy + Math.sin(a) * core * 0.95); }
@@ -140,43 +160,52 @@ export function drawScene(ctx, s) {
 
   for (let j = 2; j >= 0; j--) {
     const ro = lay[j].outer * R, ri = lay[j].inner * R; const open = j === s.L; const info = s.rings[j]; const a = s.alpha ? s.alpha[j] : 1; const rot = s.rot[j];
+    ctx.save(); if (par[j]) { const k = 1 + par[j]; ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy); } // layered parallax: each ring breathes a little differently
     if (j === 2 && s.L === 2) { // the event ring: a thick band with nodes
       ctx.fillStyle = 'rgba(40,24,90,0.7)'; band(ctx, cx, cy, ro, ri, 0, TAU - 0.0001); ctx.fill(); ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 1.5; ctx.stroke();
       glowBand(ctx, cx, cy, ro, ri, s.glow ? s.glow[2] : 0);
-      s.nodes = []; const L = s.list; const n = L ? L.idx.length : 0;
+      s.nodes = []; const L = s.list; const n = L ? L.idx.length : 0; const bl = s.bloom == null ? 1 : s.bloom;
       if (L && n) {
-        const [lo, hi] = visibleRange(n, s.cap, s.pos); const nodeR = ro - 34, labR = ro - 10;
+        const [lo, hi] = visibleRange(n, s.cap, s.pos); const nodeR = ro - 34, labR = ro - 10, SPAN = 0.6;
         for (let k = lo; k <= hi; k++) {
           const e = L.events[L.idx[k]]; const st = L.status(e); const al = slotAlpha(k, s.pos, s.cap, n) * a; if (al <= 0.02) continue;
-          const th = slotAngle(k, s.pos, s.cap, n) + rot; const aa = th - Math.PI / 2; const x = cx + Math.cos(aa) * nodeR, y = cy + Math.sin(aa) * nodeR;
-          drawNode(ctx, x, y, e, st, k === s.focus, al); stats.nodes++; s.nodes.push({ k, x, y });
-          ctx.globalAlpha = al; ctx.fillStyle = '#e6dcf7'; ctx.font = '700 9.5px system-ui, sans-serif'; ctx.fillText(compactYear(e.year), cx + Math.cos(aa) * labR, cy + Math.sin(aa) * labR); ctx.globalAlpha = 1; stats.labels++;
+          const delay = (Math.min(Math.abs(k - s.pos), 12) / 12) * SPAN; const u = clamp(bl * (1 + SPAN) - delay, 0, 1); if (u <= 0.01) { s.nodes.push({ k, x: -999, y: -999 }); continue; } // the ripple starts at the top and spreads round both ways
+          const g = bloomEase(u);
+          const th = slotAngle(k, s.pos, s.cap, n) + rot; const aa = th - Math.PI / 2; const rr = ri + (nodeR - ri) * g; const x = cx + Math.cos(aa) * rr, y = cy + Math.sin(aa) * rr;
+          ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.05, g), Math.max(0.05, g)); ctx.translate(-x, -y);
+          drawNode(ctx, x, y, e, st, k === s.focus, al * clamp(u * 1.6, 0, 1), s.kbd); ctx.restore(); stats.nodes++; s.nodes.push({ k, x, y });
+          if (k === s.focus && s.kbd && u >= 1) { ctx.globalAlpha = al; haloCircle(ctx, x, y, 21); ctx.globalAlpha = 1; }
+          ctx.globalAlpha = al * clamp(u * 1.6 - 0.4, 0, 1); ctx.fillStyle = '#e6dcf7'; ctx.font = '700 9.5px system-ui, sans-serif'; ctx.fillText(compactYear(e.year), cx + Math.cos(aa) * labR, cy + Math.sin(aa) * labR); ctx.globalAlpha = 1; stats.labels++;
         }
       }
-      continue;
+      if (s.sweep && s.sweep.ring === 2) comet(ctx, cx, cy, ro, ri, s.sweep.head, s.sweep.k);
+      ctx.restore(); continue;
     }
-    if (j > s.L || !info || !info.n) { decorRing(ctx, cx, cy, ro, ri, rot, j === 1 ? 60 : 48); continue; }
+    if (j > s.L || !info || !info.n) { ctx.globalAlpha = dim[j]; decorRing(ctx, cx, cy, ro, ri, rot, j === 1 ? 60 : 48); ctx.globalAlpha = 1; ctx.restore(); continue; }
     // a segment ring: yugas or eras (a ring that is still fading in shows its turning decoration underneath)
-    if (a < 1) decorRing(ctx, cx, cy, ro, ri, rot, j === 1 ? 60 : 48);
-    ctx.globalAlpha = a;
-    const n = info.n; const thick = (ro - ri) > 30;
+    if (a < 1) { ctx.globalAlpha = dim[j]; decorRing(ctx, cx, cy, ro, ri, rot, j === 1 ? 60 : 48); }
+    const n = info.n; const thick = (ro - ri) > 30; const ad = a * dim[j];
     for (let i = 0; i < n; i++) {
       const [a0, a1] = segSpan(i, n, rot); const chosen = i === info.chosen; const sel = open && i === info.sel;
       band(ctx, cx, cy, ro, ri, a0, a1);
-      ctx.globalAlpha = a * (open ? (sel ? 0.38 : 0.2) : chosen ? 0.55 : 0.1); ctx.fillStyle = j === 0 ? YUGA_HUE[i % 5] : GOLD; ctx.fill();
-      ctx.globalAlpha = a; ctx.strokeStyle = sel || chosen ? '#ffffff' : 'rgba(255,243,220,0.6)'; ctx.lineWidth = sel || chosen ? 2.4 : 1.2; ctx.stroke();
+      ctx.globalAlpha = ad * (open ? (sel ? 0.38 : 0.2) : chosen ? 0.55 : 0.1); ctx.fillStyle = j === 0 ? YUGA_HUE[i % 5] : GOLD; ctx.fill();
+      ctx.globalAlpha = ad; ctx.strokeStyle = sel || chosen ? '#ffffff' : 'rgba(255,243,220,0.6)'; ctx.lineWidth = sel || chosen ? 2.4 : 1.2; ctx.stroke();
+      if (sel && s.kbd) { ctx.globalAlpha = a; haloStroke(ctx, () => band(ctx, cx, cy, ro + 1, ri - 1, a0 - 0.004, a1 + 0.004)); ctx.globalAlpha = ad; }
       if (thick) {
         const mid = (a0 + a1) / 2; const arc = (a1 - a0) * ((ro + ri) / 2); const done = info.progress ? info.progress[i] : null;
         if (done != null && done > 0) { ctx.strokeStyle = '#28e0d0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, ri + 5, a0 - Math.PI / 2 + 0.03, a0 - Math.PI / 2 + 0.03 + (a1 - a0 - 0.06) * done); ctx.stroke(); }
         tangentText(ctx, info.labels[i] || '', cx, cy, (ro + ri) / 2 + 1, mid, s.W < 480 ? 13 : 15, Math.max(30, arc - 14), '#fff3dc', 700); stats.labels++;
-        if (i === info.cur) { // you are here: a gold bar at the outer edge and a marker pointing in
-          ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, ro - 2.5, a0 - Math.PI / 2 + 0.05, a1 - Math.PI / 2 - 0.05); ctx.stroke();
-        }
+        if (i === info.cur) { ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, ro - 2.5, a0 - Math.PI / 2 + 0.05, a1 - Math.PI / 2 - 0.05); ctx.stroke(); } // you are here
       } else if (i === info.cur) { ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, ro - 1.5, a0 - Math.PI / 2 + 0.05, a1 - Math.PI / 2 - 0.05); ctx.stroke(); }
     }
     ctx.globalAlpha = 1;
     if (open) glowBand(ctx, cx, cy, ro, ri, s.glow ? s.glow[j] : 0);
+    if (s.sweep && s.sweep.ring === j) comet(ctx, cx, cy, ro, ri, s.sweep.head, s.sweep.k);
+    ctx.restore();
   }
+  // dust of light
+  const P = s.parts;
+  if (P) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#ffe3a0'; for (let i = 0; i < P.n; i++) { if (P.life[i] <= 0) continue; const f = P.life[i] / P.max[i]; ctx.globalAlpha = 0.85 * f * f; ctx.beginPath(); ctx.arc(P.x[i], P.y[i], P.size[i], 0, TAU); ctx.fill(); } ctx.restore(); }
   // alignment mark at the top: where the chosen segment locks in
   const my = cy - R - 6; ctx.fillStyle = GOLD; ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 9, my - 10); ctx.lineTo(cx + 9, my - 10); ctx.lineTo(cx, my + 4); ctx.closePath(); ctx.fill(); ctx.stroke();
   // readout in the middle: short title and year
