@@ -12,6 +12,8 @@ import { angleDelta, createCameraState, followCamera, chooseGraphics } from '../
 import { loadSettings } from '../settings.js';
 import './render1.mjs';
 import './hero-assets.mjs';
+import './anim-clips.mjs';
+import './tier.mjs';
 
 const results = [];
 const queue = [];

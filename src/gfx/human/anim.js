@@ -4,6 +4,8 @@
 // neck or head leans FORWARD; a positive x on the shin or the forearm bends the knee or elbow so the foot or hand goes BACK.
 // Feet are planted by grounding: after the leg angles are chosen, the pelvis height is set so the lowest foot touches the floor (no sliding up or sinking),
 // and the walk cycle advances by distance travelled (see strideMetres), so the step length matches the ground speed.
+import { parseClipsGlb, fillRest, sampleClip } from './clips/gltf-anim.js';
+import { planClips } from './clips/plan.js';
 export const BONES = ['hips_root', 'hips', 'spine', 'chest', 'neck', 'head',
   ...['L', 'R'].flatMap((s) => [`shoulder_${s}`, `upperarm_${s}`, `forearm_${s}`, `hand_${s}`, `thumb_${s}`, `fingers_${s}`, `fingers2_${s}`, `thigh_${s}`, `shin_${s}`, `foot_${s}`, `toe_${s}`])];
 export const REST = { upperarm_L: [0.02, 0.1, -0.66], upperarm_R: [0.02, -0.1, 0.66], forearm_L: [0.8, 0, 0], forearm_R: [0.8, 0, 0], shoulder_L: [0, 0, -0.06], shoulder_R: [0, 0, 0.06],
@@ -42,7 +44,7 @@ function hands(o, rightGrip, leftGrip) { // 0 open .. 1 fist (curl about x)
 
 // ctx: { state, t (seconds in state), cycle (walk cycles, any real), speed (0..1: 0 stand, ~0.5 walk, 1 run), time (s), weapon: 'none'|'staff'|'sword'|'bow'|'spear'|'club',
 //        crouch (0..1), atk: {kind, progress, hit}, windup (0..1), draw (0..1), carry: 'none'|'pot'|'bundle'|'lamp', stoop (0..0.5), legs: {l1,l2}, seed }
-export function pose(o, c) {
+export function poseProcedural(o, c) {
   for (const n of BONES) { const r = REST[n]; const q = o.rot[n]; q[0] = r ? r[0] : 0; q[1] = r ? r[1] : 0; q[2] = r ? r[2] : 0; }
   o.lift = 0; o.sway = 0; o.fwd = 0;
   const st = c.state || 'idle'; const t = c.t || 0; const time = c.time || 0; const stoop = c.stoop || 0; const w = c.weapon || 'none';
@@ -221,5 +223,60 @@ export function pose(o, c) {
     let ext = 0; for (let k = 0; k < 2; k++) { const a = o.rot[k ? 'thigh_R' : 'thigh_L'][0]; const kn = o.rot[k ? 'shin_R' : 'shin_L'][0]; ext = Math.max(ext, legs.l1 * Math.cos(a) + legs.l2 * Math.cos(a + kn)); }
     o.lift = ext - (legs.l1 + legs.l2) + bob;
   }
+  return o;
+}
+
+// ======================================================================================================================================
+// Authored clips (Blender, see tools/blender/anim) layered over the procedural pose above. If a clip file has not loaded, or a state has no clip, the
+// procedural pose is what plays: nothing here can leave a person without a pose.
+export const CLIPS = new Map(); export const clipInfo = { groups: [], failed: [], loading: null };
+export function installClips(buf) { const m = parseClipsGlb(buf, BONES); fillRest(m, BONES, REST); for (const [k, v] of m) CLIPS.set(k, v); return m.size; }
+export function clearClips() { CLIPS.clear(); clipInfo.groups.length = 0; clipInfo.failed.length = 0; }
+// Loads the clip sets in priority order (locomotion first, so the game is moving before the combat clips arrive). Safe to call twice.
+export function loadClips(base, groups = ['loco', 'combat', 'react', 'interact'], fetchFn = (typeof fetch === 'function' ? fetch : null)) {
+  if (clipInfo.loading) return clipInfo.loading; if (!fetchFn) return Promise.resolve(0);
+  const root = base || new URL('../../../assets/characters/anim/', import.meta.url).href;
+  clipInfo.loading = (async () => { let n = 0; for (const g of groups) { try { const r = await fetchFn(root + g + '.glb'); if (!r.ok) throw new Error(String(r.status)); n += installClips(await r.arrayBuffer()); clipInfo.groups.push(g); } catch (e) { clipInfo.failed.push(g); } } return n; })();
+  return clipInfo.loading;
+}
+if (typeof window !== 'undefined' && typeof document !== 'undefined') loadClips().catch(() => {});
+
+const scratch = () => makePose();
+// Look-at with limits: the neck takes 40 percent and the head 60 percent of a turn; total yaw 80 degrees, pitch 35 down to 30 up. Eased by the caller's blend.
+export const LOOK_LIMIT = { yaw: 1.4, pitchUp: 0.52, pitchDown: 0.6, neckShare: 0.4 };
+export function applyLook(o, yaw, pitch, amount = 1) {
+  const L = LOOK_LIMIT; const y = Math.max(-L.yaw, Math.min(L.yaw, yaw)) * amount; const p = Math.max(-L.pitchDown, Math.min(L.pitchUp, pitch)) * amount;
+  o.rot.neck[1] += y * L.neckShare; o.rot.head[1] += y * (1 - L.neckShare); o.rot.neck[0] += -p * L.neckShare; o.rot.head[0] += -p * (1 - L.neckShare); return { yaw: y, pitch: p };
+}
+// Blink timing: a closure 0..1 over time, 0.16 s long, every 2.5 to 5.5 s, one in five a double blink. Deterministic from a seed so crowds do not blink together.
+export function blinkAt(time, seed = 0) {
+  const per = 3.2 + ((seed * 7.31) % 1) * 2.6; const ph = ((time + seed * 1.7) % per); const one = (x) => (x < 0 || x > 0.16 ? 0 : Math.sin((x / 0.16) * Math.PI));
+  const dbl = Math.floor((time + seed * 1.7) / per + seed) % 5 === 0 ? one(ph - 0.3) : 0; return Math.max(one(ph), dbl);
+}
+// One step of a damped spring chain joint (hair, cloth tails): j = {a, v}; target angle, stiffness k, damping d, hard limits. Stable for dt up to 0.05.
+export function springStep(j, target, dt, k = 90, d = 9, lo = -0.7, hi = 1.1) {
+  const h = Math.min(dt, 0.05); j.v += ((target - j.a) * k - j.v * d) * h; j.a += j.v * h; if (j.a < lo) { j.a = lo; j.v = 0; } else if (j.a > hi) { j.a = hi; j.v = 0; } return j.a;
+}
+// Time warp for hit-stop and slow motion: returns the dt a clip should advance by. During a hit-stop (seconds left) the clip is frozen; scale slows it.
+export function warpDt(dt, { hitstop = 0, timeScale = 1 } = {}) { return hitstop > 0 ? 0 : dt * timeScale; }
+
+const ARM_BONE = /^(shoulder|upperarm|forearm|hand|thumb|fingers|fingers2)_/;
+export function pose(o, c) {
+  poseProcedural(o, c);
+  o.clip = null; if (!CLIPS.size) return o;
+  const plan = planClips(o, c, (n) => CLIPS.has(n), CLIPS); if (!plan) return o;
+  const T = o.tmp || (o.tmp = scratch()); const reduced = !!c.reduced && !c.moving;
+  const first = CLIPS.get(plan.layers[0].name);
+  for (let i = 0; i < plan.layers.length; i++) { const l = plan.layers[i]; const cl = CLIPS.get(l.name); const tt = reduced && plan.loco ? 0 : l.t; sampleClip(cl, tt, T, BONES, i === 0 ? 1 : l.w); }
+  void first;
+  // carried things keep the procedural arms (the hand grip is tuned for the prop in the hand); the clip drives everything else
+  const keepArms = plan.carryArms && ((c.weapon && c.weapon !== 'none') || (c.carry && c.carry !== 'none') || c.guard);
+  for (const n of BONES) { if (keepArms && ARM_BONE.test(n)) continue; const a = o.rot[n]; const b = T.rot[n]; a[0] = b[0]; a[1] = b[1]; a[2] = b[2]; }
+  o.lift = T.lift; o.sway = T.sway; o.fwd = T.fwd; o.clip = plan.layers.map((l) => l.name).join('+'); o.snap = plan.snap || 0;
+  // additive layers: look-at with limits, turn lead, and impact tremor during a hit-stop (none under reduced motion)
+  if (c.look) applyLook(o, c.look.yaw || 0, c.look.pitch || 0, c.look.amount ?? 1);
+  if (c.turnRate && !c.reduced) { const lead = Math.max(-1, Math.min(1, c.turnRate * 0.12)); o.rot.head[1] += lead * 0.5; o.rot.neck[1] += lead * 0.2; o.rot.chest[1] += lead * 0.12; }
+  if (c.hitstop > 0 && !c.reduced) { const sh = Math.sin((c.time || 0) * 160) * 0.012 * Math.min(1, c.hitstop / 0.05); o.rot.chest[2] += sh; o.rot.head[0] += sh * 0.6; o.rot.upperarm_R[0] += sh; }
+  if (o.mem) o.blink = blinkAt(c.time || 0, c.seed || 0);
   return o;
 }

@@ -131,8 +131,8 @@ export function drawSky(g, w, h, T, seed = 9) {
   const l = g.createLinearGradient(0, 0, 0, h);
   l.addColorStop(0, T.sky[0]); l.addColorStop(0.2, T.sky[1]); l.addColorStop(0.38, T.sky[2]); l.addColorStop(0.5, T.sky[3]); l.addColorStop(0.52, T.haze); l.addColorStop(1, T.haze);
   g.fillStyle = l; g.fillRect(0, 0, w, h);
-  const sx = w * SUN.u; // sun glow
-  const glow = g.createRadialGradient(sx, h * SUN.v, 0, sx, h * SUN.v, h * 0.5); glow.addColorStop(0, 'rgba(255,236,170,0.9)'); glow.addColorStop(0.25, 'rgba(255,200,110,0.4)'); glow.addColorStop(1, 'rgba(255,190,100,0)');
+  const sx = w * (T.sunU ?? SUN.u); const sv = T.sunV ?? SUN.v; // sun glow
+  const glow = g.createRadialGradient(sx, h * sv, 0, sx, h * sv, h * 0.5); glow.addColorStop(0, 'rgba(255,236,170,0.9)'); glow.addColorStop(0.25, 'rgba(255,200,110,0.4)'); glow.addColorStop(1, 'rgba(255,190,100,0)');
   g.fillStyle = glow; g.fillRect(0, 0, w, h);
   const clouds = T.clouds || 12;
   for (let i = 0; i < clouds; i++) cloud(g, w, r() * w, h * (0.16 + r() * 0.26), h * (0.05 + r() * 0.07), T, r);

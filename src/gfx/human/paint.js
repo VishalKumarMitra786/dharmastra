@@ -46,8 +46,8 @@ export function paintFace(g, S, L, blink, R) {
   for (const s of [-1, 1]) { blot(s * 0.42, 6.75, 0.22, 0.15, warm, 0.28); blot(s * 0.5, 7.05, 0.2, 0.12, light, 0.2); blot(s * 0.78, 7.0, 0.08, 0.2, warm, 0.3); } // cheeks, cheekbones, ears
   blot(0, 6.85, 0.1, 0.1, light, 0.18); blot(0, 6.2, 0.2, 0.08, light, 0.15); // nose tip, chin
   for (const s of [-1, 1]) { blot(s * 0.28, 7.12, 0.24, 0.07, dark, 0.14); blot(s * 0.15, 7.42, 0.16, 0.1, dark, 0.14); } // under-eye and socket shadow
-  blot(0, 6.7, 0.17, 0.05, dark, 0.34); // shadow under the nose
-  for (const s of [-1, 1]) { blot(s * 0.1, 6.78, 0.07, 0.04, dark, 0.55); blot(s * 0.1, 7.1, 0.05, 0.28, dark, 0.12); blot(s * 0.25, 6.52, 0.04, 0.16, dark, 0.11); } // nostril wings, bridge, nasolabial folds
+  blot(0, 6.69, 0.11, 0.03, dark, 0.2); // shadow under the nose
+  for (const s of [-1, 1]) { blot(s * 0.1, 6.78, 0.05, 0.03, dark, 0.42); blot(s * 0.1, 7.1, 0.05, 0.28, dark, 0.12); blot(s * 0.25, 6.52, 0.04, 0.16, dark, 0.11); } // nostril wings, bridge, nasolabial folds
   blot(0, 8.3, 0.9, 0.35, hexMix(L.hair.color, base, 0.35), 0.5); // scalp under the hair
   // beard and moustache, painted into the skin (fibres as short strokes)
   const hc = hexMix(L.hair.color, '#1a120e', 0.2);
@@ -67,24 +67,26 @@ export function paintFace(g, S, L, blink, R) {
   const ey = LANDMARK.eyeY; const ew = LANDMARK.eyeW;
   for (const s of [-1, 1]) {
     const cx = s * LANDMARK.eyeX; const inner = cx - s * ew; const outer = cx + s * ew; const lift = 0.03; const open = 1 - blink;
-    const upper = (t) => { const x = inner + (outer - inner) * t; return [x, ey + lift * t * 0.6 + 0.085 * open * Math.sin(Math.PI * Math.pow(t, 0.85))]; };
-    const lower = (t) => { const x = inner + (outer - inner) * t; return [x, ey + lift * t * 0.6 - 0.05 * open * Math.sin(Math.PI * t)]; };
+    const upper = (t) => { const x = inner + (outer - inner) * t; return [x, ey + lift * t * 0.6 + 0.108 * open * Math.sin(Math.PI * Math.pow(t, 0.85))]; };
+    const lower = (t) => { const x = inner + (outer - inner) * t; return [x, ey + lift * t * 0.6 - 0.062 * open * Math.sin(Math.PI * t)]; };
     const path = () => { g.beginPath(); for (let i = 0; i <= 16; i++) { const [x, y] = upper(i / 16); (i ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))); } for (let i = 16; i >= 0; i--) { const [x, y] = lower(i / 16); g.lineTo(px(x), py(y)); } g.closePath(); };
     g.save(); path(); g.clip();
-    g.fillStyle = '#e8dfd2'; g.fillRect(0, 0, size, size);
-    const ix = cx + s * 0.005; const iy = ey + 0.015; const ir = 0.082 * unit;
-    const ig = g.createRadialGradient(px(ix), py(iy), ir * 0.2, px(ix), py(iy), ir); ig.addColorStop(0, shade(hexMix(L.eye, '#c89a60', 0.25), 1.0)); ig.addColorStop(0.7, shade(L.eye, 0.9)); ig.addColorStop(1, shade(L.eye, 0.45)); g.fillStyle = ig; g.beginPath(); g.arc(px(ix), py(iy), ir, 0, TAU); g.fill();
+    const sc = g.createLinearGradient(px(inner), 0, px(outer), 0); sc.addColorStop(0, '#c9a79a'); sc.addColorStop(0.25, '#eee6da'); sc.addColorStop(0.75, '#eee6da'); sc.addColorStop(1, '#cdb8a8'); g.fillStyle = sc; g.fillRect(0, 0, size, size);
+    const ix = cx + s * 0.004; const iy = ey - 0.004; const ir = 0.078 * unit;
+    const ig = g.createRadialGradient(px(ix), py(iy), ir * 0.2, px(ix), py(iy), ir); ig.addColorStop(0, shade(hexMix(L.eye, '#c89a60', 0.25), 1.0)); ig.addColorStop(0.7, shade(L.eye, 0.9)); ig.addColorStop(1, shade(L.eye, 0.35)); g.fillStyle = ig; g.beginPath(); g.arc(px(ix), py(iy), ir, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(14,8,6,0.75)'; g.lineWidth = ir * 0.16; g.beginPath(); g.arc(px(ix), py(iy), ir * 0.96, 0, TAU); g.stroke(); // limbal ring
+    for (let k = 0; k < 26; k++) { const a = R() * TAU; g.strokeStyle = rgba(hexMix(L.eye, R() < 0.5 ? '#e0b070' : '#140c08', 0.5), 0.35); g.lineWidth = Math.max(0.6, ir * 0.04); g.beginPath(); g.moveTo(px(ix + Math.cos(a) * ir * 0.45 / unit), py(iy + Math.sin(a) * ir * 0.45 / unit)); g.lineTo(px(ix + Math.cos(a) * ir * 0.88 / unit), py(iy + Math.sin(a) * ir * 0.88 / unit)); g.stroke(); } // iris fibres
     g.fillStyle = '#0c0807'; g.beginPath(); g.arc(px(ix), py(iy), ir * 0.42, 0, TAU); g.fill();
     g.fillStyle = 'rgba(255,255,255,0.92)'; g.beginPath(); g.arc(px(ix - 0.03), py(iy + 0.03), ir * 0.2, 0, TAU); g.fill(); g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.arc(px(ix + 0.035), py(iy - 0.025), ir * 0.1, 0, TAU); g.fill();
-    const sh = g.createLinearGradient(0, py(ey + 0.1), 0, py(ey - 0.01)); sh.addColorStop(0, 'rgba(40,18,12,0.5)'); sh.addColorStop(1, 'rgba(40,18,12,0)'); g.fillStyle = sh; g.fillRect(0, py(ey + 0.1), size, py(ey - 0.01) - py(ey + 0.1)); // lid shadow
+    const sh = g.createLinearGradient(0, py(ey + 0.1), 0, py(ey - 0.01)); sh.addColorStop(0, 'rgba(40,18,12,0.3)'); sh.addColorStop(1, 'rgba(40,18,12,0)'); g.fillStyle = sh; g.fillRect(0, py(ey + 0.1), size, py(ey - 0.01) - py(ey + 0.1)); // lid shadow
     g.restore();
     g.strokeStyle = rgba('#1a0e0a', 0.95); g.lineCap = 'round'; g.lineWidth = unit * 0.02; g.beginPath(); for (let i = 0; i <= 16; i++) { const [x, y] = upper(i / 16); (i ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))); } g.stroke(); // upper lash line
     g.lineWidth = unit * 0.034; g.beginPath(); for (let i = 8; i <= 16; i++) { const [x, y] = upper(i / 16); (i > 8 ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))); } g.stroke(); // heavier toward the outer corner
-    g.strokeStyle = rgba(dark, 0.4); g.lineWidth = unit * 0.012; g.beginPath(); for (let i = 0; i <= 16; i++) { const [x, y] = lower(i / 16); (i ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))); } g.stroke();
+    g.strokeStyle = rgba(dark, 0.75); g.lineWidth = unit * 0.02; g.beginPath(); for (let i = 0; i <= 16; i++) { const [x, y] = lower(i / 16); (i ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))); } g.stroke();
     g.strokeStyle = rgba(dark, 0.32); g.lineWidth = unit * 0.014; g.beginPath(); for (let i = 1; i <= 15; i++) { const [x, y] = upper(i / 16); (i > 1 ? g.lineTo(px(x), py(y + 0.04)) : g.moveTo(px(x), py(y + 0.04))); } g.stroke(); // lid crease
     // brow: tapered, a little arched, painted as many small strokes
     const bc = hexMix(L.hair.color, '#150e0b', 0.4); const by = LANDMARK.browY;
-    for (let i = 0; i < 46; i++) { const t = R(); const bx = cx - s * 0.2 + s * 0.46 * t; const byy = by + 0.07 * Math.sin(Math.PI * Math.pow(t, 0.9)) - 0.04 * t; const th = (1 - Math.abs(t - 0.3) * 1.1) * 0.05; g.strokeStyle = rgba(bc, 0.5 + R() * 0.4); g.lineWidth = Math.max(1, unit * 0.011); g.beginPath(); g.moveTo(px(bx), py(byy - th * (R() - 0.5))); g.lineTo(px(bx + s * 0.05), py(byy + 0.02 + th * R())); g.stroke(); }
+    for (let i = 0; i < 120; i++) { const t = R(); const bx = cx - s * 0.2 + s * 0.46 * t; const byy = by - 0.035 + 0.06 * Math.sin(Math.PI * Math.pow(t, 0.9)) - 0.04 * t; const th = (1 - Math.abs(t - 0.3) * 1.1) * 0.05; g.strokeStyle = rgba(hexMix(bc, base, 0.22), 0.28 + R() * 0.4); g.lineWidth = Math.max(1, unit * 0.007); g.beginPath(); g.moveTo(px(bx), py(byy - th * (R() - 0.5))); g.lineTo(px(bx + s * 0.04), py(byy + 0.015 + th * R() * 0.8)); g.stroke(); }
   }
   g.restore();
 }
@@ -128,9 +130,20 @@ function paintMetal(g, c, cell, kind, R) {
   g.fillStyle = '#b8903c'; g.fillRect(x0, y0, c, c * 0.07); g.fillRect(x0, y0 + c * 0.93, c, c * 0.07); g.fillRect(x0, y0 + c * 0.46, c, c * 0.06);
   for (let i = 0; i < 12; i++) for (const yy of [0.035, 0.965, 0.49]) { g.fillStyle = 'rgba(60,40,10,0.7)'; g.beginPath(); g.arc(x0 + (i + 0.5) * c / 12, y0 + yy * c, 1.5 * u, 0, TAU); g.fill(); }
 }
+// Hair cell: strands run down the cell (v = crown to tip). Dark roots, many fine strands with a sheen band, grey flecks for age (via the base colour), and a
+// frayed lower edge cut into the alpha channel so the shell reads as wisps, not a swim cap (the atlas material alpha-tests, with alpha-to-coverage).
 function paintHair(g, c, cell, base, R) {
-  const [x0, y0] = cellRect(c, cell); const u = c / 128; g.fillStyle = shade(base, 0.9); g.fillRect(x0, y0, c, c);
-  for (let i = 0; i < 240; i++) { const x = x0 + R() * c; g.strokeStyle = R() < 0.55 ? rgba(hexMix(base, '#d8c8b0', 0.28 + R() * 0.2), 0.16 + R() * 0.2) : 'rgba(0,0,0,0.2)'; g.lineWidth = (0.6 + R() * 1.2) * u; g.beginPath(); g.moveTo(x, y0); g.quadraticCurveTo(x + (R() - 0.5) * 6 * u, y0 + c * 0.5, x + (R() - 0.5) * 4 * u, y0 + c); g.stroke(); }
+  const [x0, y0] = cellRect(c, cell); const u = c / 128; g.fillStyle = shade(base, 0.7); g.fillRect(x0, y0, c, c);
+  const lite = hexMix(base, '#e9d6b8', 0.34); const dk = hexMix(base, '#000000', 0.55);
+  for (let i = 0; i < 520; i++) {
+    const x = x0 + R() * c; const w = (0.5 + R() * 1.1) * u; const t = R();
+    const col = t < 0.5 ? rgba(dk, 0.35 + R() * 0.3) : t < 0.88 ? rgba(base, 0.5 + R() * 0.4) : rgba(lite, 0.18 + R() * 0.3);
+    g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(x, y0); g.bezierCurveTo(x + (R() - 0.5) * 5 * u, y0 + c * 0.33, x + (R() - 0.5) * 6 * u, y0 + c * 0.66, x + (R() - 0.5) * 4 * u, y0 + c); g.stroke();
+  }
+  const sh = g.createLinearGradient(0, y0, 0, y0 + c); sh.addColorStop(0, 'rgba(0,0,0,0.5)'); sh.addColorStop(0.18, 'rgba(0,0,0,0.12)'); sh.addColorStop(0.5, rgba(lite, 0.16)); sh.addColorStop(1, 'rgba(0,0,0,0.12)'); g.fillStyle = sh; g.fillRect(x0, y0, c, c); // dark roots, a sheen band
+  g.save(); g.globalCompositeOperation = 'destination-out'; // frayed ends: each strand column stops at its own length
+  for (let x = 0; x < c; x += Math.max(1, u * 0.9)) { const cut = y0 + c * (0.8 + R() * R() * 0.2); g.fillRect(x0 + x, cut, Math.max(1, u * 0.9), y0 + c - cut + 1); }
+  g.restore();
 }
 
 // ---- Shared maps: normal and roughness/occlusion/metal, from height fields computed per cell ----

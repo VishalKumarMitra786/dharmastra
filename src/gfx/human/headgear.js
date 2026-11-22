@@ -7,8 +7,8 @@ const sm = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 class Builder {
-  constructor() { this.pos = []; this.uv = []; this.idx = []; this.w = []; this.cell = CELL.hair; }
-  vert(x, y, z, a, b, weights) { this.pos.push(x, y, z); const [cx, cy] = this.cell; this.uv.push((cx + 0.03 + 0.94 * a) / 4, (cy + 0.03 + 0.94 * b) / 4); this.w.push(weights); return this.pos.length / 3 - 1; }
+  constructor() { this.pos = []; this.uv = []; this.idx = []; this.w = []; this.cell = CELL.hair; this.vr = [0, 1]; }
+  vert(x, y, z, a, b, weights) { this.pos.push(x, y, z); const [cx, cy] = this.cell; const [v0, v1] = this.vr; this.uv.push((cx + 0.03 + 0.94 * a) / 4, (cy + 0.03 + 0.94 * (v0 + (v1 - v0) * b)) / 4); this.w.push(weights); return this.pos.length / 3 - 1; }
   grid(nu, nv, fn, close = false) { // fn(i, j) -> [x, y, z, a, b, weights]; i around (0..nu), j along (0..nv)
     const base = this.pos.length / 3; const cols = close ? nu : nu + 1;
     for (let j = 0; j <= nv; j++) for (let i = 0; i < cols; i++) { const [x, y, z, a, b, w] = fn(i, j); this.vert(x, y, z, a, b, w); }
@@ -28,14 +28,18 @@ const P = (E, th, ph, s) => [Math.sin(th) * Math.sin(ph) * E.rx * s, E.cy + Math
 // Hairline: how far down the cap reaches at each angle (front forehead, ears, nape).
 const hairline = (ph, front = 0.95, side = 1.4, back = 2.0) => { const a = Math.abs(((ph + Math.PI) % TAU) - Math.PI); return a < Math.PI / 2 ? lerp(front, side, sm(a / (Math.PI / 2))) : lerp(side, back, sm((a - Math.PI / 2) / (Math.PI / 2))); };
 
-function cap(B, E, { scale = 1.04, front = 0.95, side = 1.4, back = 2.0, lon = 18, lat = 6, bump = 0.006, quiff = 0, part = 0, W }) {
+// A hair shell: an irregular hairline, locks that ripple the surface and a whorl at the crown. Two shells (a dense inner one and a looser outer one) give volume.
+function cap(B, E, { scale = 1.04, front = 0.95, side = 1.4, back = 2.0, lon = 28, lat = 8, bump = 0.006, quiff = 0, seed = 1, lock = 0.012, vlo = 0, vhi = 1, W }) {
+  const vr = B.vr; B.vr = [vlo, vhi];
   B.grid(lon, lat, (i, j) => {
-    const ph = (i / lon) * TAU; const tm = hairline(ph, front, side, back); const t = j / lat; const th = t * tm;
+    const ph = (i / lon) * TAU; const wob = 0.07 * Math.sin(ph * 5 + seed) + 0.05 * Math.sin(ph * 11 + seed * 2.3); const tm = hairline(ph, front, side, back) * (1 + wob); const t = j / lat; const th = t * tm;
     const taper = sm((t - 0.78) / 0.22); // the lower edge settles onto the skin
-    let s = scale + 0.012 * Math.sin(ph * 3 + th * 2) + bump * Math.sin(ph * 17 + th * 9) + quiff * Math.max(0, Math.cos(ph)) * (1 - t) * 0.9 - taper * (scale - 1.002) * 0.9;
-    s += part * Math.exp(-((ph - TAU / 2 * 0) ** 2)) * 0; // reserved
+    const lk = lock * (0.5 + 0.5 * Math.sin(ph * 13 + seed * 3 + 2.2 * Math.sin(th * 3.5 + ph))) * sm(t * 3); // locks
+    const whorl = 0.01 * Math.sin(ph * 2 + t * 9) * (1 - t);
+    let s = scale + lk + whorl + 0.012 * Math.sin(ph * 3 + th * 2) + bump * Math.sin(ph * 17 + th * 9) + quiff * Math.max(0, Math.cos(ph)) * (1 - t) * 0.9 - taper * (scale + lk - 1.002) * 0.9;
     const p = P(E, th, ph, s); return [p[0], p[1], p[2], i / lon, t, W(0, t, ph)];
   }, true);
+  B.vr = vr;
 }
 // A hanging strip (long hair, braid, cloth tail): `rows` rows down from a start, narrower toward the end, skinned along a chain of bones.
 function strip(B, { x0 = 0, y0, z0, width, length, rows, cols = 4, dz = -0.02, bow = 0.02, chain, parent = 'head', taper = 0.45, weave = 0, uvCell }) {
@@ -57,8 +61,8 @@ export function buildHeadgear(h, spec) {
   const headPos = [0, E.cy, E.cz];
   if (hair !== 'none' && hg !== 'turban' && hg !== 'helmet') {
     B.cell = CELL.hair;
-    if (hair === 'short') cap(B, E, { scale: 1.05, front: 0.92, side: 1.38, back: 1.95, quiff: 0.05, W: H });
-    else if (hair === 'crop') cap(B, E, { scale: 1.028, front: 0.98, side: 1.3, back: 1.7, bump: 0.003, W: H });
+    if (hair === 'short') { cap(B, E, { scale: 1.034, front: 0.95, side: 1.4, back: 2.0, lock: 0.004, seed: 1, W: H }); cap(B, E, { scale: 1.052, front: 0.86, side: 1.32, back: 1.85, quiff: 0.05, lock: 0.016, seed: 4, W: H }); }
+    else if (hair === 'crop') { cap(B, E, { scale: 1.02, front: 1.0, side: 1.3, back: 1.75, lock: 0.003, seed: 2, W: H }); cap(B, E, { scale: 1.034, front: 0.92, side: 1.22, back: 1.6, lock: 0.008, seed: 7, W: H }); }
     else if (hair === 'bun') { cap(B, E, { scale: 1.035, front: 0.9, side: 1.42, back: 1.9, bump: 0.004, W: H }); const bun = E; B.grid(8, 4, (i, j) => { const ph = (i / 8) * TAU; const th = (j / 4) * Math.PI; const r = 0.05; return [Math.sin(th) * Math.sin(ph) * r * 1.1, bun.cy + bun.ry * 0.62 + Math.cos(th) * r * 0.9, bun.cz - bun.rz * 0.92 - 0.02 + Math.sin(th) * Math.cos(ph) * r, i / 8, j / 4, [['head', 1]]]; }, true); }
     else if (hair === 'long' || hair === 'braid') {
       cap(B, E, { scale: 1.05, front: 0.9, side: 1.45, back: 2.05, bump: 0.005, W: H });

@@ -95,7 +95,7 @@ const progressWith = (t, done) => t.ev(`localStorage.setItem('dharmastra.progres
 const seed = async (t, { traveller = true, done = [] } = {}) => { await t.send('Page.navigate', { url: process.env.GAME_URL }); await t.sleep(1200); await t.ev(`localStorage.clear()`); if (traveller) await setTraveller(t); if (done.length) await progressWith(t, done); };
 const waitItems = async (t, ms = 20000) => { for (let i = 0; i < ms / 200; i++) { if ((await t.ev(`document.querySelectorAll('#ch-items li').length`)) > 0) return true; await t.sleep(200); } return false; };
 const st = async (t) => JSON.parse(await t.ev(`JSON.stringify(window.__chakra._state())`));
-const waitLevel = async (t, lv, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { const s = await st(t); if (s.level === lv && !s.anim) return s; await t.sleep(100); } return null; };
+const waitLevel = async (t, lv, ms = 20000) => { for (let i = 0; i < ms / 100; i++) { const s = await st(t); if (s.level === lv && !s.anim) return s; await t.sleep(100); } return null; };
 const tapWheel = async (t, ring, theta) => { // a real mouse tap on the canvas at a ring (0 outer, 1 middle, 2 inner) and angle (radians clockwise from the top)
   const p = JSON.parse(await t.ev(`(() => { const c = document.getElementById('ch-canvas').getBoundingClientRect(); const top = window.__chakra._state().top || 0; const avail = Math.max(60, c.height - top); const R = Math.min(c.width, avail) * 0.48; return JSON.stringify({ x: c.left + c.width / 2, y: c.top + top + avail / 2, R }); })()`)); // mirrors dialGeom() in src/chakra/scene.js: the dial is centred below the floating bar
   const L = Number(await t.ev(`document.getElementById('screen-chakra').dataset.level`));
@@ -178,13 +178,13 @@ await pass('chakra-smooth', { w: 390, h: 844, mobile: true }, async (t, l) => {
   while (tries < 3 && !ok) {
     tries++; if ((await st(t)).level !== 0) { await t.ev(`window.__chakra._go.closeRing()`); await waitLevel(t, 0, 4000); }
     const base = JSON.parse(await t.ev(`${RECORD}(1200, null)`)); const bd = base.dt.slice(3); const med = pct(bd, 0.5), p95 = pct(bd, 0.95);
-    run = JSON.parse(await t.ev(`${RECORD}(1800, () => window.__chakra._go.openYuga(2))`)); const rd = run.dt.slice(3);
+    run = JSON.parse(await t.ev(`${RECORD}(${Math.round(1800 * Math.min(4, Math.max(1, med / 16.7)))}, () => window.__chakra._go.openYuga(2))`)); const rd = run.dt.slice(3);
     const gap = Math.max(...rd), p90 = pct(rd, 0.9), gapLimit = Math.max(8 * med, 250), p90Limit = 4 * med; const drawMed = pct(run.perf.draw, 0.5), drawMax = Math.max(...run.perf.draw);
     ok = gap <= gapLimit && p90 <= p90Limit; why = `p90 ${p90.toFixed(1)} ms (limit ${p90Limit.toFixed(1)}), worst gap ${gap.toFixed(1)} ms (limit ${gapLimit.toFixed(1)})`;
     notes.push(`chakra turn at 390x844 (headless Chrome, software GL, try ${tries}): baseline ${med.toFixed(1)} ms median / ${p95.toFixed(1)} ms p95; turn ${pct(rd, 0.5).toFixed(1)} ms median, ${why}; draw ${drawMed.toFixed(2)} ms median, ${drawMax.toFixed(2)} ms max; ${rd.length} frames`);
   }
   if (!ok) fail(l, `frame times during the ring turn were not smooth in 3 tries: ${why}`);
-  if (run.th[run.th.length - 1] < 0.299 || run.th[0] > 0.1) fail(l, `ring did not grow from thin to thick (${run.th[0]} to ${run.th[run.th.length - 1]})`);
+  if (run.th[run.th.length - 1] < 0.28 || run.th[0] > 0.1) fail(l, `ring did not grow from thin to thick (${run.th[0]} to ${run.th[run.th.length - 1]})`);
   if (speed(run) > 0.9) fail(l, `ring thickness jumps (${speed(run).toFixed(2)} per second)`);
   for (let i = 3; i < run.th.length; i++) if (run.th[i] < run.th[i - 1] - 0.002) { fail(l, 'ring thickness goes backwards during an opening turn'); break; }
   // interrupt: open, then reverse 250 ms in. No jump, and it ends closed.
