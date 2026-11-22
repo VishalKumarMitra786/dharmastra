@@ -2,7 +2,8 @@
 import { resolveWalls } from './world.js';
 import { START_ABILITIES, COMBAT_BASICS, WEAPONS, WEAPON_ORDER, HURDLES, hasAbility, grantAbility, closeAbilities, bestWeapon, findCross, solidObstacles, underBeam, PREREQ } from './abilities.js';
 import { COMBAT, createProps, stepProps, tryPickupProp, dropHeld, startThrow, throwContext, twoHandCue, carryScale, createEnemies, createTargets, spawnEnemy, startAttack, stepAttack, lungeStep, stepFinisher, resolveSwing, stepEnemies, regenStamina, tryDodge, stepDodge, updateGuard, updateAim, stepArrows, stepEnemyArrows } from './combat.js';
-import { createObjectives, updateObjectives, objectivesStatus, tickWaves } from './objectives.js';
+import { createObjectives, updateObjectives, objectivesStatus, tickWaves, phaseSpawns } from './objectives.js';
+import { createStyle, feedStyle, tickStyle, rankResult } from './style.js';
 
 export const TUNING = {
   maxSpeed: 200, maxReverse: 80, accel: 260, brakeForce: 420, coast: 120, drag: 0.25,
@@ -57,6 +58,7 @@ export function createSim(world, { timerMode = 'standard', tuning = {}, abilitie
     sim.props = createProps(world);
     sim.pickups = world.pickups.map((k) => ({ ...k, taken: false }));
     sim.objectives = createObjectives(objectives ?? world.objectiveDefs, world.checkpoints.length);
+    sim.style = createStyle(); sim.result = null; // the style meter and, once won, the end rank (src/style.js)
   }
   sim.timeLeft = limitFor(sim);
   return sim;
@@ -113,7 +115,7 @@ function advance(sim, dt, controls, events) {
   if (sim.rules2) { stepEnemies(sim, dt, events); stepArrows(sim, dt, events); stepEnemyArrows(sim, dt, events); stepProps(sim, dt, events); for (const t of sim.targets) t.flash = Math.max(0, t.flash - dt); }
   wallHits(sim, events);
   checkpoints(sim, events);
-  if (sim.rules2) settleObjectives(sim, dt, events);
+  if (sim.rules2) { events.push(...tickStyle(sim.style, dt), ...feedStyle(sim.style, events)); settleObjectives(sim, dt, events); }
   sim.player.hp = sim.health;
   for (const e of events) queueFx(sim, e);
 }
@@ -121,7 +123,8 @@ function advance(sim, dt, controls, events) {
 function finish(sim, events, status, reason) {
   sim.status = status;
   sim.failReason = status === 'failed' ? reason : null;
-  events.push({ type: status === 'won' ? 'win' : 'fail', reason });
+  if (status === 'won' && sim.style) sim.result = rankResult(sim.style, sim.elapsed, sim.world.rank);
+  events.push({ type: status === 'won' ? 'win' : 'fail', reason, rank: sim.result?.rank });
 }
 
 function driveChariot(sim, dt, { steer = 0, throttle = 0 }) {
@@ -199,7 +202,14 @@ function settleObjectives(sim, dt, events) {
     e.aware = true; e.state = 'chase'; e.lastX = sim.chariot.x; e.lastY = sim.chariot.y;
     sim.enemies.push(e);
   }
+  for (const e of sim.enemies) if (e.wave && e.state !== 'down' && (e.state === 'patrol' || e.state === 'alert')) { e.state = 'chase'; e.stateT = 0; e.aware = true; e.lostT = 0; e.lastX = sim.chariot.x; e.lastY = sim.chariot.y; } // a wave never gives up the hunt or goes back to a patrol
   events.push(...wv.events);
+  for (const ev of events) for (const sp of phaseSpawns(sim.objectives, ev, { ts })) { // a captain's reinforcements arrive on the phase change
+    if (sim.enemies.length >= MAX_ENEMIES) break;
+    const e = spawnEnemy({ id: sp.id, kind: sp.kind, x: sp.x, y: sp.y, hp: sp.hp, angle: Math.atan2(sim.chariot.y - sp.y, sim.chariot.x - sp.x), wave: true }, sim.rng);
+    e.aware = true; e.state = 'chase'; e.lastX = sim.chariot.x; e.lastY = sim.chariot.y; sim.enemies.push(e);
+    events.push({ type: 'reinforce', id: sp.id, kind: sp.kind, x: sp.x, y: sp.y });
+  }
   for (const e of wv.events) if (e.type === 'wave-clear' && e.heal > 0 && sim.health > 0) { sim.health = Math.min(sim.t.maxHealth, sim.health + e.heal); events.push({ type: 'rest', amount: e.heal, health: sim.health }); } // a breath between waves
   for (const ch of wv.changes) events.push({ type: 'objective', id: ch.id, state: ch.state });
   const feed = events.filter((e) => e.type !== 'objective' && e.type !== 'win' && e.type !== 'fail');

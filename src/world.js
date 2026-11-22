@@ -27,6 +27,7 @@ export function parseLayout(layout) {
     rules: layout.rules === 2 ? 2 : 1, objectiveDefs: Array.isArray(layout.objectives) ? layout.objectives : null,
     tileSize: ts, cols, rows: rows.length, width: cols * ts, height: rows.length * ts,
     solid, walls: mergeWalls(solid, ts), start, checkpoints, guards, timeLimit: layout.timeLimit,
+    rank: layout.rank && typeof layout.rank === 'object' ? layout.rank : null, flow: Array.isArray(layout.flow) ? layout.flow : null, // style-rank goals and the ordered stages of a fight-driven level
     mode: layout.mode || 'chariot', theme: layout.theme || 'default', rowsText: rows,
   };
 }

@@ -46,6 +46,7 @@ export function stickVector(dx, dy, radius, dead = STICK_DEAD) {
 export function createInput({ stage, buttons, onPause, now, joystick = null, knob = null }) {
   const actions = createActionBuffer(now);
   const act = (names) => { if (state.enabled) names.forEach((n) => actions.press(n)); };
+  (typeof document !== 'undefined' && document.getElementById ? document.getElementById('prop-prompt') : null)?.addEventListener('pointerdown', (e) => { e.preventDefault(); act(['interact']); });
   const down = { left: new Set(), right: new Set(), up: new Set(), down: new Set(), run: new Set(), lookLeft: new Set(), lookRight: new Set(), block: new Set(), aim: new Set() };
   const latch = { block: false, aim: false, reset: false }; // a press shorter than one tick still counts once (reset: the camera-reset control)
   let drag = null; // the finger or mouse steering the walker (chariot mode) or the left-thumb stick

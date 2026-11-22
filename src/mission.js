@@ -1,7 +1,9 @@
 // Mission data loading, validation, and the runner that turns sim events into objectives and dialogue.
 import { ABILITY_IDS } from './abilities.js';
 const LABELS = ['History', 'Tradition', 'Invented'];
-const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'checkpoint-4', 'checkpoint-5', 'checkpoint-6', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen', 'ability', 'parry', 'finisher', 'wave-clear', 'captain-down', 'phase', 'prop-pickup', 'disarm'];
+const TRIGGERS = ['start', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'checkpoint-4', 'checkpoint-5', 'checkpoint-6', 'hit', 'fail', 'win', 'pickup', 'enemy-down', 'seen', 'ability', 'parry', 'finisher', 'wave-clear', 'captain-down', 'phase', 'prop-pickup', 'disarm', 'cliffhanger', 'rank-s', 'style-s'];
+const WAVE_TRIGGER = /^wave:[a-z0-9-]+:\d+$/; // wave:<objective id>:<wave number>, said when that wave starts (the captain's own entrance is wave:bridge:1)
+const validTrigger = (t) => TRIGGERS.includes(t) || WAVE_TRIGGER.test(t || '');
 const HIT_GAP = 5; // seconds between "hit" lines so captions do not spam
 
 export function validateMission(m) {
@@ -14,7 +16,7 @@ export function validateMission(m) {
   if (!Array.isArray(m.dialogue)) errors.push('"dialogue" must be an array');
   (m.dialogue || []).forEach((d, i) => {
     if (!str(d?.id) || !str(d?.speaker) || !str(d?.text)) errors.push(`dialogue[${i}] needs id, speaker and text`);
-    if (!TRIGGERS.includes(d?.trigger)) errors.push(`dialogue[${i}] has unknown trigger "${d?.trigger}"`);
+    if (!validTrigger(d?.trigger)) errors.push(`dialogue[${i}] has unknown trigger "${d?.trigger}"`);
   });
   if (!Array.isArray(m.events)) errors.push('"events" must be an array');
   (m.events || []).forEach((e, i) => {
@@ -59,6 +61,7 @@ export function createRunner(data, handlers = {}) {
   }
 
   return {
+    lines: (trigger) => data.dialogue.filter((d) => d.trigger === trigger), // every line of a trigger, in order (the cliffhanger is shown whole on the win screen)
     get total() { return data.objectives.length; },
     get objectiveIndex() { return index; },
     start() { lastHit = -Infinity; lastSeen = -Infinity; setObjective(0); say('start'); },
@@ -80,7 +83,9 @@ export function createRunner(data, handlers = {}) {
       else if (event.type === 'prop-pickup') say('prop-pickup');
       else if (event.type === 'disarm') say('disarm');
       else if (event.type === 'seen') { if (now - lastSeen >= HIT_GAP) { lastSeen = now; say('seen'); } }
-      else if (event.type === 'win') say('win');
+      else if (event.type === 'wave-start') say(`wave:${event.id}:${event.n}`);
+      else if (event.type === 'style-rank' && event.up && event.rank === 'S') say('style-s');
+      else if (event.type === 'win') { say('win'); if (event.rank === 'S') say('rank-s'); }
       else if (event.type === 'fail') say('fail');
     },
   };

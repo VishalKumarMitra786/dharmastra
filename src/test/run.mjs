@@ -80,7 +80,7 @@ test('legacy guards are gone: the old contact-damage guard list is always empty 
   const sim = fresh();
   assert.equal(sim.guards.length, 0); assert.equal(sim.invuln, 0);
   const sim2 = createSim(parseLayout(layout), { timerMode: 'off' });
-  assert.ok(sim2.enemies.length >= 5 && sim2.enemies.every((e) => e.kind !== 'target')); assert.equal(sim2.guards.length, 0);
+  assert.ok(sim2.enemies.every((e) => e.kind !== 'target')); assert.equal(sim2.guards.length, 0); // level 1 is fight-driven: its enemies arrive in waves (src/test/dvapara2.mjs)
 });
 test('checkpoints must be reached in order; reaching 3 wins', () => {
   const sim = fresh(); const cps = sim.world.checkpoints;
@@ -120,8 +120,8 @@ test('mission runner: objectives advance, triggers fire, hit lines are rate limi
   r.handle({ type: 'wall' }, 1); r.handle({ type: 'guard' }, 2); r.handle({ type: 'guard' }, 7);
   [1, 2, 3].forEach((n) => r.handle({ type: 'checkpoint', n }, 10));
   r.handle({ type: 'win' }, 11); r.handle({ type: 'fail' }, 12);
-  assert.deepEqual(said, ['start', 'hit', 'hit', 'checkpoint-1', 'checkpoint-2', 'checkpoint-3', 'win', 'fail']);
-  assert.deepEqual(objs, [['checkpoint-1', 0], ['checkpoint-2', 1], ['checkpoint-3', 2], [undefined, 3]]);
+  assert.deepEqual(said, ['start', 'hit', 'hit', 'win', 'fail']); // level 1 has no per-checkpoint lines: its fights speak (wave:, phase, captain-down)
+  assert.deepEqual(objs, [['bazaar', 0], ['rows', 1], ['bridge', 2], [undefined, 3]]);
 });
 test('loop runs fixed steps and stops', () => {
   let t = 0; const q = []; let updates = 0; let renders = 0;
@@ -138,7 +138,7 @@ test('renderer interface check and frame snapshot', () => {
   assert.equal(f.checkpoints[0].state, 'next'); assert.equal(f.checkpoints[2].state, 'later'); assert.equal(f.guards.length, 0, 'guards are enemies now');
 });
 test('bot can drive S->1->2->3 with guards removed (geometry is drivable)', () => {
-  const w = parseLayout(layout); const sim = createSim(w); sim.enemies = [];
+  const w = parseLayout(layout); const sim = createSim(w, { objectives: [] }); sim.enemies = []; // no fights: this checks the geometry only
   const path = routeTiles(w, w.start, w.checkpoints);
   const r = drive(sim, path);
   assert.equal(sim.status, 'won', `status ${sim.status} after ${r.t.toFixed(1)}s health ${sim.health}`);
@@ -277,7 +277,7 @@ for (const m of MISSIONS) {
     const w = parseLayout(lay);
     assert.equal(w.checkpoints.length, data.objectives.length);
     assert.equal(data.objectives.length, 3);
-    data.objectives.forEach((o, i) => assert.equal(o.id, `checkpoint-${i + 1}`));
+    if (m.id !== 'dvapara-escape') data.objectives.forEach((o, i) => assert.equal(o.id, `checkpoint-${i + 1}`)); // level 1 names its stages (bazaar, rows, bridge)
     const pts = [w.start, ...w.checkpoints];
     for (let i = 0; i < pts.length - 1; i++) assert.ok(reachable(w, pts[i], pts[i + 1]) > 0, `leg ${i}`);
     const open = (c, r) => w.solid[r]?.[c] === false;
@@ -371,7 +371,7 @@ test('walking: foot mode is on for both missions and the player stops at walls w
     const { layout: lay } = await import(`../../missions/${id}.js`);
     const w = parseLayout(lay);
     assert.equal(w.mode, 'foot', id);
-    const sim = createSim(w, { timerMode: 'off' });
+    const sim = createSim(w, { timerMode: 'off', objectives: [] }); // no waves: this is about walls
     for (let i = 0; i < 600; i++) step(sim, 1 / 60, { mx: 0, my: -1, run: true }); // push north into the wall for 10s
     assert.equal(sim.health, 100, `${id}: walls do not hurt on foot`);
     assert.ok(sim.chariot.y > sim.chariot.radius - 1, `${id}: stays inside the map`);
@@ -414,6 +414,7 @@ import { registerSangam } from './sangam.mjs'; registerSangam(test);
 import { registerPhase2 } from './phase2.mjs'; await registerPhase2(test);
 import { registerCombat2 } from './combat2.mjs'; await registerCombat2(test);
 import { registerProps } from './props.mjs'; registerProps(test);
+import { registerDvapara } from './dvapara2.mjs'; registerDvapara(test);
 import { registerChakra } from './chakra.mjs'; registerChakra(test);
 import { registerMonetize } from './monetize.mjs'; registerMonetize(test);
 // ================= UI rework: controls, HUD, menus, chakra rings =================

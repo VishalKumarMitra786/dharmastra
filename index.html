@@ -61,9 +61,12 @@
         <div id="stat-held" class="vital hold" role="status" aria-label="Holding nothing" hidden><svg class="i" aria-hidden="true" focusable="false"><use href="#i-hold"/></svg><span class="hcol"><span id="held-name" aria-hidden="true"></span><span class="bar" aria-hidden="true"><span id="held-fill"></span></span></span></div>
         <div id="stat-timer" class="vital tm" role="timer" aria-label="Time left" hidden><svg class="i" aria-hidden="true" focusable="false"><use href="#i-clock"/></svg><span id="timer-text"></span></div>
       </div>
+      <div id="boss" class="boss" role="meter" aria-label="Boss health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="" hidden><span id="boss-name" aria-hidden="true"></span><span class="bar" aria-hidden="true"><span id="boss-fill"></span></span><span id="boss-phase" aria-hidden="true"></span></div>
       <p id="hint" class="sr-only"></p>
       <ul id="objectives" class="sr-only" aria-label="Objectives" hidden></ul>
     </header>
+
+    <div id="style" class="style" role="group" aria-label="Style" data-active="0" data-rank="0" hidden><span id="style-rank" class="style-rank" aria-hidden="true">D</span><span class="style-col" aria-hidden="true"><span id="style-combo" class="style-combo"></span><span class="bar style-bar"><span id="style-fill"></span></span></span></div>
 
     <p id="tip" class="tip" role="status" hidden><svg class="i tip-i" aria-hidden="true" focusable="false"><use href="#i-tap"/></svg><span id="tip-text"></span></p>
     <div class="captions">
@@ -218,7 +221,7 @@
       <div class="field check"><input id="set-blood" type="checkbox" checked><label for="set-blood">Blood spatter</label></div>
       <div class="field"><label for="set-side">Action buttons</label><select id="set-side"><option value="right">Right</option><option value="left">Left</option></select></div>
       <div class="field"><label for="set-timer">Timer</label><select id="set-timer"><option value="off">Off</option><option value="standard">Standard (2:30)</option><option value="extended">Extended (5:00)</option></select></div>
-      <div class="field"><label for="set-graphics">Graphics</label><select id="set-graphics"><option value="3d">3D</option><option value="2d">2D</option></select><p id="gfx-note" class="note" role="status" hidden></p></div>
+      <div class="field"><label for="set-graphics">Graphics</label><select id="set-graphics"><option value="3d">3D view</option><option value="2d">Top view (2D)</option></select><p id="gfx-note" class="note" role="status" hidden></p></div>
       <div class="field"><label for="set-quality">Graphics quality</label><select id="set-quality" aria-describedby="set-quality-note"><option value="auto">Automatic</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select><p id="set-quality-note" class="note" role="status"></p></div>
       <div class="actions"><button class="btn primary" type="button" data-action="settings-back" data-autofocus>Back</button></div>
     </div>
@@ -228,8 +231,11 @@
     <div class="panel menu">
       <span class="dial" data-dial role="img" aria-label="Chakra"></span>
       <h2 id="win-title">Complete</h2>
+      <p id="win-rank" class="rank-big" role="img" aria-label="" hidden></p>
+      <p id="win-rankstats" class="rank-stats" hidden></p>
       <p id="win-line"></p>
       <p id="win-stats"></p>
+      <p id="win-cliff" class="cliff" hidden></p>
       <div id="win-notes"><h3>History and tradition</h3><ul id="win-events"></ul></div>
       <div class="actions"><button class="btn primary" type="button" data-action="retry" data-autofocus>Again</button><button class="btn" type="button" data-action="menu">Chakra</button></div>
     </div>

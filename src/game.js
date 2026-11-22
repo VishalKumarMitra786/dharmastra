@@ -6,6 +6,8 @@ import { createLoop } from './loop.js';
 import { createMinimap } from './minimap.js';
 import { loadProgress, saveProgress, recordCompletion } from './progress.js';
 import { bestWeapon } from './abilities.js';
+import { currentStage } from './objectives.js';
+import { RANKS } from './style.js';
 import { createOrbit, updateOrbit, relativeMove, FORWARD_UP, TPCAM } from './camera.js';
 
 const hashSeed = (id) => [...String(id)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
@@ -14,6 +16,7 @@ const FAIL_TEXT = { wrecked: 'Your chariot is wrecked.', defeated: 'You are over
 // Events the HUD already captions itself (hud.handleEvents). Every other audible event gets its caption line from audio.captionFor, so no sound is caption-less.
 const HUD_CAPTIONED = new Set(['vault', 'pickup', 'hit-enemy', 'enemy-down', 'enemy-fell', 'shove-hit', 'stagger', 'dodge', 'tired', 'climb', 'blocked', 'parry', 'guard-break', 'tap', 'whiff', 'shot', 'drawn', 'no-arrows', 'target-hit', 'weapon', 'refused', 'seen', 'hurt', 'ability']);
 const CAPTION_GAP = { swing: 1, shove: 1, windup: 0.4, 'enemy-swing': 99, 'enemy-arrow': 0.6, 'arrow-hit': 0.6 }; // seconds between captions of one kind (99 = never: the wind-up caption already said it)
+const CHATTER = new Set(['win', 'fail', 'cliffhanger', 'rank-s']); // lines shown on the end screens, not as live captions
 const SHAKE = { hurt: 0.6, finisher: 0.5, phase: 0.8, parry: 0.3, 'shield-break': 0.3, 'captain-down': 0.8 }; // screenshake per event; none at all under reduced motion
 
 export function createGame({ mission, world, renderer: initialRenderer, input, hud, screens, audio, settings, onSettings, dev = false }) {
@@ -29,6 +32,7 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
   let lastKit = '';
   let lastVitals = '';
   let lastObj = '';
+  let lastStage = '';
   const orbit = createOrbit();
   const usesOrbit = () => !!(renderer && renderer.orbit && world.mode === 'foot'); // third-person only with the 3D renderer on foot
   const camera = () => (usesOrbit() ? { yaw: orbit.yaw, pitch: orbit.pitch } : { yaw: FORWARD_UP, pitch: orbit.pitch });
@@ -50,13 +54,15 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const abilities = [...kit, ...lent];
     const weapon = abilities.includes(progress.weapon) ? progress.weapon : bestWeapon(abilities); // the weapon you last held, else the best you own
     sim = createSim(world, { timerMode: settings.timer, abilities, weapon, seed: hashSeed(mission.id) + attempt, reduceMotion: settings.reduceMotion });
-    lastKit = ''; lastObj = ''; lastVitals = '';
+    lastKit = ''; lastObj = ''; lastVitals = ''; lastStage = '';
+    hud.setStyle?.(null); hud.setBoss?.(null);
+    { const g = typeof document !== 'undefined' ? document.getElementById('game') : null; if (g?.dataset) g.dataset.fight = world.flow ? '1' : '0'; }
     effects = { shake: 0, flash: 0 };
     lastSay = {};
     hud.clearCaption();
     runner = createRunner(mission, {
-      onObjective: (o) => { if (o) { hud.setObjective(o.text); hud.announce(`Objective: ${o.text}`); } },
-      onSay: (line) => { lastSay[line.trigger] = line; if (line.trigger !== 'win' && line.trigger !== 'fail') hud.showCaption(line); },
+      onObjective: (o) => { if (o && !world.flow) { hud.setObjective(o.text); hud.announce(`Objective: ${o.text}`); } },
+      onSay: (line) => { lastSay[line.trigger] = line; if (!CHATTER.has(line.trigger)) hud.showCaption(line); },
     });
     orbit.yaw = sim.chariot.angle ?? FORWARD_UP; orbit.pitch = createOrbit().pitch; orbit.swing = null; orbit.fwdT = 0;
     syncCamera();
@@ -87,6 +93,13 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
     const list = sim.objectives.items.filter((o) => o.type !== 'reach' && (o.unlock || 0) <= sim.checkpoint).map((o) => ({ id: o.id, text: o.text, state: o.state, optional: o.optional, progress: ['collect', 'do', 'defeat', 'waves'].includes(o.type) ? { n: o.progress, total: o.goal } : null }));
     const okey = JSON.stringify(list);
     if (okey !== lastObj) { lastObj = okey; hud.setObjectives(list); }
+    if (world.flow) { // a fight-driven level: the one-line objective is the stage you are in (fight, run, fight, run, boss, run), with wave n/total beside it
+      const st = currentStage(sim.objectives, world.flow); const sk = JSON.stringify(st);
+      if (sk !== lastStage) { const was = lastStage ? JSON.parse(lastStage)?.id : null; lastStage = sk; if (st) { hud.setObjective(st.text, st.text, st.progress); if (st.id !== was) hud.announce(`Objective: ${st.text}`); } }
+    }
+    if (world.rank && sim.style) { const S = sim.style; hud.setStyle?.({ rank: RANKS[S.rank], index: S.rank, meter: S.meter / 100, combo: S.combo, peak: S.peak }); }
+    { const cap = sim.enemies.find((e) => e.kind === 'captain' && e.state !== 'down' && e.wave); const bo = sim.objectives.items.find((o) => o.boss && o.state === 'active');
+      hud.setBoss?.(cap && bo ? { name: bo.boss, hp: cap.hp / cap.maxHp, phase: cap.phaseNo, phases: 3 } : null); }
     const key = `${sim.abilities.join()}|${sim.player.weapon}|${sim.player.crouching}`;
     if (key !== lastKit) { lastKit = key; hud.setAbilities({ abilities: sim.abilities, weapon: sim.player.weapon, crouch: sim.player.crouching }); }
     const P = sim.player; const drawing = P.state === 'aim';
@@ -116,7 +129,9 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
 
   function updateHint() {
     const next = world.checkpoints[sim.checkpoint];
-    hud.tipFor?.(sim); // a one-icon tip the first time a vault, duck or dodge is needed
+    hud.tipFor?.(sim);
+    const foe = world.flow ? sim.enemies.filter((e) => e.state !== 'down').sort((a, b) => Math.hypot(a.x - sim.chariot.x, a.y - sim.chariot.y) - Math.hypot(b.x - sim.chariot.x, b.y - sim.chariot.y))[0] : null;
+    if (foe) { hud.setHint(foe.x - sim.chariot.x, foe.y - sim.chariot.y, 'Enemy', usesOrbit() ? orbit.yaw : undefined); return; } // in a fight the arrow points at the nearest enemy // a one-icon tip the first time a vault, duck or dodge is needed
     if (next) hud.setHint(next.x - sim.chariot.x, next.y - sim.chariot.y, `Checkpoint ${sim.checkpoint + 1}`, usesOrbit() ? orbit.yaw : undefined);
   }
 
@@ -146,7 +161,10 @@ export function createGame({ mission, world, renderer: initialRenderer, input, h
       if (!dev) { progress = recordCompletion(loadProgress(), mission.id, sim.elapsed, grants, bestWeapon(grants)); saveProgress(progress); }
       for (const a of grants) hud.announce(`New ability learned: ${a}.`);
       audio.play('win');
-      screens.showWin({ time: fmt(sim.elapsed), health: sim.health }, mission.events, lastSay.win);
+      const result = world.rank ? sim.result : null; const cliff = runner.lines('cliffhanger');
+      if (result) hud.announce(`Rank ${result.rank}. Best combo ${result.maxCombo}. Blows taken ${result.hurts}.`);
+      for (const l of cliff) hud.announce(`${l.speaker}: ${l.text}`);
+      screens.showWin({ time: fmt(sim.elapsed), health: sim.health }, mission.events, lastSay['rank-s'] || lastSay.win, { result, cliff });
     } else {
       audio.play('fail');
       screens.showFail(FAIL_TEXT[reason] || 'The mission failed.', lastSay.fail);

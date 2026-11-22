@@ -1,6 +1,7 @@
 // Objective state machine. Pure: feed it sim events, read the states. Win = every non-optional objective done.
 // do: perform a move N times (a teaching exercise): {event:'dodge', count:2, via?}. defeat: drive off N enemies (they are never killed).
 // waves (alias arena): hold a yard against rising waves: {waves:[[{kind,at:[col,row]}...],...], gap?, heal? (health given back when a wave is cleared, 0..50), unlock?|zone?}. Positions are in tile units; unlock = checkpoints reached first.
+// waves also take: after (id of an objective that must be done first), boss (name shown on the boss bar), reinforce ({2:[{kind,at}...]}: extra enemies that join when the captain of the wave enters that phase).
 // defeat-captain: bring down the captain, a mini boss with phases. Completes on the sim's 'captain-down' event (or any 'enemy-down' of kind captain).
 import { ENEMY_KINDS } from './combat.js';
 export const OBJECTIVE_TYPES = ['reach', 'collect', 'evade', 'do', 'defeat', 'waves', 'arena', 'defeat-captain'];
@@ -40,6 +41,14 @@ function validateWaves(d, i) {
   });
   if (d.heal != null && !(Number.isFinite(d.heal) && d.heal >= 0 && d.heal <= 50)) errors.push(`${at} heal must be 0..50`);
   if (d.gap != null && !(Number.isFinite(d.gap) && d.gap >= 0 && d.gap <= 30)) errors.push(`${at} gap must be 0..30 seconds`);
+  if (d.after != null && typeof d.after !== 'string') errors.push(`${at} after must be an objective id`);
+  if (d.reinforce != null) {
+    if (typeof d.reinforce !== 'object' || Array.isArray(d.reinforce)) errors.push(`${at} reinforce must be {phase: [enemies]}`);
+    else for (const [ph, list] of Object.entries(d.reinforce)) {
+      if (!['2', '3'].includes(ph) || !Array.isArray(list) || list.length < 1 || list.length > 4) { errors.push(`${at} reinforce.${ph} needs phase 2 or 3 and 1..4 enemies`); continue; }
+      list.forEach((en, k) => { if (!en || !ENEMY_KINDS.includes(en.kind) || !Array.isArray(en.at) || en.at.length !== 2 || !en.at.every(Number.isFinite)) errors.push(`${at} reinforce.${ph} enemy ${k + 1} needs kind and at:[col,row]`); });
+    }
+  }
   if (d.zone != null && !(d.zone && [d.zone.x, d.zone.y, d.zone.r].every(Number.isFinite))) errors.push(`${at} zone needs x, y, r`);
   return errors;
 }
@@ -58,7 +67,7 @@ export function createObjectives(defs, checkpointCount) {
 
 function item(d) {
   const goal = d.type === 'collect' || d.type === 'do' || d.type === 'defeat' ? d.count : d.type === 'evade' ? (d.max ?? 0) : d.type === 'waves' ? d.waves.length : 1;
-  const w = d.type === 'waves' ? { waves: d.waves, gap: Number.isFinite(d.gap) ? d.gap : 2.5, heal: Number.isFinite(d.heal) ? Math.max(0, Math.min(50, d.heal)) : 0, zone: d.zone || null, wave: -1, ids: [], timer: 0 } : {};
+  const w = d.type === 'waves' ? { waves: d.waves, gap: Number.isFinite(d.gap) ? d.gap : 2.5, heal: Number.isFinite(d.heal) ? Math.max(0, Math.min(50, d.heal)) : 0, zone: d.zone || null, after: d.after || null, boss: d.boss || null, reinforce: d.reinforce || null, wave: -1, ids: [], timer: 0 } : {};
   return { ...w, id: d.id, type: d.type, text: d.text || d.id, optional: !!d.optional, state: 'active', progress: 0, goal, kind: d.kind || null, target: cpIndex(d.target), unlock: Number.isInteger(d.unlock) ? d.unlock : 0, event: d.event || null, via: d.via || null, heavy: d.heavy ?? null };
 }
 
@@ -108,6 +117,7 @@ export function tickWaves(obj, ctx) {
   const out = { spawn: [], events: [], changes: [] };
   for (const o of obj?.items ?? []) {
     if (o.type !== 'waves' || o.state !== 'active') continue;
+    if (o.after && obj.items.find((x) => x.id === o.after)?.state !== 'done') continue;
     if (o.wave === -1) {
       const inZone = o.zone ? Math.hypot(ctx.px - o.zone.x * ctx.ts, ctx.py - o.zone.y * ctx.ts) <= o.zone.r * ctx.ts : true;
       if (ctx.checkpoint < o.unlock || !inZone) continue;
@@ -126,4 +136,24 @@ function startWave(o, n, ctx, out) {
   o.wave = n; o.timer = 0; o.ids = [];
   o.waves[n].forEach((en, k) => { const id = `${o.id}-${n + 1}-${k + 1}`; o.ids.push(id); out.spawn.push({ id, kind: en.kind, x: en.at[0] * ctx.ts, y: en.at[1] * ctx.ts, hp: en.hp }); });
   out.events.push({ type: 'wave-start', id: o.id, n: n + 1, total: o.waves.length });
+}
+
+// A captain entering phase 2 or 3 calls its reinforcements: returns spawns for the wave that holds that captain, and adds them to the wave so it is not clear until they are down.
+export function phaseSpawns(obj, ev, ctx) {
+  const spawn = [];
+  if (ev?.type !== 'phase') return spawn;
+  for (const o of obj?.items ?? []) {
+    if (o.type !== 'waves' || o.state !== 'active' || !o.reinforce || !o.ids.includes(ev.id)) continue;
+    (o.reinforce[ev.n] || []).forEach((en, k) => { const id = `${o.id}-p${ev.n}-${k + 1}`; o.ids.push(id); spawn.push({ id, kind: en.kind, x: en.at[0] * ctx.ts, y: en.at[1] * ctx.ts, hp: en.hp }); });
+  }
+  return spawn;
+}
+
+// The stage the player is in now, for the one-line objective: the first entry of `flow` (ids, in order) that is not done. Returns {id, text, progress:{n,total}|null} or null.
+export function currentStage(obj, flow) {
+  for (const id of flow || []) {
+    const o = obj?.items.find((x) => x.id === id);
+    if (o && o.state !== 'done') return { id, text: o.text, type: o.type, progress: o.type === 'waves' && o.wave >= 0 ? { n: Math.min(o.waves.length, o.wave + 1), total: o.waves.length } : null };
+  }
+  return null;
 }

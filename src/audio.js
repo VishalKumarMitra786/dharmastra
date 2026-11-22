@@ -15,7 +15,7 @@ export const CAPTIONS = {
   'enemy-swing': '[Swish: an enemy strikes]', arrow: '[Twang: an arrow is loosed]', 'arrow-hit': '[Thock: an arrow lands]', finisher: '[Crash: finishing blow]',
   horn: '[Horn: a call for help]', gong: '[Gong]', down: '[Fall: a soldier yields]', rest: '[Chime: a moment to breathe]', ping: '[Ping: an opening]',
   checkpoint: '[Chime: checkpoint]', win: '[Rising notes: mission complete]', fail: '[Falling notes: mission failed]', bump: '[Knock: a wall]',
-  grab: '[Rustle: you take an item]', drop: '[Clunk: an item is put down]', throw: '[Whoosh: a throw]', crack: '[Crack: an item breaks]', shatter: '[Crash: it shatters]', clatter: '[Clatter: a weapon is knocked away]',
+  chime: '[Rising chime: style rank up]', grab: '[Rustle: you take an item]', drop: '[Clunk: an item is put down]', throw: '[Whoosh: a throw]', crack: '[Crack: an item breaks]', shatter: '[Crash: it shatters]', clatter: '[Clatter: a weapon is knocked away]',
 };
 
 // sim event -> cue name (or null for silence)
@@ -36,7 +36,8 @@ export function cueFor(e) {
     case 'shot': case 'enemy-arrow': return 'arrow';
     case 'arrow-hit': return 'arrow-hit';
     case 'finisher': return 'finisher';
-    case 'call': case 'wave-start': return 'horn';
+    case 'call': case 'wave-start': case 'reinforce': return 'horn';
+    case 'style-rank': return e.up ? 'chime' : null;
     case 'phase': case 'captain-down': return 'gong';
     case 'enemy-down': case 'enemy-fell': return 'down';
     case 'rest': case 'wave-clear': return 'rest';
@@ -63,6 +64,8 @@ export function captionFor(e) {
   if (e?.type === 'prop-nothrow') return `[The ${(e.name || 'item').toLowerCase()} cannot be thrown]`;
   if (e?.type === 'windup') return `[Tick tick: ${kindName(e.kind)} winds up${e.unblockable ? ', cannot be blocked' : ''}]`;
   if (e?.type === 'phase') return `[Gong: the captain changes stance, phase ${e.n}]`;
+  if (e?.type === 'style-rank') return e.up ? `[Rising chime: style ${e.rank}]` : `[Style falls to ${e.rank}]`;
+  if (e?.type === 'reinforce') return `[Horn: a ${kindName(e.kind)} joins the fight]`;
   if (e?.type === 'wave-start') return `[Horn: wave ${e.n} of ${e.total}]`;
   if (e?.type === 'wave-clear') return `[Chime: wave ${e.n} cleared]`;
   if (e?.type === 'hit-enemy' && e.via) return CAPTIONS[cueFor(e)].replace('a hit lands', `${e.via === 'fists' ? 'fist' : e.via} hit`).replace('a strong hit', `strong ${e.via === 'fists' ? 'fist' : e.via} hit`);
@@ -84,6 +87,8 @@ export function announceFor(e) {
     case 'retreat': return 'An enemy falls back, hurt.';
     case 'phase': return `The captain changes stance. Phase ${e.n} of 3.`;
     case 'captain-down': return 'The captain yields.';
+    case 'style-rank': return `Style ${e.rank}.`;
+    case 'reinforce': return `A ${kindName(e.kind)} joins the captain.`;
     case 'wave-start': return `Wave ${e.n} of ${e.total}.`;
     case 'wave-clear': return `Wave ${e.n} cleared.${e.heal ? ' You catch your breath.' : ''}`;
     case 'enemy-arrow': return 'An archer looses an arrow.';
@@ -131,6 +136,7 @@ export const VOICES = {
   horn: (c, o, t) => { tone(c, o, t, { type: 'sawtooth', f0: 196, f1: 220, dur: 0.55, gain: 0.16, attack: 0.08 }); tone(c, o, t, { type: 'sawtooth', f0: 294, f1: 330, dur: 0.55, gain: 0.08, attack: 0.08 }); },
   gong: (c, o, t) => { for (const [f, g] of [[110, 0.4], [165, 0.25], [233, 0.15]]) tone(c, o, t, { f0: f, dur: 1.3, gain: g, attack: 0.01 }); },
   down: (c, o, t) => tone(c, o, t, { type: 'triangle', f0: 320, f1: 110, dur: 0.32, gain: 0.25 }),
+  chime: (c, o, t) => { tone(c, o, t, { f0: 880, dur: 0.22, gain: 0.16 }); tone(c, o, t + 0.09, { f0: 1175, dur: 0.22, gain: 0.16 }); tone(c, o, t + 0.18, { f0: 1568, dur: 0.35, gain: 0.14 }); },
   rest: (c, o, t) => { tone(c, o, t, { f0: 660, dur: 0.35, gain: 0.18 }); tone(c, o, t + 0.12, { f0: 880, dur: 0.4, gain: 0.16 }); },
   ping: (c, o, t) => tone(c, o, t, { f0: 1560, dur: 0.18, gain: 0.14 }),
   checkpoint: (c, o, t) => { tone(c, o, t, { f0: 523, dur: 0.18, gain: 0.2 }); tone(c, o, t + 0.14, { f0: 784, dur: 0.3, gain: 0.2 }); },

@@ -78,8 +78,10 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
     staminaItem: $('stat-stamina'), staminaFill: $('stamina-fill'), arrows: $('arrows-text'), arrowsItem: $('stat-arrows'),
     objList: $('objectives'), cue: $('cue'), fx: $('fx'), chapter: $('chapter'), chapterEra: $('chapter-era'), chapterTitle: $('chapter-title'),
     held: $('stat-held'), heldName: $('held-name'), heldFill: $('held-fill'), prompt: $('prop-prompt'), promptText: $('prop-prompt-text'),
+    style: $('style'), styleRank: $('style-rank'), styleCombo: $('style-combo'), styleFill: $('style-fill'), boss: $('boss'), bossName: $('boss-name'), bossFill: $('boss-fill'), bossPhase: $('boss-phase'), game: $('game'),
     tip: $('tip'), tipText: $('tip-text'), tipIcon: doc.querySelector?.('#tip use'),
   };
+  let countOwned = false; let styleKey = ''; let bossKey = ''; let styleRankShown = '';
   let captionTimer = 0;
   let chapterTimer = 0;
   let cueTimer = 0;
@@ -113,7 +115,7 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
     // Every objective with its progress, as text. List order is kept. Hidden when empty (old missions use setObjective only).
     setObjectives(list) {
       objectives = Array.isArray(list) ? list : [];
-      if (el.objCount) { // a small n/total badge on the chip for the first open objective that counts something (for example sacks)
+      if (el.objCount && !countOwned) { // a small n/total badge on the chip for the first open objective that counts something (for example sacks)
         const c = objectives.find((o) => (o.state || 'active') === 'active' && o.progress && o.progress.total != null);
         el.objCount.hidden = !c; if (c) el.objCount.textContent = `${c.progress.n ?? 0}/${c.progress.total}`;
       }
@@ -231,9 +233,32 @@ export function createHud(doc = document, { now = () => Date.now() / 1000, mode 
       for (const b of q('attack')) { if (held) b.setAttribute('aria-label', `Swing ${held.name} (J)`); else if (was && kit) b.setAttribute('aria-label', ATTACK_LABEL[kit.weapon] || 'Punch (J)'); }
       if (was !== holding && kit) { const sw = ['staff', 'sword', 'bow'].filter((w) => kit.abilities.includes(w)).length >= 2; for (const b of q('swap')) b.hidden = holding || !sw; }
     },
+    // Style meter (src/style.js): {rank 'D'..'S', index 0..4, meter 0..1, combo, peak} or null to hide it. The big letter and "x7" are text, the bar is a shape; the label names all three for a screen reader.
+    // It is not a live region (it changes every hit): rank changes are announced by the sim's 'style-rank' event instead.
+    setStyle(v) {
+      if (!el.style) return;
+      if (!v) { el.style.hidden = true; styleKey = ''; return; }
+      const pct = Math.round(clampN(v.meter, 0, 1) * 100); const combo = v.combo | 0;
+      const key = `${v.rank}|${combo}|${pct}`; if (key === styleKey) return; styleKey = key;
+      el.style.hidden = false; el.style.dataset.rank = String(v.index ?? 0); el.style.dataset.active = combo > 0 || pct > 0 ? '1' : '0';
+      el.styleRank.textContent = v.rank; el.styleCombo.textContent = combo > 1 ? `x${combo}` : ''; el.styleFill.style.width = `${pct}%`;
+      el.style.setAttribute('aria-label', `Style ${v.rank}${combo > 1 ? `, combo ${combo}` : ''}, meter ${pct} percent`);
+      if (styleRankShown !== v.rank) { if (styleRankShown && el.style.classList) { el.style.classList.remove('pop'); void el.style.offsetWidth; el.style.classList.add('pop'); } styleRankShown = v.rank; }
+    },
+    // Boss bar: {name, hp 0..1, phase, phases} or null. Name, "Phase 2/3" and the bar's fill are all visible text or shape; the meter's value text says the same.
+    setBoss(v) {
+      if (!el.boss) return;
+      if (!v) { if (!el.boss.hidden) { el.boss.hidden = true; bossKey = ''; if (el.game?.dataset) el.game.dataset.boss = '0'; } return; }
+      const pct = Math.round(clampN(v.hp, 0, 1) * 100); const key = `${v.name}|${pct}|${v.phase}`; if (key === bossKey) return; bossKey = key;
+      el.boss.hidden = false; if (el.game?.dataset) el.game.dataset.boss = '1';
+      el.bossName.textContent = v.name; el.bossFill.style.width = `${pct}%`; el.bossPhase.textContent = `Phase ${v.phase}/${v.phases}`;
+      el.boss.setAttribute('aria-label', `${v.name}, health`); el.boss.setAttribute('aria-valuenow', String(pct)); el.boss.setAttribute('aria-valuetext', `${pct} percent, phase ${v.phase} of ${v.phases}`);
+    },
     cue,
-    setObjective(text, short) {
+    setObjective(text, short, progress) {
       const t = short || chipText(text);
+      if (progress !== undefined) countOwned = true;
+      if (progress !== undefined && el.objCount) { el.objCount.hidden = !progress; if (progress) el.objCount.textContent = `${progress.n}/${progress.total}`; }
       if (el.objText) el.objText.textContent = t; if (el.objFull) el.objFull.textContent = text;
       if (el.objective) el.objective.title = text;
     },

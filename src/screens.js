@@ -52,9 +52,17 @@ export function createScreens(doc = document) {
     f.autoCentre.addEventListener('change', () => onChange({ autoCentre: f.autoCentre.checked }));
   }
 
-  function showWin(stats, events, line) {
+  // extra (optional): {result: the style rank result, cliff: [lines]}. A level with no rank shows neither block.
+  function showWin(stats, events, line, extra = {}) {
     $('win-line').textContent = line ? `${line.speaker}: ${line.text}` : '';
     $('win-stats').textContent = `${stats.time} \u00b7 health ${stats.health}`;
+    const r = extra.result; const rankEl = $('win-rank'); const rs = $('win-rankstats'); const cl = $('win-cliff');
+    if (rankEl) {
+      rankEl.hidden = !r; rankEl.textContent = r ? r.rank : ''; if (r) { rankEl.dataset.rank = r.rank; rankEl.setAttribute('aria-label', `Rank ${r.rank}`); }
+      rs.hidden = !r; rs.textContent = r ? `Style ${r.style} \u00b7 Best combo ${r.maxCombo} \u00b7 Parries ${r.parries} \u00b7 Blows taken ${r.hurts}` : '';
+      const lines = extra.cliff || []; cl.hidden = !lines.length;
+      cl.replaceChildren(...lines.map((l) => { const sp = doc.createElement('span'); sp.textContent = l.speaker === 'Far bank' || l.speaker === 'Scene' ? `[${l.text}]` : `${l.speaker}: ${l.text}`; return sp; }));
+    }
     const list = $('win-events');
     list.replaceChildren(...events.map((ev) => {
       const li = doc.createElement('li');

@@ -1,4 +1,6 @@
-// Layout and tuning for "Escape from Hastinapur". Text lives in dvapara-escape.json.
+// Layout and tuning for "Escape from Hastinapur" (docs/design/levels-v2.md, level 1). Text lives in dvapara-escape.json.
+// Fight-driven: there are no patrols. The road is a chain of fights that arrive in waves (mouth -> lamp rows -> canal bridge with Captain Kunjara), joined by three short runs.
+// `flow` is the order the one-line objective follows. A style meter (src/style.js) scores every hit, parry and finisher; `rank` sets what an S needs.
 // Rules 2: the traveller starts with bare hands (a fist combo, block, parry, roll and shove) and every watchman is armed. Nothing hurts by touch:
 // a watchman must wind up a visible blow (spear thrust, sword slash, shield bash) and you can roll, block, parry or win the exchange. At most two attack at once.
 // Legend: # wall, o pillar, . road, S start tile, 1 2 3 = top-left tile of a 2x2 checkpoint spot, in order.
@@ -36,20 +38,33 @@ export const layout = {
     '#..####..####..####........#',
     '#..####..####..####...oo...#',
     '#..####..####..####........#',
-    '#3.........................#',
+    '#........................3.#',
     '#..........................#',
     '############################',
   ],
   // Armed watchmen on patrol (kind: spearman = long thrust, swordsman = slash chains of 1 to 3, shield = guards its front, flank it or shove to break the guard).
-  guards: [
-    { kind: 'spearman', speed: 70, path: [[8, 2], [8, 7]] },
-    { kind: 'swordsman', speed: 70, path: [[20, 2], [20, 12]] },
-    { kind: 'spearman', speed: 65, path: [[26, 6], [26, 12]] },
-    { kind: 'swordsman', speed: 70, path: [[4, 17], [14, 17]] },
-    { kind: 'swordsman', speed: 60, path: [[2, 7], [8, 7], [8, 12], [2, 12]] },
-    { kind: 'shield', speed: 50, path: [[10, 12], [24, 12]] },
-  ],
+  guards: [], // fight-driven: every enemy arrives in a wave, aware and coming
+  flow: ['mouth', 'cp1', 'rows', 'cp2', 'bridge', 'cp3'],
+  rank: { style: 520, combo: 12, parSecs: 190, maxSecs: 320 },
   objectives: [
-    { id: 'arm', type: 'do', event: 'prop-pickup', count: 1, optional: true, text: 'Optional: pick up a stick or a pole (Do)' },
+    { id: 'cp1', type: 'reach', target: 'cp1', text: 'Run to Lamp Rows' },
+    { id: 'cp2', type: 'reach', target: 'cp2', text: 'Cross to the bridge' },
+    { id: 'cp3', type: 'reach', target: 'cp3', text: 'Out the east gate!' },
+    // 1. Bazaar mouth: one spearman (dodge, then hit back), then a spearman and a swordsman.
+    { id: 'mouth', type: 'waves', text: 'Break the watch', heal: 8, gap: 2, waves: [
+      [{ kind: 'spearman', at: [7.5, 1.5] }],
+      [{ kind: 'spearman', at: [8.5, 2.5] }, { kind: 'swordsman', at: [10.5, 1.5] }],
+    ] },
+    // 2. Lamp rows (the chase becomes a brawl): a shield wall, then three spears from three sides, then swords and a shield.
+    { id: 'rows', type: 'waves', after: 'mouth', unlock: 1, text: 'Hold Lamp Rows', heal: 14, gap: 2.5, waves: [
+      [{ kind: 'spearman', at: [19.5, 2.5] }, { kind: 'shield', at: [8.5, 6.5] }],
+      [{ kind: 'spearman', at: [20.5, 6.5] }, { kind: 'spearman', at: [8.5, 7.5] }, { kind: 'swordsman', at: [14.5, 7.5] }],
+      [{ kind: 'swordsman', at: [6.5, 2.5] }, { kind: 'swordsman', at: [22.5, 7.5] }, { kind: 'shield', at: [14.5, 6.5] }],
+    ] },
+    // 3. Canal bridge: Captain Kunjara. Phase 2 (the bell) brings two spearmen.
+    { id: 'bridge', type: 'waves', after: 'rows', unlock: 2, boss: 'Captain Kunjara', text: 'Beat Kunjara', heal: 0, waves: [
+      [{ kind: 'captain', at: [21.5, 12.5] }],
+    ], reinforce: { 2: [{ kind: 'spearman', at: [19.5, 9.5] }, { kind: 'spearman', at: [19.5, 12.5] }] } },
+    { id: 'arm', type: 'do', event: 'prop-pickup', count: 1, optional: true, text: 'Optional: grab a weapon (Do)' },
   ],
 };

@@ -2,151 +2,36 @@
  "id": "dvapara-escape",
  "era": "Dvapara Yuga",
  "title": "Escape from Hastinapur",
- "logline": "On a tense night before the great war, a young courier on foot must carry a villagers' plea for grain relief through Hastinapur's lantern-lit streets and out the east gate before dawn.",
+ "logline": "Spears in the Lamp Bazaar. Carry the grain plea out before dawn.",
  "objectives": [
-  {
-   "id": "checkpoint-1",
-   "text": "Reach the Lamp Bazaar and take on Suvrata and the sealed plea."
-  },
-  {
-   "id": "checkpoint-2",
-   "text": "Cross the canal bridge before the watch bells close it."
-  },
-  {
-   "id": "checkpoint-3",
-   "text": "Reach the East Gate before the first light of dawn."
-  }
+  { "id": "bazaar", "text": "Break the watch" },
+  { "id": "rows", "text": "Hold Lamp Rows" },
+  { "id": "bridge", "text": "Beat Kunjara" }
  ],
  "dialogue": [
-  {
-   "id": "start-1",
-   "speaker": "Bhadra",
-   "text": "The city is on edge. Keep your lamp low and your steps quiet, {name}.",
-   "trigger": "start"
-  },
-  {
-   "id": "start-2",
-   "speaker": "{name}",
-   "text": "Three stops, then the east road. I know the way.",
-   "trigger": "start"
-  },
-  {
-   "id": "cp1-1",
-   "speaker": "Suvrata",
-   "text": "Here. The plea from the farm villages. Hold the tablet flat and run.",
-   "trigger": "checkpoint-1"
-  },
-  {
-   "id": "cp1-2",
-   "speaker": "{name}",
-   "text": "Hold tight. The canal bridge is next.",
-   "trigger": "checkpoint-1"
-  },
-  {
-   "id": "cp2-1",
-   "speaker": "Suvrata",
-   "text": "The bells are ringing. Once the bridge lifts, we are stuck.",
-   "trigger": "checkpoint-2"
-  },
-  {
-   "id": "cp2-2",
-   "speaker": "{name}",
-   "text": "Across. Now the east gate, and the dawn is coming.",
-   "trigger": "checkpoint-2"
-  },
-  {
-   "id": "cp3-1",
-   "speaker": "Captain Dandaka",
-   "text": "Open the gate. I read your tablet. Those fields feed my kin too.",
-   "trigger": "checkpoint-3"
-  },
-  {
-   "id": "hit-1",
-   "speaker": "Suvrata",
-   "text": "A spear! Watch the wind-up and roll clear, {name}.",
-   "trigger": "hit"
-  },
-  {
-   "id": "hit-2",
-   "speaker": "{name}",
-   "text": "Steady. Raise your guard just as the blow lands, or step aside.",
-   "trigger": "hit"
-  },
-  {
-   "id": "fail-1",
-   "speaker": "Bhadra",
-   "text": "They caught you. Come back to the stable and try another lane.",
-   "trigger": "fail"
-  },
-  {
-   "id": "fail-2",
-   "speaker": "Suvrata",
-   "text": "We can still go. The watch changes at the bells. Wait for them.",
-   "trigger": "fail"
-  },
-  {
-   "id": "win-1",
-   "speaker": "Suvrata",
-   "text": "The plea will reach the village elders by morning. Thank you, {name}.",
-   "trigger": "win"
-  },
-  {
-   "id": "win-2",
-   "speaker": "{name}",
-   "text": "No glory in this. Just a road that stayed open.",
-   "trigger": "win"
-  },
-  {
-   "id": "seen-1",
-   "speaker": "Bhadra",
-   "text": "They have seen us. Roll if a blow comes, then answer with your hands.",
-   "trigger": "seen"
-  },
-  {
-   "id": "down-1",
-   "speaker": "Bhadra",
-   "text": "He yields. Do not follow him. The road is ahead.",
-   "trigger": "enemy-down"
-  },
-  {
-   "id": "parry-1",
-   "speaker": "Bhadra",
-   "text": "Good, you turned his own strength aside. Now strike while he is open.",
-   "trigger": "parry"
-  },
-  {
-   "id": "pr1",
-   "speaker": "Suvrata",
-   "text": "Anything in your hand is better than nothing, {name}. It will not last, so strike when it counts.",
-   "trigger": "prop-pickup"
-  }
+  { "id": "start-1", "speaker": "Suvrata", "text": "A spear! Roll clear, {name}. Then hit back.", "trigger": "start" },
+  { "id": "w-mouth-2", "speaker": "Suvrata", "text": "Grey cords on their wrists. Not the city watch.", "trigger": "wave:mouth:2" },
+  { "id": "w-rows-1", "speaker": "{name}", "text": "A shield. Shove it, then strike.", "trigger": "wave:rows:1" },
+  { "id": "w-rows-2", "speaker": "Suvrata", "text": "They circle you. Keep moving. Keep striking.", "trigger": "wave:rows:2" },
+  { "id": "w-bridge-1", "speaker": "Kunjara", "text": "The bridge is shut. Hand over the plea.", "trigger": "wave:bridge:1" },
+  { "id": "phase-1", "speaker": "Kunjara", "text": "Bell! Bring every spear!", "trigger": "phase" },
+  { "id": "phase-2", "speaker": "Kunjara", "text": "My shield is split. Still I stand.", "trigger": "phase" },
+  { "id": "boss-down", "speaker": "Kunjara", "text": "Enough. I yield. Go.", "trigger": "captain-down" },
+  { "id": "hit-1", "speaker": "Suvrata", "text": "Up! Keep moving. The plea is safe.", "trigger": "hit" },
+  { "id": "pr1", "speaker": "Suvrata", "text": "Anything in hand helps. It will not last.", "trigger": "prop-pickup" },
+  { "id": "fail-1", "speaker": "Suvrata", "text": "Again, {name}. The plea can wait a breath.", "trigger": "fail" },
+  { "id": "win-1", "speaker": "Captain Dandaka", "text": "Open the gate. Those fields feed my kin too.", "trigger": "win" },
+  { "id": "rank-s-1", "speaker": "Suvrata", "text": "That was a dance. Lamp-Runner, indeed.", "trigger": "rank-s" },
+  { "id": "cliff-1", "speaker": "Kunjara", "text": "Ulka sends word: another courier falls tonight.", "trigger": "cliffhanger" },
+  { "id": "cliff-2", "speaker": "Suvrata", "text": "The far torch just went out. Keep walking, {name}.", "trigger": "cliffhanger" },
+  { "id": "cliff-3", "speaker": "Far bank", "text": "A torch goes dark.", "trigger": "cliffhanger" }
  ],
  "events": [
-  {
-   "name": "Hastinapur Period II: Painted Grey Ware occupation (B. B. Lal)",
-   "year": "c. 1100-800 BCE",
-   "label": "History"
-  },
-  {
-   "name": "Hastinapur 2021-22 excavation reports an earlier Painted Grey Ware layer",
-   "year": "c. 1500-1000 BCE (as reported)",
-   "label": "History"
-  },
-  {
-   "name": "Traditional start of Kali Yuga, ending the Dvapara Yuga",
-   "year": "Legend",
-   "label": "Tradition"
-  },
-  {
-   "name": "Peace embassy to Hastinapura before the Kurukshetra war",
-   "year": "Legend",
-   "label": "Tradition"
-  },
-  {
-   "name": "{name} carries the villagers' grain plea out of the city",
-   "year": "Legend",
-   "label": "Invented"
-  }
+  { "name": "Hastinapur Period II: Painted Grey Ware occupation (B. B. Lal)", "year": "c. 1100-800 BCE", "label": "History" },
+  { "name": "Hastinapur 2021-22 excavation reports an earlier Painted Grey Ware layer", "year": "c. 1500-1000 BCE (as reported)", "label": "History" },
+  { "name": "The eve of the great war; Dvapara placement of the story", "year": "Legend", "label": "Tradition" },
+  { "name": "{name} carries the villagers' grain plea out of the city", "year": "Legend", "label": "Invented" },
+  { "name": "Suvrata, Captain Kunjara, Ulka, the Hunt and its grey cords", "year": "Legend", "label": "Invented" }
  ],
  "rewards": {
   "grants": [

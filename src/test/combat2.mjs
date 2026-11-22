@@ -46,7 +46,7 @@ export async function registerCombat2(test) {
       const w = parseLayout(layout);
       assert.equal(w.rules, 2, `${id} runs the combat rules`);
       const sim = createSim(w, { timerMode: 'off', abilities: FULL, weapon: 'sword' });
-      assert.ok(sim.enemies.length >= 1);
+      assert.ok(sim.enemies.length >= 1 || id === 'dvapara-escape', 'level 1 spawns its enemies in waves (tested in dvapara2.mjs)');
       for (const target of [...sim.enemies]) {
         sim.enemies.forEach(inert); // every enemy holds still and cannot attack: only the contact itself is under test
         at(sim, target.x, target.y, 0);
@@ -80,7 +80,7 @@ export async function registerCombat2(test) {
       const sim = createSim(w, { timerMode: 'off', abilities: FULL, weapon: 'sword', seed: 5 });
       const winds = {}; const swings = {}; let hurts = 0;
       const near = (sim.enemies.filter((e) => e.kind !== 'sparrer')[0]) || sim.enemies[0];
-      at(sim, near.x - 70, near.y, 0);
+      if (near) at(sim, near.x - 70, near.y, 0); // level 1 has none yet: its waves come to the bot
       for (let i = 0; i < 60 * 60 && sim.status === 'playing'; i++) {
         const c = sim.chariot;
         const e = sim.enemies.filter((x) => x.state !== 'down' && x.kind !== 'sparrer').sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
@@ -557,8 +557,8 @@ export async function registerCombat2(test) {
       const pts = [w.start, ...w.checkpoints]; for (let i = 0; i < pts.length - 1; i++) assert.ok(reachable(w, pts[i], pts[i + 1]) > 0, `${id} leg ${i}`);
     }
     const dv = await here('dvapara-escape'); const dsim = createSim(parseLayout(dv.layout), { timerMode: 'off' });
-    assert.equal(dsim.player.weapon, 'none'); assert.ok(!dsim.abilities.includes('staff')); assert.ok(dsim.enemies.length >= 5);
-    assert.ok(new Set(dsim.enemies.map((e) => e.kind)).size >= 3, 'spears, swords and a shield'); assert.ok(types(run(dsim, 0.3, {}, { attack: true })).includes('swing'), 'fists work on level 1');
+    assert.equal(dsim.player.weapon, 'none'); assert.ok(!dsim.abilities.includes('staff')); const wv = dv.layout.objectives.filter((o) => o.type === 'waves').flatMap((o) => o.waves.flat()); assert.ok(wv.length >= 10, 'level 1 is a chain of waves');
+    assert.ok(new Set(wv.map((e) => e.kind)).size >= 4, 'spears, swords, shields and a captain'); assert.ok(types(run(dsim, 0.3, {}, { attack: true })).includes('swing'), 'fists work on level 1');
     const my = await here('mauryan-spy'); const ms = parseLayout(my.layout); assert.ok(my.layout.objectives.some((o) => o.type === 'evade'), 'stealth objective stays');
     assert.ok(createSim(ms, { timerMode: 'off' }).enemies.length >= 5);
   });
