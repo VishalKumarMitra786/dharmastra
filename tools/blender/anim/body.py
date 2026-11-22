@@ -51,7 +51,7 @@ def build(c, grips=None):
         tgt = Oc + Rc @ Vector((c[f'{s}H_x'], c[f'{s}H_y'], c[f'{s}H_z']))
         if s == 'L' and c['grip2'] > 0:   # two hands on one shaft: the left hand sits on the weapon, grip2 metres along it from the right hand
             tgt = Wc['hand_R'].translation + wdir(c['RW_yaw'], c['RW_pitch']) * c['grip2']
-        J = Wc[f'shoulder_{s}'] @ OFF[f'upperarm_{s}']; dv = tgt - J; RMAX = 0.425           # the arm is 0.447 m long: never ask for more than 95 percent of it
+        J = Wc[f'shoulder_{s}'] @ OFF[f'upperarm_{s}']; dv = tgt - J; RMAX = 0.95 * (OFF[f'forearm_{s}'] + rx(0.96) @ OFF[f'hand_{s}']).length           # never ask for more than 95 percent of the straight arm
         RMIN = (OFF[f'forearm_{s}'] + rx(-1.7) @ OFF[f'hand_{s}']).length + 0.004            # and no closer than the folded elbow allows
         if dv.length > RMAX: P.clamp = max(P.clamp, dv.length - RMAX); tgt = J + dv.normalized() * RMAX
         elif dv.length < RMIN: P.clamp = max(P.clamp, RMIN - dv.length); tgt = J + dv.normalized() * RMIN
@@ -69,6 +69,11 @@ def build(c, grips=None):
             zh = n; yh = zh.cross(xh).normalized(); zh = xh.cross(yh).normalized()
             Rd = Matrix((xh, yh, zh)).transposed()
             P.rot[f'hand_{s}'] = euler_of(Rf.transposed() @ Rd)
+    if c['grip2'] > 0:   # torso check: how far the shaft between the two hands runs inside the chest (ellipse 0.16 x 0.11 m, 0.5 m tall)
+        W = fk(P); Oc = W['chest'] @ Vector((0, 0.091, 0.022)); Rc = W['chest'].to_3x3().transposed(); a0 = W['hand_R'].translation; a1 = W['hand_L'].translation
+        for i in range(11):
+            q = Rc @ (a0.lerp(a1, i / 10) - Oc); r = math.hypot(q.x / 0.16, q.z / 0.11)
+            if r < 1 and abs(q.y) < 0.25: P.shaft = max(P.shaft, (1 - r) * 0.11)
     # feet
     lift = P.root[1]
     for it in range(3):
@@ -131,7 +136,7 @@ class Clip:
             if travel:  # feet were keyed in world space: subtract how far the entity has moved
                 d = travel(t); c['LF_z'] -= d; c['RF_z'] -= d
             frames.append(build(c))
-        ex = dict(self.meta); ex['loop'] = self.loop; ex['dur'] = round(self.dur, 4); ex['ikres_mm'] = round(max(f.res for f in frames) * 1000, 1); ex['clamp_mm'] = round(max(f.clamp for f in frames) * 1000, 1); ex['legres_mm'] = round(max(f.resl for f in frames) * 1000, 1)
+        ex = dict(self.meta); ex['loop'] = self.loop; ex['dur'] = round(self.dur, 4); ex['ikres_mm'] = round(max(f.res for f in frames) * 1000, 1); ex['shaft_mm'] = round(max(getattr(f,'shaft',0) for f in frames) * 1000, 1); ex['clamp_mm'] = round(max(f.clamp for f in frames) * 1000, 1); ex['legres_mm'] = round(max(f.resl for f in frames) * 1000, 1)
         return {'name': self.name, 'fps': self.fps, 'frames': frames, 'extras': ex, 'travel': travel}
 
 

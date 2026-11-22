@@ -68,3 +68,11 @@ Worst three flaws found in r6 and status:
 3. Palisade is no longer a black comb (timber tone, tapered stakes) but sits in shade as dark red-brown; reads as timber, still heavy.
 Done: warm sun/sky gradient with glow, lamp pools batched (one InstancedMesh + one Points), bench.js guard (aborts on slow call), shadow casters limited to big forms, kit LOD1 off-High.
 Counts (Medium, incl. shadow pass): 390x844 135 calls / 250k tris; 1280x800 150 calls / 267k tris. Tri budget (150k) still exceeded: skinned people ~87k (human area), palisade/kit wood, shadow pass. Distance LOD for merged static meshes not built.
+
+## Character artist round 5
+Worst three flaws found, then fixed or reported:
+1. Crown and back of the head showed bare skin between hair cards. Cause: the scalp tint was off whenever the hero wore any headgear, and the hairline mask stopped at the temples. Fixed: the tint follows whether a hair mesh exists, the mask now covers the sides, the tint is nearly opaque. In-game from behind the crown is now dark hair, but a skin-coloured gap remains at the nape and the cards still read as blocky dark patches (alpha cut-outs are too wide).
+2. Right-hand finger curl had the wrong sign (the right hand is the mirrored mesh): a sword was held by straight fingers. Fixed in grips.js; props now sit at the palm, not the wrist. Checked in a close-up render for the sword; staff, spear, bow and torch were not re-checked.
+3. Arms were 17-20% short. build-hero.mjs now stretches the shoulder-to-wrist span by ARM_K = 1.2 (hand rigid), bones and mesh together, bone names and hierarchy unchanged: shoulder to wrist 0.416 m to 0.500 m. hero.glb is 77 KB gz. The animator must rebuild the clips (tools/blender/anim/build.py) and re-tune two-handed grips.
+Also: pack heads are capped (High 8, Medium 3, hero and bosses always); far (lod >= 2) humans fall back to the base head, near ones take a free slot. src/test/highpack.mjs covers pack-load failure and the cap/LOD swap.
+Not done this round: sandals, new hand mesh, Blender turban/kurta/dhoti fold maps, 14-identity sheet.

@@ -14,6 +14,7 @@ import './render1.mjs';
 import './hero-assets.mjs';
 import './anim-clips.mjs';
 import './tier.mjs';
+import './highpack.mjs';
 
 const results = [];
 const queue = [];

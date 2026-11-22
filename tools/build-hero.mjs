@@ -20,6 +20,7 @@ const CACHE = process.env.HERO_CACHE || '/tmp/hero-cache';
 const RAW = 'https://raw.githubusercontent.com/makehumancommunity/makehuman/master/';
 const OUT = join(ROOT, 'assets/characters');
 // Target triangles. The whole hero (soldier with armour and a helmet) must stay under about 6,000 including headgear.
+const ARM_K = 1.2; // arm length factor, see the stretch below
 const BODY_TARGET = { head: 1500, hands: 1000, armup: 120, torso: 520, thigh: 140, shin: 180, foot: 72 };
 const GARMENT_TARGET = { tunic: 650, sash: 96, cuirass: 360, dhoti: 360, dhotiLong: 420, shoes: 240 };
 
@@ -323,11 +324,17 @@ async function main() {
       default: return frac(cyl(0, 1), hy(-8.5, 8.6), CELL.skin);
     }
   };
+  // Arms 20% longer (MakeHuman's arms total only 0.447 m shoulder to wrist; a real arm is about 25% longer, and two-handed grips need the reach): positions along the
+  // shoulder-to-wrist axis scale by ARM_K up to the wrist and the hand moves rigidly. Weighted by how much of a vertex belongs to the arm chain, so the shoulder blends into the torso.
+  const armSet = new Set([...idxOf('upperarm01'), ...idxOf('lowerarm01'), ...idxOf('wrist'), ...idxOf('finger')]);
+  const armAxis = {}; for (const sd of SIDES) { const S = plan.headOf('upperarm01.' + sd); const Wr = plan.headOf('wrist.' + sd); const d = [Wr[0] - S[0], Wr[1] - S[1], Wr[2] - S[2]]; const L = Math.hypot(...d); armAxis[sd] = { S, u: d.map((v) => v / L), L }; }
+  const armShift = (p, sd, w) => { const { S, u, L } = armAxis[sd]; const sPar = (p[0] - S[0]) * u[0] + (p[1] - S[1]) * u[1] + (p[2] - S[2]) * u[2]; const m = (ARM_K - 1) * Math.max(0, Math.min(sPar, L)) * w; return [p[0] + u[0] * m, p[1] + u[1] * m, p[2] + u[2] * m]; };
   for (const { sh, name } of parts) {
     const n = sh.P.length / 3; const isBody = name === 'body'; const start = io;
     for (let k = 0; k < n; k++) {
       const o = vo + k; const x = sh.P[k * 3]; const y = sh.P[k * 3 + 1]; const z = sh.P[k * 3 + 2];
-      pos[o * 3] = Math.round(x / 10 * 2048) / 2048; pos[o * 3 + 1] = Math.round((y - yFloor) / 10 * 2048) / 2048; pos[o * 3 + 2] = Math.round(z / 10 * 2048) / 2048;
+      const aw = sh.W[k].reduce((a, [b, w]) => a + (armSet.has(b) ? w : 0), 0); const [px, py, pz] = aw > 0 ? armShift([x, y, z], x > 0 ? 'L' : 'R', aw) : [x, y, z];
+      pos[o * 3] = Math.round(px / 10 * 2048) / 2048; pos[o * 3 + 1] = Math.round((py - yFloor) / 10 * 2048) / 2048; pos[o * 3 + 2] = Math.round(pz / 10 * 2048) / 2048;
       for (let c = 0; c < 3; c++) nor[o * 4 + c] = Math.round(Math.max(-1, Math.min(1, sh.N[k * 3 + c])) * 127);
       const headVert = isBody && GROUP_OF.get(sh.dom[k]) === 'head';
       const [u, v] = uvOf({ slot: sh.slot, name, uv: sh.uv, headVert }, x, y, z); uvs[o * 2] = Math.round(u * 65535); uvs[o * 2 + 1] = Math.round(v * 65535);
@@ -349,7 +356,7 @@ async function main() {
   const headFrame = { top: my(hyb.max), chin: my(6.15), eye: my(7.27), brow: my(7.55), mouth: my(6.45), nose: my(6.85), cx: 0, rx: m((hx.max - hx.min) / 2), zBack: m(hz.min), zFront: m(hz.max), earY: my(7.0), faceCell: { ...FACE, unit: 'dm in the base mesh, y raw' } };
 
   // ---------------- skeleton ----------------
-  const bones = KEEP.map((mh) => { const h = plan.headOf(mh); return { mh, name: gameName(mh), world: [h[0] / 10, (h[1] - yFloor) / 10, h[2] / 10], parent: plan.keepParent(mh) }; });
+  const bones = KEEP.map((mh) => { let h = plan.headOf(mh); if (/^(upperarm01|lowerarm01|wrist|finger)/.test(mh)) h = armShift(h, mh.slice(-1), 1); return { mh, name: gameName(mh), world: [h[0] / 10, (h[1] - yFloor) / 10, h[2] / 10], parent: plan.keepParent(mh) }; });
   writeGlb({ bones, pos, nor, uvs, paint, jnt, wgt, idx, manifest, extras: { shells: shellTable, groups: groupsOut, head: headFrame, cells: CELL, slotCell: SLOT_CELL, atlasCells: 4, floorDm: +yFloor.toFixed(4), note: 'Index table for variants: a human is the body groups it shows plus the garment shells it wears. Positions are rounded to 1/2048 m.' } });
   mkdirSync(OUT, { recursive: true });
   copyFileSync(join(CACHE, 'LICENSE.md'), join(OUT, 'makehuman-LICENSE.md')); copyFileSync(join(CACHE, 'LICENSE.ASSETS.md'), join(OUT, 'makehuman-LICENSE.ASSETS.md'));

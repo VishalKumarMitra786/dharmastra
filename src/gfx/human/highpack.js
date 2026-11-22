@@ -76,7 +76,7 @@ export function createHeadMaterials(THREE, pack) {
         .replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb *= mix( 0.6, 1.0, vVd.x );')
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         { float hairMask = clamp( texelRoughness.b * uBeard + smoothstep( 0.25, 0.95, vVd.z ) * uScalp, 0.0, 1.0 );
-          diffuseColor.rgb = mix( diffuseColor.rgb, uHair * 0.5, hairMask * 0.97 ); roughnessFactor = mix( roughnessFactor, 0.8, hairMask ); }`)
+          diffuseColor.rgb = mix( diffuseColor.rgb, uHair * 0.5, hairMask * 0.97 ); roughnessFactor = mix( roughnessFactor, 1.0, hairMask ); }`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         { float rim = pow( 1.0 - saturate( dot( normalize( vViewPosition ), normal ) ), 2.0 );
           totalEmissiveRadiance += diffuseColor.rgb * vec3( 1.0, 0.30, 0.16 ) * ( 0.025 + 0.16 * rim + 0.35 * vVd.y );
@@ -92,7 +92,7 @@ export function createHeadMaterials(THREE, pack) {
   }
   function cardMaterial(L) {
     const key = L.hair.color; let m = cardCache.get(key); if (m) return m;
-    m = new THREE.MeshStandardMaterial({ map: pack.tex.cards, color: new THREE.Color(L.hair.color), roughness: 0.55, metalness: 0, alphaTest: 0.35, alphaToCoverage: true, side: THREE.DoubleSide, envMapIntensity: 0.8 });
+    m = new THREE.MeshStandardMaterial({ map: pack.tex.cards, color: new THREE.Color(L.hair.color), roughness: 0.7, metalness: 0, alphaTest: 0.35, alphaToCoverage: true, side: THREE.DoubleSide, envMapIntensity: 0.8 });
     m.color.multiplyScalar(1.0); cardCache.set(key, m); return m;
   }
   function mouthMaterial() { return (mouthMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0, envMapIntensity: 1 })); }

@@ -9,5 +9,5 @@ export const GRIP_POSES = {
 // Sets the finger bones of one hand to a named pose, blended with weight w (1 = fully). side 'L' | 'R'.
 export function applyGrip(bones, side, name, w = 1) {
   const g = GRIP_POSES[name] || GRIP_POSES.relaxed; const s = side === 'L' ? 1 : -1; const F1 = bones['fingers_' + side]; const F2 = bones['fingers2_' + side]; const T = bones['thumb_' + side];
-  if (F1) F1.rotation.x += (g.f - F1.rotation.x) * w; if (F2) F2.rotation.x += (g.f2 - F2.rotation.x) * w; if (T) { T.rotation.x += (g.t[0] - T.rotation.x) * w; T.rotation.z += (s * g.t[1] - T.rotation.z) * w; }
+  const c = side === 'L' ? 1 : -1; /* the right hand is the mirrored mesh: curl about x turns the other way */ if (F1) F1.rotation.x += (c * g.f - F1.rotation.x) * w; if (F2) F2.rotation.x += (c * g.f2 - F2.rotation.x) * w; if (T) { T.rotation.x += (g.t[0] - T.rotation.x) * w; T.rotation.z += (s * g.t[1] - T.rotation.z) * w; }
 }

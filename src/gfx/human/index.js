@@ -29,7 +29,7 @@ export function parseGlb(buf) {
 
 // tier: 'low' keeps the 1,500-triangle head of hero.glb; 'medium' and 'high' lazily load the Blender head pack (assets/characters/high) after the kit exists and swap
 // every live human's head when it arrives (high uses the larger skin maps). waitHigh: resolve only after the pack is loaded (studio shots, tests).
-export async function createHumanKit(THREE, { url = new URL('../../../assets/characters/hero.glb', import.meta.url).href, atlas = 512, anisotropy = 4, buffer, tier, highBase = new URL('../../../assets/characters/high/', import.meta.url).href, waitHigh = false } = {}) {
+export async function createHumanKit(THREE, { url = new URL('../../../assets/characters/hero.glb', import.meta.url).href, atlas = 512, anisotropy = 4, buffer, tier, highBase = new URL('../../../assets/characters/high/', import.meta.url).href, waitHigh = false, maxHigh } = {}) {
   if (!tier) tier = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent || '') ? 'medium' : 'high';
   const buf = buffer || await (await fetch(url)).arrayBuffer(); const { json, acc } = parseGlb(buf); const ex = json.asset.extras;
   const prim = json.meshes[0].primitives[0]; const nv = json.accessors[prim.attributes.POSITION].count;
@@ -52,8 +52,10 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
 
   const geoCache = new Map(); const matCache = new Map(); const atlasCache = new Map();
   // ---- the lazily loaded head pack ----
+  // how many humans may wear the heavy head at once (about 9k to 20k triangles and 4 draw calls each): the hero and bosses always do, the rest by free slot, far ones fall back to the cheap head
+  const cap = maxHigh ?? (tier === 'high' ? 8 : tier === 'medium' ? 3 : 0); let active = 0;
   let high = null; const humans = new Set(); const headCache = new Map();
-  const highReady = tier === 'low' ? Promise.resolve(null) : Promise.all([loadHighPack(THREE, { parse: parseGlb, base: highBase, size: 1024, anisotropy }), loadHairPack(THREE, { parse: parseGlb, base: highBase, anisotropy })]).then(([pack, hairPack]) => { high = { pack, hairPack, mats: createHeadMaterials(THREE, pack), hairMats: new Map() }; for (const h of humans) h.upgradeHead?.(); return high; }).catch((e) => { console.warn('high head pack unavailable, keeping the base heads', e); return null; });
+  const highReady = tier === 'low' ? Promise.resolve(null) : Promise.all([loadHighPack(THREE, { parse: parseGlb, base: highBase, size: 1024, anisotropy }), loadHairPack(THREE, { parse: parseGlb, base: highBase, anisotropy })]).then(([pack, hairPack]) => { high = { pack, hairPack, mats: createHeadMaterials(THREE, pack), hairMats: new Map() }; for (const h of [...humans].sort((a, b) => b.priority - a.priority)) h.upgradeHead?.(); return high; }).catch((e) => { console.warn('high head pack unavailable, keeping the base heads', e); return null; });
   if (waitHigh) await highReady;
   const patchMaterial = (m) => {
     m.onBeforeCompile = (sh) => {
@@ -74,16 +76,16 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
     patchMaterial(mat); a = { canvas, tex, mat }; atlasCache.set(key, a); return a;
   }
   const extraBoneNames = (list) => list.flatMap((e) => e.names);
-  function geometryFor(L) {
-    const key = geometryKey(L) + (high ? '#hp' : ''); let G = geoCache.get(key); if (G) return G;
-    const sel = shellsFor(L); if (high) sel.groups = sel.groups.filter((g) => g !== 'head'); const ranges = [];
+  function geometryFor(L, hp = !!high) {
+    const key = geometryKey(L) + (hp ? '#hp' : ''); let G = geoCache.get(key); if (G) return G;
+    const sel = shellsFor(L); if (hp) sel.groups = sel.groups.filter((g) => g !== 'head'); const ranges = [];
     for (const g of sel.groups) ranges.push([ex.groups[g].first, ex.groups[g].count]);
     for (const s of sel.shells) if (s !== 'body') ranges.push([ex.shells[s].first, ex.shells[s].count]);
     if (!L.female) { // a male chest: the garment shells over the chest are flattened a little (the base mesh is neutral)
       for (const sname of ['tunic', 'cuirass', 'sash']) { const sv = ex.shells[sname]; if (!sv) continue; for (let i = sv.vertices[0]; i < sv.vertices[0] + sv.vertices[1]; i++) { const y = base.pos[i * 3 + 1]; if (y > 1.05 && y < 1.34 && Math.abs(base.pos[i * 3]) < 0.19 && base.pos[i * 3 + 2] > 0.14) { /* applied to the copy below */ } } }
     }
-    const hg = buildHeadgear(head, { hair: high ? 'none' : L.hair.style, headgear: L.headgear.type, carry: L.carry });
-    if (high && hairNames(L).some((n) => /long|braid/.test(n))) hg.extra.push({ names: EXTRA_BONES.hair, parent: 'head', at: [0, hg.E.cy - hg.E.ry * 0.5, hg.E.cz - hg.E.rz * 0.8], step: -0.11 });
+    const hg = buildHeadgear(head, { hair: hp ? 'none' : L.hair.style, headgear: L.headgear.type, carry: L.carry });
+    if (hp && hairNames(L).some((n) => /long|braid/.test(n))) hg.extra.push({ names: EXTRA_BONES.hair, parent: 'head', at: [0, hg.E.cy - hg.E.ry * 0.5, hg.E.cz - hg.E.rz * 0.8], step: -0.11 });
     const parts = [hg]; if (L.sash && L.role !== 'hero' && L.sash === 'tail') parts.push(buildSashTail(W('hips')[1] + 0.02));
     const extra = parts.flatMap((p) => p.extra); const boneNamesAll = [...names, ...extraBoneNames(extra)];
     const extraV = parts.reduce((a, p) => a + p.pos.length / 3, 0); const total = nv + extraV;
@@ -104,7 +106,7 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
   }
 
   function spawn(L, { lod = 0 } = {}) {
-    const G = geometryFor(L); const A = atlasFor(L);
+    const G = geometryFor(L, false); const A = atlasFor(L);
     const root = new THREE.Group(); root.name = 'human';
     const bones = names.map((n, i) => { const b = new THREE.Bone(); b.name = n; b.position.set(...local[i]); return b; });
     names.forEach((_, i) => { if (parentOf[i] >= 0) bones[parentOf[i]].add(bones[i]); }); root.add(bones[0]);
@@ -121,7 +123,7 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
     const hips0 = bmap.hips_root.position.clone();
     // ---- held props ----
     const attached = {};
-    const hold = (name, bone, pos, rot, scale = 1) => { const m = new THREE.Mesh(props.get(name), name === 'lamp' ? propMat : propMat); m.position.set(...pos); m.rotation.set(...rot); m.scale.setScalar(scale); bone.add(m); m.castShadow = true; attached[name] = m; return m; };
+    const hold = (name, bone, pos, rot, scale = 1) => { const m = new THREE.Mesh(props.get(name), name === 'lamp' ? propMat : propMat); const palm = /^hand_/.test(bone.name) ? [(bone.name.endsWith('_L') ? 1 : -1) * 0.016, -0.03, 0.04] : [0, 0, 0]; /* the palm centre lies about half-way to the knuckles, not at the wrist */ m.position.set(pos[0] + palm[0], pos[1] + palm[1], pos[2] + palm[2]); m.rotation.set(...rot); m.scale.setScalar(scale); bone.add(m); m.castShadow = true; attached[name] = m; return m; };
     if (L.right && L.right !== 'none' && L.right !== 'bow') hold(L.right, bmap.hand_R, GRIPS[L.right]?.pos || [0, 0, 0], GRIPS[L.right]?.rot || [0, 0, 0]);
     if (L.right === 'bow' || L.left === 'bow') hold('bow', bmap.hand_L, GRIPS.bow.pos, GRIPS.bow.rot);
     if (L.left === 'shield') hold('shield', bmap.forearm_L, GRIPS.shield.pos, GRIPS.shield.rot);
@@ -132,14 +134,22 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
     const H = { look: L, root, mesh, bones: bmap, attached, cycle: ((L.seed * 0.37) % 1), lod, tris: G.tris, atlas: A, weaponShown: null, blink: 0, blinkAt: 2 + (L.seed % 5), blinkT: -1, t: 0 };
     const cur = makePose(); const tgt = makePose(); const rngS = rng(L.seed * 3 + 1); const seed = rngS() * 6; let lastState = ''; let stateT = 0; let lastSpeed = 0; const fall = { yaw: 0 };
     const wantMouth = L.role === 'hero' || L.role === 'boss';
+    H.priority = wantMouth ? 1 : 0; H.headOn = false;
+    const slotFree = () => H.priority > 0 || active < cap;
     H.upgradeHead = () => { // swap the base head for the High pack head: the body loses its head triangles, the pack's meshes share the skeleton
-      if (!high || headMeshes.length) return; const G2 = geometryFor(L); mesh.geometry = G2.geo; H.tris = G2.tris;
+      if (!high || H.headOn || !slotFree()) return;
+      const G2 = geometryFor(L, true); mesh.geometry = G2.geo; H.tris = G2.tris; H.headOn = true; active++;
+      if (headMeshes.length) { for (const m of headMeshes) m.visible = true; H.setLod(H.lod); return; }
       const bi = {}; G2.boneNamesAll.forEach((n, i) => { bi[n] = i; });
-      const ck = pickIdentity(L).map(([k, w]) => k + w).join('+') + (L.hair.style === 'x' ? '' : ''); let parts = headCache.get(ck); if (!parts) { parts = buildHeadGeometry(THREE, high.pack, L, bi); headCache.set(ck, parts); }
+      const ck = pickIdentity(L).map(([k, w]) => k + w).join('+'); let parts = headCache.get(ck); if (!parts) { parts = buildHeadGeometry(THREE, high.pack, L, bi); headCache.set(ck, parts); }
       const mats = { skin: high.mats.skinMaterial(L), eyes: high.mats.eyeMaterial(L), cards: high.mats.cardMaterial(L), mouth: high.mats.mouthMaterial() }; const fm = [];
       for (const p of parts) { if (p.name === 'mouth' && !wantMouth) continue; const sm = new THREE.SkinnedMesh(p.geo, mats[p.name]); sm.bind(skel, new THREE.Matrix4()); sm.name = 'head-' + p.name; if (p.name === 'skin') sm.onBeforeRender = (r, sc, cam) => high.mats.feedSun(mats.skin, sc, cam); sm.castShadow = p.name === 'skin'; sm.receiveShadow = p.name === 'skin'; sm.frustumCulled = true; sm.updateMorphTargets?.(); root.add(sm); headMeshes.push(sm); fm.push({ mesh: sm, keys: p.keys }); }
       const hn = hairNames(L); if (hn.length) { const hk = hn.join('+') + '|' + ck + '|' + G2.boneNamesAll.length; let hp = headCache.get(hk); if (!hp) { hp = buildHairGeometry(THREE, high.pack, high.hairPack, hn, L, bi); headCache.set(hk, hp ? [hp] : []); hp = hp ? [hp] : []; } for (const q of hp) { const sm = new THREE.SkinnedMesh(q.geo, hairMaterial(THREE, high.hairPack, L, high.hairMats)); sm.bind(skel, new THREE.Matrix4()); sm.name = 'head-hair'; sm.frustumCulled = true; sm.castShadow = false; root.add(sm); headMeshes.push(sm); fm.push({ mesh: sm, keys: q.keys }); } }
       face = createFace(fm, L.seed); H.face = face; H.headMeshes = headMeshes; H.setLod(H.lod);
+    };
+    H.downgradeHead = () => { // back to the 1,500-triangle head of hero.glb (same skeleton, so the swap is only a geometry and visibility change)
+      if (!H.headOn) return; const G0 = geometryFor(L, false), G1 = geometryFor(L, true); if (G0.boneNamesAll.join() !== G1.boneNamesAll.join()) return;
+      mesh.geometry = G0.geo; H.tris = G0.tris; for (const m of headMeshes) m.visible = false; H.headOn = false; active--;
     };
     H.setExpression = (n, w = 1) => face?.set(n, w); H.clearExpression = () => face?.clear();
     H.setScale = () => { root.scale.set(UNITS_PER_M * L.height * L.build, UNITS_PER_M * L.height, UNITS_PER_M * L.height * L.build); }; H.setScale();
@@ -150,7 +160,7 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
       const rr = Math.max(0, Math.min(1, (v - 1.8) / 2.2)); const stride = STRIDE_WALK + (STRIDE_RUN - STRIDE_WALK) * rr;
       if (!c.reduced || c.moving) H.cycle += (v * dt) / stride; // the cycle advances by distance: steps match the ground speed
       const accel = (c.speed - lastSpeed) / Math.max(dt, 1e-3) / UNITS_PER_M; lastSpeed = c.speed || 0;
-      pose(tgt, { state: st, t: stateT, cycle: H.cycle, speed: sp, time: (c.time || 0) + seed, weapon: c.weapon || L.right, crouch: c.crouch ? 1 : 0, atk: c.atk, windup: c.windup, draw: c.draw, carry: L.carry === 'none' && L.left === 'lamp' ? 'lamp' : L.carry, stoop: L.stoop, legs, seed });
+      pose(tgt, { state: st, t: stateT, cycle: H.cycle, speed: sp, time: (c.time || 0) + seed, weapon: c.weapon || L.right, crouch: c.crouch ? 1 : 0, atk: c.atk, windup: c.windup, draw: c.draw, carry: L.carry === 'none' && L.left === 'lamp' ? 'lamp' : L.carry, stoop: L.stoop, legs, seed, hitDir: c.hitDir, look: c.look, hitstop: c.hitstop, turnRate: c.turnRate, listen: c.listen, dodgeDur: c.dodgeDur, chain: c.atk && c.atk.chain });
       const k = dt > 0.2 || c.snap ? 1 : 1 - Math.exp(-(st === 'attack' || st === 'hurt' || st === 'dodge' || st === 'shove' || st === 'parry' || st === 'strike' ? 30 : st === 'down' ? 18 : 14) * dt);
       blendPose(cur, tgt, k);
       for (const n of BONES) { const r = cur.rot[n]; bmap[n].rotation.set(r[0], r[1], r[2]); }
@@ -169,8 +179,8 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
         j.bone.rotation.set(Math.max(-0.7, Math.min(1.1, j.a[0])), 0, Math.max(-0.6, Math.min(0.6, j.a[1]))); }); }
       if (lod >= 2) { for (const n of ['lamp', 'flame']) if (attached[n]) attached[n].visible = false; }
     };
-    H.setLod = (l) => { H.lod = l; mesh.castShadow = l < 2; for (const m of headMeshes) { const n = m.name; m.visible = n === 'head-skin' || (n === 'head-eyes' && l < 3) || ((n === 'head-cards' || n === 'head-hair') && l < 3) || (n === 'head-mouth' && l < 1); } };
-    H.dispose = () => { humans.delete(H); mesh.skeleton.dispose?.(); };
+    H.setLod = (l) => { H.lod = l; mesh.castShadow = l < 2; if (high) { if (l >= 2 && H.priority === 0) H.downgradeHead(); else if (l < 2) H.upgradeHead(); } if (!H.headOn) return; for (const m of headMeshes) { const n = m.name; m.visible = n === 'head-skin' || (n === 'head-eyes' && l < 3) || ((n === 'head-cards' || n === 'head-hair') && l < 3) || (n === 'head-mouth' && l < 1); } };
+    H.dispose = () => { humans.delete(H); if (H.headOn) { H.headOn = false; active--; } mesh.skeleton.dispose?.(); };
     mesh.castShadow = true; mesh.receiveShadow = true;
     humans.add(H); if (high) H.upgradeHead();
     return H;
@@ -179,7 +189,7 @@ export async function createHumanKit(THREE, { url = new URL('../../../assets/cha
   props.flame = flameGeo(THREE);
   return { spawn, geometryFor, parse: { json, acc }, extras: ex, legs, names, world, head, atlasSize: atlas, normalTex, ormTex, propMat,
     tier, highReady, get high() { return !!high; },
-    stats() { return { geometries: geoCache.size, atlases: atlasCache.size, heads: headCache.size, high: !!high }; },
+    stats() { return { geometries: geoCache.size, atlases: atlasCache.size, heads: headCache.size, high: !!high, highHeads: active, highCap: cap }; },
     dispose() { headCache.forEach((ps) => ps.forEach((p) => p.geo.dispose())); headCache.clear(); high?.mats.dispose(); atlasCache.forEach((a) => { a.tex.dispose(); a.mat.dispose(); }); atlasCache.clear(); geoCache.forEach((g) => g.geo.dispose()); geoCache.clear(); normalTex.dispose(); ormTex.dispose(); propsMap.dispose(); propsOrm.dispose(); propMat.dispose(); props.dispose(); } };
 }
 

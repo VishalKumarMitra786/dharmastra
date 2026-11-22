@@ -82,7 +82,7 @@ def club_overhead():
 
 
 def staff_swing():
-    K = weapon_clip('staff_swing', 1.25, 0.5, 0.68, SW, propR='staff'); K.default(grip2=0.14, LH_w=1)
+    K = weapon_clip('staff_swing', 1.25, 0.5, 0.68, SW, propR='staff'); K.default(grip2=0.20, LH_w=1)
     K.at(0.0, 'stop', RH_x=-0.08, RH_y=-0.22, RH_z=0.22, RW_yaw=18, RW_pitch=48, root_y=-0.07, hip_y=-20)
     K.at(0.12, root_y=-0.10, root_z=-0.03)
     K.at(0.5, 'stop', RH_x=-0.20, RH_y=-0.10, RH_z=0.04, RW_yaw=-70, RW_pitch=12, root_y=-0.10, root_z=-0.07, hip_y=-52, sp_y=-14, ch_y=-12, hd_y=48, RF_pitch=16)
@@ -94,7 +94,7 @@ def staff_swing():
 
 
 def staff_heavy():
-    K = weapon_clip('staff_heavy', 1.55, 0.7, 0.9, SW, propR='staff'); K.default(grip2=0.14, LH_w=1)
+    K = weapon_clip('staff_heavy', 1.55, 0.7, 0.9, SW, propR='staff'); K.default(grip2=0.20, LH_w=1)
     K.at(0.0, 'stop', RH_x=-0.08, RH_y=-0.22, RH_z=0.22, RW_yaw=18, RW_pitch=48, root_y=-0.07, hip_y=-20)
     K.at(0.16, root_y=-0.12, root_z=-0.04, hip_p=8)
     K.at(0.70, 'stop', RH_x=-0.10, RH_y=0.30, RH_z=0.04, RW_yaw=0, RW_pitch=108, root_y=-0.03, root_z=-0.08, hip_y=-30, sp_y=-6, sp_p=-16, hip_p=0, hd_y=24, RF_pitch=20)
@@ -106,7 +106,7 @@ def staff_heavy():
 
 
 def spear_thrust():
-    K = weapon_clip('spear_thrust', 1.3, 0.55, 0.72, SW, propR='spear'); K.default(grip2=0.14, LH_w=1)
+    K = weapon_clip('spear_thrust', 1.3, 0.55, 0.72, SW, propR='spear'); K.default(grip2=0.20, LH_w=1)
     K.at(0.0, 'stop', RH_x=-0.10, RH_y=-0.20, RH_z=0.22, RW_yaw=8, RW_pitch=24, root_y=-0.08, hip_y=-22)
     K.at(0.14, root_y=-0.12, root_z=-0.04)
     K.at(0.55, 'stop', RH_x=-0.12, RH_y=-0.22, RH_z=0.04, RW_yaw=10, RW_pitch=16, root_y=-0.14, root_z=-0.14, hip_y=-46, sp_y=-12, ch_y=-10, hip_p=6, hd_y=44, RF_pitch=16)
@@ -118,7 +118,7 @@ def spear_thrust():
 
 
 def spear_sweep():
-    K = weapon_clip('spear_sweep', 1.6, 0.7, 0.92, SW, propR='spear'); K.default(grip2=0.14, LH_w=1)
+    K = weapon_clip('spear_sweep', 1.6, 0.7, 0.92, SW, propR='spear'); K.default(grip2=0.20, LH_w=1)
     K.at(0.0, 'stop', RH_x=-0.10, RH_y=-0.20, RH_z=0.22, RW_yaw=8, RW_pitch=24, root_y=-0.08, hip_y=-22)
     K.at(0.2, root_y=-0.13, root_z=-0.04)
     K.at(0.7, 'stop', RH_x=-0.20, RH_y=-0.18, RH_z=0.04, RW_yaw=-80, RW_pitch=-4, root_y=-0.14, root_z=-0.08, hip_y=-58, sp_y=-14, ch_y=-12, hd_y=54, RF_pitch=16)
@@ -192,7 +192,7 @@ def captain_lunge():
 
 
 def captain_slam():
-    K = weapon_clip('captain_slam', 2.3, 0.9, 1.1, SW, propR='club'); K.default(grip2=0.14, LH_w=1)
+    K = weapon_clip('captain_slam', 2.3, 0.9, 1.1, SW, propR='club'); K.default(grip2=0.20, LH_w=1)
     K.at(0.0, 'stop', RH_x=-0.08, RH_y=-0.22, RH_z=0.22, RW_yaw=14, RW_pitch=50, root_y=-0.07, hip_y=-20)
     K.at(0.2, root_y=-0.16, root_z=-0.04, hip_p=10)
     K.at(0.9, 'stop', RH_x=-0.08, RH_y=0.34, RH_z=0.02, RW_yaw=0, RW_pitch=100, root_y=-0.02, root_z=-0.12, hip_y=-16, sp_y=-4, sp_p=-20, hip_p=-2, hd_y=10, LF_z=0.24, RF_z=-0.24, RF_pitch=24)
@@ -247,15 +247,15 @@ def bow_draw():
     """Draw from nocked to full draw (0..a), then holds. The sim's draw fraction 0..1 maps to 0..a."""
     K = Clip('bow_draw', 1.2, w=0.5, a=1.0, propL='bow'); K.default(**SW); K.default(LF_z=0.18, RF_z=-0.26, hip_y=-70, sp_y=-4, ch_y=-4, hd_y=70, root_y=-0.04, LH_w=1, RH_w=1, LW_w=1, RG=0.9, LG=0.8)
     K.at(0.0, 'stop', LH_x=0.16, LH_y=-0.12, LH_z=0.38, LW_yaw=0, LW_pitch=90, RH_x=-0.14, RH_y=-0.10, RH_z=0.22, hip_y=-62)
-    K.at(1.0, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.18, RH_y=0.02, RH_z=0.02, hip_y=-72, sp_y=-8, ch_y=-8, hd_y=74, sp_p=0, LW_yaw=0, LW_pitch=90)
-    K.at(1.2, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.18, RH_y=0.02, RH_z=0.02)
+    K.at(1.0, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.25, RH_y=0.02, RH_z=-0.02, hip_y=-72, sp_y=-8, ch_y=-8, hd_y=74, sp_p=0, LW_yaw=0, LW_pitch=90)
+    K.at(1.2, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.25, RH_y=0.02, RH_z=-0.02)
     K.default(LW_yaw=0, LW_pitch=90)
     return K.render()
 
 
 def bow_release():
     K = Clip('bow_release', 0.7, w=0.1, a=0.25, propL='bow'); K.default(**SW); K.default(LF_z=0.18, RF_z=-0.26, hip_y=-72, sp_y=-8, ch_y=-8, hd_y=74, root_y=-0.04, LH_w=1, RH_w=1, LW_w=1, RG=0.5, LG=0.8, LW_yaw=0, LW_pitch=90)
-    K.at(0.0, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.18, RH_y=0.02, RH_z=0.02, RG=0.9)
+    K.at(0.0, 'stop', LH_x=0.18, LH_y=0.0, LH_z=0.43, RH_x=-0.25, RH_y=0.02, RH_z=-0.02, RG=0.9)
     K.at(0.08, RH_x=-0.30, RH_y=0.0, RH_z=-0.10, RG=0.1, ch_y=-12, sp_y=-10)
     K.at(0.25, 'stop', RH_x=-0.32, RH_y=-0.04, RH_z=-0.04, LH_z=0.42, RG=0.1)
     K.at(0.7, 'stop', LH_x=0.16, LH_y=-0.10, LH_z=0.38, RH_x=-0.14, RH_y=-0.10, RH_z=0.22, RG=0.6, hip_y=-62, ch_y=-4)

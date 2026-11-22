@@ -49,11 +49,11 @@ UP = Vector((0, 1, 0))
 
 
 class Pose:
-    __slots__ = ('rot', 'root', 'res', 'clamp', 'resl')
+    __slots__ = ('rot', 'root', 'res', 'clamp', 'resl', 'shaft')
 
     def __init__(self):
         self.rot = {b: list(REST.get(b, (0, 0, 0))) for b in BONES}
-        self.root = [0.0, 0.0, 0.0]; self.res = 0.0; self.clamp = 0.0; self.resl = 0.0
+        self.root = [0.0, 0.0, 0.0]; self.res = 0.0; self.clamp = 0.0; self.resl = 0.0; self.shaft = 0.0
 
     def copy(self):
         p = Pose(); p.rot = {k: list(v) for k, v in self.rot.items()}; p.root = list(self.root); return p
